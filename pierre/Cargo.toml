@@ -1,0 +1,13 @@
+[package]
+name = "pierre"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+apr = { path = "../apr" }
+gethostname = ">=0.4.3"
+mdns-sd = { version = ">=0.7.3" }
+network-interface = ">=1.0.1"
+tokio = { version = "1", features = ["full"] }
