@@ -172,6 +172,13 @@ impl ApReceiver {
         })
     }
 
+    pub fn bind_address(&self) -> String {
+        let mut ip_and_port = self.host_ip.to_owned();
+        ip_and_port.push_str(format!(":{}", Self::port()).as_str());
+
+        ip_and_port
+    }
+
     pub fn device_id(&self) -> String {
         self.device_id.to_owned()
     }
