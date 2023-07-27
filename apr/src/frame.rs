@@ -18,27 +18,72 @@
 
 use std::{collections::HashMap, convert::From, fmt, io::Cursor};
 
+extern crate plist;
+use plist::Dictionary;
+
+extern crate serde_derive;
+
+use bstr::ByteSlice;
 use bytes::Buf;
 use derive_new::new;
-use tracing::{error, info};
+#[allow(unused_imports)]
+use tracing::{debug, error, info};
+
+#[derive(Debug)]
+pub enum ContentType {
+    Plist(Dictionary),
+    Raw(Vec<u8>),
+}
+
+const CONTENT_LENGTH: &str = "Content-Length";
+const CONTENT_TYPE: &str = "Content-Type";
+
+const APP_PLIST: &str = "application/x-apple-binary-plist";
+const PLIST_PREFIX: &str = "bplist";
 
 #[derive(Debug, new)]
 #[allow(dead_code)]
 pub struct Frame {
     method: Option<String>,
-    url: Option<String>,
+    path: Option<String>,
     headers: HashMap<String, String>,
     content: Option<Vec<u8>>,
 }
 
 impl Frame {
+    pub fn get_content(&self) -> Result<ContentType, Error> {
+        use plist::from_bytes;
+
+        // has_content() allows safe unwrapping
+        if self.has_content() {
+            match self.headers.get(CONTENT_TYPE) {
+                Some(t) if t == APP_PLIST => {
+                    if let Some(content) = &self.content {
+                        if let Ok(prefix) = content[0..PLIST_PREFIX.len()].to_str() {
+                            if prefix == PLIST_PREFIX {
+                                let plist = from_bytes::<Dictionary>(content);
+                                return Ok(ContentType::Plist(plist.ok().unwrap()));
+                            }
+                        }
+
+                        Err(Error::InvalidPlist)
+                    } else {
+                        Err(Error::ProtocolError)
+                    }
+                }
+                Some(_) => Ok(ContentType::Raw(self.content.to_owned().unwrap())),
+                None => Err(Error::ProtocolError),
+            }
+        } else {
+            Err(Error::ProtocolError)
+        }
+    }
+
     pub fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
-        use bstr::{ByteSlice, B};
+        use bstr::B;
         use Error::Incomplete;
 
         let splitter = B("\r\n\r\n");
-
-        // let len = src.get_ref().len();
 
         match src.get_ref().split_str(splitter).count() {
             // complete message contains two separators
@@ -48,18 +93,23 @@ impl Frame {
 
                 match src.get_ref().rfind(needle) {
                     Some(delim) if delim != 0 => {
-                        let msg = src.get_ref()[0..delim].to_str()?;
-                        src.advance(msg.len() + needle.len());
+                        {
+                            let msg = src.chunk()[0..delim].to_str()?;
+                            debug!("complete message:\n{}", msg);
+                        }
 
-                        // let body_start = delim + needle.len();
-                        let body = &src.get_ref()[0..];
-                        // let body_len = body.len();
+                        // if there is content be sure to include it
+                        if let Some(cnt) = get_content_len(src.chunk()) {
+                            src.advance(cnt);
+                        }
 
-                        let body_prefix = body[0..4].to_str()?;
+                        src.advance(delim + needle.len());
 
-                        info!("{}", msg);
-
-                        info!("cursor_pos={} prefix={}", src.position(), body_prefix);
+                        debug!(
+                            "cursor_pos={} remaining={}",
+                            src.position(),
+                            src.remaining()
+                        );
 
                         Ok(())
                     }
@@ -74,53 +124,76 @@ impl Frame {
         }
     }
 
+    pub fn has_content(&self) -> bool {
+        self.headers.contains_key(CONTENT_LENGTH)
+            && self.headers.contains_key(CONTENT_TYPE)
+            && self.content.is_some()
+    }
+
     pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, Error> {
-        use bstr::{ByteSlice, B};
+        use bstr::B;
         use Error::Incomplete;
 
+        const CONTENT_LENGTH: &str = "Content-Length";
         let needle = B("\r\n\r\n");
 
-        match src.get_ref().find(needle) {
+        match src.chunk().find(needle) {
             Some(dpos) if dpos > 0 => {
+                // convert the first block to str for easy extraction
+                // of relevant data.  return Err if conversion to str
+                // fails (indicating bad data)
+                let hdr_block = src.get_ref()[0..dpos].to_str()?;
+
+                // establish destinations for the data we'll extract
                 let mut method: Option<String> = None;
-                let mut url: Option<String> = None;
+                let mut path: Option<String> = None;
                 let mut headers: HashMap<String, String> = HashMap::new();
                 let mut content: Option<Vec<u8>> = None;
 
-                let lines = src.get_ref()[0..dpos].lines();
+                let lines = hdr_block.lines();
 
                 lines.enumerate().for_each(|e| match e {
-                    (n, u) if n == 0 && u.is_utf8() => {
-                        let mut p = u.split_str(B(" "));
-                        if let Some(Ok(s)) = p.next().map(|x| x.to_str()) {
-                            method = Some(s.to_string());
-                        }
-
-                        if let Some(Ok(s)) = p.next().map(|s| s.to_str()) {
-                            url = Some(s.to_string());
+                    // we use enumerate here to handle the first line differently
+                    // than the rest.  the first line is the method, path and protocol
+                    (n, u) if n == 0 => {
+                        let mut prelude = u.split_ascii_whitespace();
+                        if let (Some(m), Some(p)) = (prelude.next(), prelude.next()) {
+                            method = Some(m.to_string());
+                            path = Some(p.to_string());
                         }
                     }
-                    (_n, u) if u.is_utf8() => {
-                        let mut p = e.1.split_str(B(": "));
+                    // subsequent lines are headers
+                    (_n, u) => {
+                        let mut p = u.split(": ");
 
-                        if let (Some(Ok(k)), Some(Ok(v))) =
-                            (p.next().map(|x| x.to_str()), p.next().map(|x| x.to_str()))
-                        {
+                        if let (Some(k), Some(v)) = (p.next(), p.next()) {
                             headers.insert(k.to_string(), v.to_string());
                         }
                     }
-                    (_, _) => (),
                 });
 
+                // done processing the prelude and headers block, move cursor
                 src.advance(dpos + needle.len());
 
-                if let Some(Ok(cnt)) = headers.get("Content-Length").map(|x| x.parse::<usize>()) {
-                    content = Some(src.get_ref()[0..cnt].to_vec());
+                // extract content, if present
+                if let Some(content_len) = headers.get(CONTENT_LENGTH) {
+                    let cnt: usize = content_len.parse()?;
 
-                    src.advance(cnt);
+                    if src.remaining() >= cnt {
+                        content = Some(src.chunk()[0..cnt].to_vec());
+
+                        // done extracting content, move cursor
+                        src.advance(cnt);
+                    } else {
+                        return Err(Incomplete);
+                    }
                 }
 
-                Ok(Frame::new(method, url, headers, content))
+                // NOTE
+                // the cursor position at the end of this function is used as the
+                // length of the src data processed so it can be consumed
+
+                Ok(Frame::new(method, path, headers, content))
             }
             Some(_) => Err(Incomplete),
             None => Err(Incomplete),
@@ -128,10 +201,46 @@ impl Frame {
     }
 }
 
+#[allow(dead_code)]
+fn get_content_len(src: &[u8]) -> Option<usize> {
+    debug!("src={:?}", src.to_str());
+
+    let mut src = Cursor::new(src);
+    let needle = CONTENT_LENGTH;
+
+    if let Some(cnt) = src.chunk().find(needle) {
+        debug!("needle at pos={}", cnt);
+        src.advance(cnt + CONTENT_LENGTH.len());
+
+        if let Some(val) = src.chunk().words().next() {
+            debug!("found word={}", val);
+            if let Ok(len) = val.parse::<usize>() {
+                return Some(len);
+            }
+        }
+    }
+
+    None
+}
+#[test]
+fn can_get_content_len_from_cursor() {
+    let inner: &[u8] = r#"Content-Type: application/x-apple-binary-plist
+    Content-Length: 80"#
+        .as_bytes();
+
+    let src = Cursor::new(inner);
+
+    let maybe_val = get_content_len(src.chunk());
+
+    assert!(maybe_val.is_some());
+    assert!(maybe_val.unwrap() == 80);
+}
+
 #[derive(Debug)]
 pub enum Error {
     Incomplete,
     ProtocolError,
+    InvalidPlist,
     /// Invalid message encoding
     Other(crate::Error),
 }
@@ -154,6 +263,18 @@ impl From<bstr::Utf8Error> for Error {
     }
 }
 
+impl From<std::num::ParseIntError> for Error {
+    fn from(_src: std::num::ParseIntError) -> Error {
+        "protocol error; invalid frame format".into()
+    }
+}
+
+impl From<plist::Error> for Error {
+    fn from(src: plist::Error) -> Error {
+        src.into()
+    }
+}
+
 // impl From<TryFromIntError> for Error {
 //     fn from(_src: TryFromIntError) -> Error {
 //         "protocol error; invalid frame format".into()
@@ -167,6 +288,7 @@ impl fmt::Display for Error {
         match self {
             Error::Incomplete => "stream ended early".fmt(fmt),
             Error::ProtocolError => "protocol error".fmt(fmt),
+            Error::InvalidPlist => "invalid plist".fmt(fmt),
             Error::Other(err) => err.fmt(fmt),
         }
     }

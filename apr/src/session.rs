@@ -131,7 +131,11 @@ impl Session {
                 // cursor, but it may be done by reallocating and copying data.
                 self.buffer.advance(len);
 
-                // info!("advanced buffer len={}", len);
+                info!(
+                    "advanced buffer cursor [len={} remaining={}]",
+                    len,
+                    self.buffer.remaining()
+                );
 
                 // Return the parsed frame to the caller.
                 Ok(Some(frame))

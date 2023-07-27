@@ -24,6 +24,9 @@ use mdns_sd::{DaemonEvent, ServiceDaemon, ServiceInfo};
 use network_interface::{NetworkInterface, NetworkInterfaceConfig};
 use std::{error::Error, fmt, result, time::Duration};
 
+#[allow(unused_imports)]
+use tracing::{debug, error, info};
+
 use crate::flags::{FeatureFlags, StatusFlags};
 
 /// Result Type for ApReceiver
@@ -282,8 +285,8 @@ impl ApReceiver {
             let receiver = self.mdns.unregister(fullname).unwrap();
 
             match receiver.recv_timeout(timeout) {
-                Ok(_) => println!("Unregistered {}", fullname),
-                Err(e) => println!("{} {:#?}", fullname, e),
+                Ok(_) => info!("unregistered {}", fullname),
+                Err(e) => error!("{} {:#?}", fullname, e),
             }
         });
     }

@@ -355,7 +355,11 @@ impl Handler {
                 None => return Ok(()),
             };
 
-            info!(?frame);
+            if let Ok(crate::frame::ContentType::Plist(plist)) = frame.get_content() {
+                info!("plist={:?}", plist);
+            }
+
+            debug!(?frame);
 
             // Convert the redis frame into a command struct. This returns an
             // error if the frame is not a valid redis command or it is an
