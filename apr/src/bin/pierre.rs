@@ -15,10 +15,10 @@
 // limitations under the License.
 
 extern crate plist;
-//#[macro_use]
 extern crate serde_derive;
 
 use apr::ApReceiver;
+// use bytes::{Buf, BytesMut};
 use bstr::{ByteSlice, B};
 use plist::Dictionary;
 use std::{
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
             let res = listener.accept().await;
             match res {
                 Ok((mut socket, _)) => {
-                    let mut buf = [0; 1024];
+                    let mut buf = [0u8; 4096];
                     let start_at = Instant::now();
 
                     while start_at.elapsed() <= max_runtime {
@@ -57,13 +57,30 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
                                 // split the reeived buffer into the prelude and data parts
                                 let parts = &buf[0..n].split_str(splitter).collect::<Vec<_>>();
 
-                                println!("parts len={}", parts.len());
+                                println!("parts count={}", parts.len());
+
+                                if parts.len() > 1 {
+                                    let content = parts.get(1).unwrap();
+                                    println!("content part len={}", content.len());
+                                }
 
                                 parts.iter().for_each(|p| match p.to_str() {
                                     Ok(part) => {
-                                        let lines: Vec<&str> = part.split("\r\n").collect();
+                                        let header: Vec<&str> = part.split_whitespace().collect();
 
-                                        println!("lines:\n{:?}", lines);
+                                        if let Some(prelude) = header.first() {
+                                            let pp = prelude.split_whitespace().collect::<Vec<_>>();
+
+                                            if let Some(proto) = pp.last() {
+                                                if proto.starts_with("RTSP/1.0") {
+                                                    let path = pp.get(1).unwrap();
+                                                    let command = pp.first().unwrap();
+                                                    println!("command={command} path={path}",);
+                                                }
+                                            }
+                                        }
+
+                                        println!("lines:\n{:?}", header);
                                     }
                                     Err(_e) => {
                                         if let Ok(dict) = plist::from_bytes::<Dictionary>(&p[..]) {

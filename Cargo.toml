@@ -14,4 +14,4 @@
 
 [workspace]
 
-members = ["pierre", "apr"]
+members = ["apr"]

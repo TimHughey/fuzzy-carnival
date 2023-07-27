@@ -24,7 +24,7 @@ use mdns_sd::{DaemonEvent, ServiceDaemon, ServiceInfo};
 use network_interface::{NetworkInterface, NetworkInterfaceConfig};
 use std::{error::Error, fmt, result, time::Duration};
 
-use crate::FeatureFlags;
+use crate::flags::{FeatureFlags, StatusFlags};
 
 /// Result Type for ApReceiver
 pub type ApReceiverResult<T> = result::Result<T, ApReceiverError>;
@@ -88,8 +88,9 @@ impl ApReceiver {
 
             let host = Self::hostname();
             let pk = Self::get_pub_key(&keypair);
-            let ff = FeatureFlags::default();
-            let features_ascii = ff.as_lsb_msb_hex();
+            let ff_hex = FeatureFlags::default().as_lsb_msb_hex();
+            let st_hex = format!("{:#x}", StatusFlags::default());
+
             let serial_num = Self::serial_num(&device_id);
 
             let txt_raop = [
@@ -97,11 +98,11 @@ impl ApReceiver {
                 ("vs", "366.0"),
                 ("vn", "65537"),
                 ("tp", "UDP"),
-                ("sf", "0x4"),
+                ("sf", &st_hex),
                 ("md", "0,1,2"),
                 ("am", "Pierre"),
                 ("fv", GIT_VERSION),
-                ("ft", features_ascii.as_str()),
+                ("ft", &ff_hex),
                 ("et", "0,4"),
                 ("da", "true"),
                 ("cn", "0,4"),
@@ -123,26 +124,26 @@ impl ApReceiver {
             let txt_airplay = [
                 ("pk", pk.as_str()),
                 ("gcgl", "0"),
-                ("gid", mac_addr.as_str()),
-                ("pi", mac_addr.as_str()),
+                ("gid", &mac_addr),
+                ("pi", &mac_addr),
                 ("srcvers", "366.0"),
                 ("protovers", "1.1"),
-                ("serial_num", serial_num.as_str()),
+                ("serial_num", &serial_num),
                 ("manufacturer", "Hughey"),
                 ("model", "Pierre"),
-                ("flags", "0x04"),
+                ("flags", &st_hex),
                 ("fv", GIT_VERSION),
                 ("rsf", "0x0"),
-                ("features", features_ascii.as_str()),
-                ("deviceid", device_id.as_str()),
+                ("features", &ff_hex),
+                ("deviceid", &device_id),
                 ("acl", "0"),
             ];
 
             let si_airplay = ServiceInfo::new(
                 ST_AIRPLAY,
                 RECEIVER_NAME,
-                host.as_str(),
-                host_ip.as_str(),
+                &host,
+                &host_ip,
                 ApReceiver::port(),
                 &txt_airplay[..],
             )

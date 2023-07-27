@@ -1,15 +1,61 @@
+# Rusty Pierre
+#
+# Copyright 2023 Tim Hughey
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http:#www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 [package]
+authors = ["Tim Hughey"]
+edition = "2021"
 name = "apr"
 version = "0.1.0"
-edition = "2021"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/TimHughey/fuzzy-carnival.git"
+
+[[bin]]
+name = "pierre"
+path = "src/bin/pierre.rs"
+
+[[bin]]
+name = "pierre2"
+path = "src/bin/pierre2.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 alkali = ">=0.3.0"
+async-stream = "0.3.0"
+atoi = ">=2.0.0"
 bitflags = ">=2.3.3"
+bstr = ">=0.1.6"
+bytes = "1"
+derive-new = ">=0.5.0"
 gethostname = ">=0.4.3"
 git-version = ">=0.3.5"
 mdns-sd = { version = ">=0.7.3" }
 network-interface = ">=1.0.1"
+plist = ">=0.1.5"
+serde_derive = ">=1.0.173"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+tracing = "0.1.34"
+tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
+# Integration between the tracing crate and the opentelemetry crate
+# tracing-opentelemetry = { version = "0.19.0", optional = true }
 
+# Implements the types defined in the OTel spec
+# opentelemetry = { version = "0.19.0", optional = true }
+
+[features]
+# otel = ["dep:opentelemetry", "dep:tracing-opentelemetry"]

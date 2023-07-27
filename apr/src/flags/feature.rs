@@ -19,7 +19,7 @@ use mdns_sd::TxtProperty;
 
 bitflags! {
   #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-  pub struct FeatureFlags : u64 {
+  pub struct Features : u64 {
     const B00_VIDEO = 0x01;
     const B01_PHOTO = 0x01 << 1;
     const B02_VIDEO_FAIRPLAY = 0x01 << 2;
@@ -121,7 +121,7 @@ bitflags! {
   }
 }
 
-impl FeatureFlags {
+impl Features {
     pub fn as_lsb_msb_hex(&self) -> String {
         let bits = self.bits();
         let msb = bits >> 32;
@@ -143,8 +143,8 @@ impl FeatureFlags {
     }
 }
 
-impl Default for FeatureFlags {
-    fn default() -> FeatureFlags {
+impl Default for Features {
+    fn default() -> Features {
         Self::B48_TRANSIENT_PAIRING
             | Self::B47_PEER_MANAGEMENT
             | Self::B46_HOME_KIT_PAIRING
@@ -170,12 +170,12 @@ mod tests {
 
     #[test]
     fn feature_flags_default() {
-        assert!(FeatureFlags::default().bits() == 0x1C300405FC200);
+        assert!(Features::default().bits() == 0x1C300405FC200);
     }
 
     #[test]
     fn feature_flags_produces_raop_txt() {
-        let txt = FeatureFlags::default().as_txt_raop();
+        let txt = Features::default().as_txt_raop();
 
         assert!(txt.key() == "ft");
         assert!(txt.val_str() == "0x405FC200,0x1C300");
@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     fn feature_flags_produces_airplay_txt() {
-        let txt = FeatureFlags::default().as_txt_airplay();
+        let txt = Features::default().as_txt_airplay();
 
         assert!(txt.key() == "features");
         assert!(txt.val_str() == "0x405FC200,0x1C300");
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     #[ignore]
     fn feature_flags_musing() {
-        let ff = FeatureFlags::default();
+        let ff = Features::default();
 
         ff.iter_names().for_each(|name| println!("{}", name.0));
     }
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     #[ignore]
     fn feature_flags_dump() {
-        let mut alpha = FeatureFlags::default();
+        let mut alpha = Features::default();
 
         println!("alpha as plist val: {}", alpha.as_plist_val());
 
@@ -240,10 +240,10 @@ mod tests {
         println!("alpha: {}", as_str(alpha.bits()));
         println!("beta:  {}", as_str(beta));
 
-        alpha.remove(FeatureFlags::B03_VIDEO_VOL_CTRL);
+        alpha.remove(Features::B03_VIDEO_VOL_CTRL);
         println!("alpha={:#08b}", alpha);
 
-        let two = FeatureFlags::B00_VIDEO | FeatureFlags::B01_PHOTO;
+        let two = Features::B00_VIDEO | Features::B01_PHOTO;
 
         let two_string = format!("{:#06x}", two);
 
