@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+        <key>streams</key>
+        <array>
+                <dict>
+                        <key>clientUUID</key>
+                        <string>85D3D355-16BE-4979-9205-57100E8E6E4F</string>
+                        <key>clientTypeUUID</key>
+                        <string>1910A70F-DBC0-4242-AF95-115DB30604E1</string>
+                        <key>channelID</key>
+                        <string>846ED925-F223-4CF2-9984-F5D5E8AE195E</string>
+                        <key>controlType</key>
+                        <integer>1</integer>
+                        <key>type</key>
+                        <integer>130</integer>
+                </dict>
+        </array>
+</dict>
+</plist>

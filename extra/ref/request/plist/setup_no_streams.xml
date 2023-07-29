@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+        <key>timingProtocol</key>
+        <string>PTP</string>
+        <key>sessionUUID</key>
+        <string>DE0FD1F7-637F-43E2-B181-259F0600D0BA</string>
+        <key>osName</key>
+        <string>macOS</string>
+        <key>osBuildVersion</key>
+        <string>21E258</string>
+        <key>sourceVersion</key>
+        <string>610.19.1</string>
+        <key>senderSupportsRelay</key>
+        <true/>
+        <key>osVersion</key>
+        <string>12.3.1</string>
+        <key>isMultiSelectAirPlay</key>
+        <true/>
+        <key>timingPeerInfo</key>
+        <dict>
+                <key>ID</key>
+                <string>2FDF0D7E-7B7C-411C-85F4-595A44C53B21</string>
+                <key>Addresses</key>
+                <array>
+                        <string>192.168.2.53</string>
+                        <string>fe80::109a:2757:fb38:9fe2</string>
+                </array>
+                <key>DeviceType</key>
+                <integer>0</integer>
+                <key>SupportsClockPortMatchingOverride</key>
+                <true/>
+        </dict>
+        <key>groupContainsGroupLeader</key>
+        <false/>
+        <key>timingPeerList</key>
+        <array>
+                <dict>
+                        <key>ID</key>
+                        <string>2FDF0D7E-7B7C-411C-85F4-595A44C53B21</string>
+                        <key>Addresses</key>
+                        <array>
+                                <string>192.168.2.53</string>
+                                <string>fe80::109a:2757:fb38:9fe2</string>
+                        </array>
+                        <key>DeviceType</key>
+                        <integer>0</integer>
+                        <key>SupportsClockPortMatchingOverride</key>
+                        <true/>
+                </dict>
+        </array>
+        <key>groupUUID</key>
+        <string>91B9F1E2-7C5C-404D-952A-D5E5BE76302F</string>
+        <key>deviceID</key>
+        <string>A4:83:E7:AB:91:EA</string>
+        <key>model</key>
+        <string>MacBookPro15,3</string>
+        <key>name</key>
+        <string>raziel</string>
+        <key>macAddress</key>
+        <string>A4:83:E7:AB:91:EA</string>
+</dict>
+</plist>

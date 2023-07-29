@@ -26,6 +26,7 @@ pub(crate) mod session;
 pub use session::Session;
 
 pub(crate) mod frame;
+pub use frame::ContentType;
 pub use frame::Frame;
 
 pub(crate) mod shutdown;

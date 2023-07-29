@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+      <dict>
+              <key>Addresses</key>
+              <array>
+                      <string>192.168.2.179</string>
+                      <string>2001:470:1f07:187:7a28:caff:feb0:c564</string>
+                      <string>fe80::7a28:caff:feb0:c564</string>
+              </array>
+              <key>ID</key>
+              <string>db7bedbe-2d5a-4134-8759-de1911a1daab</string>
+              <key>SupportsClockPortMatchingOverride</key>
+              <false/>
+      </dict>
+      <dict>
+              <key>SupportsClockPortMatchingOverride</key>
+              <true/>
+              <key>ClockPorts</key>
+              <dict>
+                      <key>db7bedbe-2d5a-4134-8759-de1911a1daab</key>
+                      <integer>33222</integer>
+                      <key>192.168.2.4</key>
+                      <integer>33224</integer>
+              </dict>
+              <key>DeviceType</key>
+              <integer>0</integer>
+              <key>Addresses</key>
+              <array>
+                      <string>192.168.2.53</string>
+                      <string>fe80::1015:7d9e:d05a:a51e</string>
+              </array>
+              <key>ID</key>
+              <string>0753B0A5-BBE4-4160-9BC0-2CBF1A05D53B</string>
+              <key>ClockID</key>
+              <integer>-6592170705466818552</integer>
+      </dict>
+</array>
+</plist>

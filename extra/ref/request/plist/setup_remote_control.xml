@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+        <key>isRemoteControlOnly</key>
+        <true/>
+        <key>osName</key>
+        <string>macOS</string>
+        <key>sourceVersion</key>
+        <string>610.19.1</string>
+        <key>timingProtocol</key>
+        <string>None</string>
+        <key>model</key>
+        <string>MacBookPro15,3</string>
+        <key>deviceID</key>
+        <string>A4:83:E7:AB:91:EA</string>
+        <key>osVersion</key>
+        <string>12.3.1</string>
+        <key>osBuildVersion</key>
+        <string>21E258</string>
+        <key>macAddress</key>
+        <string>A4:83:E7:AB:91:EA</string>
+        <key>sessionUUID</key>
+        <string>2921D715-2EB1-4279-A08C-D6F65905EEC0</string>
+        <key>name</key>
+        <string>raziel</string>
+</dict>
+</plist>

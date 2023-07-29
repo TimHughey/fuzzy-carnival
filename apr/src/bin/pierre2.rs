@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 use tokio::{net::TcpListener, signal, task::JoinSet};
 use tracing::info;
 
-#[tokio::main]
+#[tokio::main(worker_threads = 10)]
 pub async fn main() -> apr::Result<()> {
     set_up_logging()?;
 

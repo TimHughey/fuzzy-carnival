@@ -1,0 +1,293 @@
+GET /info RTSP/1.0
+Active-Remote: 72068767
+CSeq: 0
+Content-Length: 70
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+X-Apple-ProtocolVersion: 1
+
+
+POST /pair-verify RTSP/1.0
+Active-Remote: 72068767
+CSeq: 1
+Content-Length: 37
+Content-Type: application/octet-stream
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+X-Apple-Client-Name: xapham
+X-Apple-HKP: 6
+X-Apple-PD: 1
+
+
+POST /pair-setup RTSP/1.0
+Active-Remote: 72068767
+CSeq: 2
+Content-Length: 9
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+X-Apple-Client-Name: xapham
+X-Apple-HKP: 4
+
+
+POST /pair-setup RTSP/1.0
+Active-Remote: 72068767
+CSeq: 3
+Content-Length: 457
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+X-Apple-Client-Name: xapham
+X-Apple-HKP: 4
+
+
+POST /fp-setup RTSP/1.0
+Active-Remote: 72068767
+CSeq: 4
+Content-Length: 16
+Content-Type: application/octet-stream
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+X-Apple-ET: 32
+
+
+POST /fp-setup RTSP/1.0
+Active-Remote: 72068767
+CSeq: 5
+Content-Length: 164
+Content-Type: application/octet-stream
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+X-Apple-ET: 32
+
+
+SETUP rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 6
+Content-Length: 874
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+GET /info RTSP/1.0
+Active-Remote: 72068767
+CSeq: 7
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+X-Apple-ProtocolVersion: 1
+
+
+GET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 8
+Content-Length: 8
+Content-Type: text/parameters
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+RECORD rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 9
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+SETPEERSX rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 10
+Content-Length: 265
+Content-Type: /peer-list-changed-x
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+POST /command RTSP/1.0
+Active-Remote: 72068767
+CSeq: 11
+Content-Length: 128
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+SET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 12
+Content-Length: 20
+Content-Type: text/parameters
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+POST /command RTSP/1.0
+Active-Remote: 72068767
+CSeq: 13
+Content-Length: 2644
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+POST /feedback RTSP/1.0
+Active-Remote: 72068767
+CSeq: 14
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+SET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 15
+Content-Length: 20
+Content-Type: text/parameters
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+POST /command RTSP/1.0
+Active-Remote: 72068767
+CSeq: 16
+Content-Length: 2644
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+POST /command RTSP/1.0
+Active-Remote: 72068767
+CSeq: 17
+Content-Length: 2644
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+SETUP rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 18
+Content-Length: 271
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+SET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 19
+Content-Length: 0
+Content-Type: image/none
+DACP-ID: 6E2DB4E8B3489D27
+RTP-Info: rtptime=3114266647
+User-Agent: AirPlay/665.13.1
+
+
+SETRATEANCHORTIME rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 20
+Content-Length: 190
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+SET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 21
+Content-Length: 43
+Content-Type: text/parameters
+DACP-ID: 6E2DB4E8B3489D27
+RTP-Info: rtptime=3114266931
+User-Agent: AirPlay/665.13.1
+
+
+SET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 22
+Content-Length: 161
+Content-Type: application/x-dmap-tagged
+DACP-ID: 6E2DB4E8B3489D27
+RTP-Info: rtptime=3114267243
+User-Agent: AirPlay/665.13.1
+
+
+POST /command RTSP/1.0
+Active-Remote: 72068767
+CSeq: 23
+Content-Length: 2644
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+SET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 24
+Content-Length: 120
+Content-Type: application/x-dmap-tagged
+DACP-ID: 6E2DB4E8B3489D27
+RTP-Info: rtptime=3114267577
+User-Agent: AirPlay/665.13.1
+
+
+SET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 25
+Content-Length: 120
+Content-Type: application/x-dmap-tagged
+DACP-ID: 6E2DB4E8B3489D27
+RTP-Info: rtptime=3114268075
+User-Agent: AirPlay/665.13.1
+
+
+POST /feedback RTSP/1.0
+Active-Remote: 72068767
+CSeq: 26
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+SET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 27
+Content-Length: 132
+Content-Type: application/x-dmap-tagged
+DACP-ID: 6E2DB4E8B3489D27
+RTP-Info: rtptime=3114291460
+User-Agent: AirPlay/665.13.1
+
+
+SET_PARAMETER rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 28
+Content-Length: 43
+Content-Type: text/parameters
+DACP-ID: 6E2DB4E8B3489D27
+RTP-Info: rtptime=3114291619
+User-Agent: AirPlay/665.13.1
+
+
+POST /feedback RTSP/1.0
+Active-Remote: 72068767
+CSeq: 29
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+SETRATEANCHORTIME rtsp://192.168.2.4/17850953470598267234 RTSP/1.0
+Active-Remote: 72068767
+CSeq: 39
+Content-Length: 53
+Content-Type: application/x-apple-binary-plist
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+
+
+POST /feedback RTSP/1.0
+Active-Remote: 72068767
+CSeq: 40
+DACP-ID: 6E2DB4E8B3489D27
+User-Agent: AirPlay/665.13.1
+

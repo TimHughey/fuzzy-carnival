@@ -1,0 +1,40 @@
+DICT DUMP dict=0x7fffc4002a60 buf=0x7fffc4003620 bytes=942
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+        <key>streams</key>
+        <array>
+                <dict>
+                        <key>audioMode</key>
+                        <string>default</string>
+                        <key>streamConnections</key>
+                        <dict>
+                                <key>streamConnectionTypeRTP</key>
+                                <dict>
+                                        <key>streamConnectionKeyUseStreamEncryptionKey</key>
+                                        <true/>
+                                </dict>
+                        </dict>
+                        <key>ct</key>
+                        <integer>4</integer>
+                        <key>spf</key>
+                        <integer>1024</integer>
+                        <key>shk</key>
+                        <data>
+                        sJahMX1CvS/aTJdiX3xUs/ATsFl22PFexm0wt0mB5Qs=
+                        </data>
+                        <key>streamConnectionID</key>
+                        <integer>-1903544043800212200</integer>
+                        <key>supportsDynamicStreamID</key>
+                        <true/>
+                        <key>audioFormat</key>
+                        <integer>4194304</integer>
+                        <key>clientID</key>
+                        <string>com.apple.Music</string>
+                        <key>type</key>
+                        <integer>103</integer>
+                </dict>
+        </array>
+</dict>
+</plist>

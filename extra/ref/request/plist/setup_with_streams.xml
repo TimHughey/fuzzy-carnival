@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+        <key>streams</key>
+        <array>
+                <dict>
+                        <key>audioMode</key>
+                        <string>default</string>
+                        <key>ct</key>
+                        <integer>4</integer>
+                        <key>streamConnectionID</key>
+                        <integer>-4149473013914908818</integer>
+                        <key>spf</key>
+                        <integer>1024</integer>
+                        <key>shk</key>
+                        <data>
+                        6PLTUtvNxm0kgscaBMpHPqCsmDjRRmXLH0KXn/vXYy8=
+                        </data>
+                        <key>supportsDynamicStreamID</key>
+                        <true/>
+                        <key>audioFormat</key>
+                        <integer>4194304</integer>
+                        <key>clientID</key>
+                        <string>com.apple.Music</string>
+                        <key>type</key>
+                        <integer>103</integer>
+                </dict>
+        </array>
+</dict>
+</plist>

@@ -1,0 +1,44 @@
+REPLIES
+  
+   6728.0ms INFO                path=/info        method=GET                bytes=643 val=binary
+   6749.0ms PAIRING             path=/pair-verify method=POST               bytes=135 val=binary
+   6789.9ms PAIRING             path=/pair-setup  method=POST               bytes=409 val=binary
+   6833.3ms PAIRING             path=/pair-setup  method=POST               bytes=69  val=binary
+   6838.4ms FAIRPLAY            path=/fp-setup    method=POST               bytes=142 val=binary
+   6844.9ms FAIRPLAY            path=/fp-setup    method=POST                         val=binary
+   6852.6ms SETUP               path=snip/<snip>  method=SETUP              bytes=134 val=binary
+   6863.8ms INFO                path=/info        method=GET                bytes=646 val=binary
+   6883.5ms PARAMETER           path=snip/<snip>  method=GET_PARAMETER      bytes=15  val=binary
+   6887.7ms RECORD              path=snip/<snip>  method=RECORD                 
+   6891.9ms SET_PEERSX          path=snip/<snip>  method=SETPEERSX              
+   6906.7ms COMMAND             path=/command     method=POST                   
+   6910.7ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER          
+   6914.8ms COMMAND             path=/command     method=POST                   
+   9006.1ms FEEDBACK            path=/feedback    method=POST                   
+  10089.1ms COMMAND             path=/command     method=POST                   
+  10108.9ms COMMAND             path=/command     method=POST                   
+  10114.4ms SETUP               path=snip/<snip>  method=SETUP              bytes=131 val=binary
+  10299.9ms SET_ANCHOR          path=snip/<snip>  method=SETRATEANCHORTIME      
+  10302.8ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER          
+  10306.0ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER          
+  10307.7ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER          
+  10312.5ms COMMAND             path=/command     method=POST                   
+  10332.9ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER          
+  10344.3ms SET_ANCHOR          path=snip/<snip>  method=SETRATEANCHORTIME      
+  10349.9ms FLUSHBUFFERED       path=snip/<snip>  method=FLUSHBUFFERED          
+  10510.9ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER          
+  10515.1ms SET_ANCHOR          path=snip/<snip>  method=SETRATEANCHORTIME      
+  10518.4ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER          
+  10522.3ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER          
+  10528.5ms COMMAND             path=/command     method=POST                   
+  10530.8ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER     
+  10534.3ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER     
+  10930.1ms FEEDBACK            path=/feedback    method=POST              
+  11098.1ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER     
+  11102.0ms PARAMETER           path=snip/<snip>  method=SET_PARAMETER     
+  12969.5ms FEEDBACK            path=/feedback    method=POST              
+  40452.4ms SET_ANCHOR          path=snip/<snip>  method=SETRATEANCHORTIME 
+  41280.3ms FEEDBACK            path=/feedback    method=POST              
+  43281.3ms FEEDBACK            path=/feedback    method=POST              
+  43860.1ms TEARDOWN            path=snip/<snip>  method=TEARDOWN          
+  43865.9ms TEARDOWN            path=snip/<snip>  method=TEARDOWN          

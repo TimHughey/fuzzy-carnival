@@ -16,13 +16,14 @@
 
 // use std::convert::TryInto;
 
-use std::{collections::HashMap, convert::From, fmt, io::Cursor};
+use std::{collections::HashMap, convert::From, fmt, fmt::Display, io::Cursor};
 
 extern crate plist;
 use plist::Dictionary;
 
 extern crate serde_derive;
 
+use arrayvec::ArrayVec;
 use bstr::ByteSlice;
 use bytes::Buf;
 use derive_new::new;
@@ -40,101 +41,58 @@ const CONTENT_TYPE: &str = "Content-Type";
 
 const APP_PLIST: &str = "application/x-apple-binary-plist";
 const PLIST_PREFIX: &str = "bplist";
+const RTSP_VER: &str = "RTSP/1.0";
+
+#[derive(Debug, PartialEq)]
+pub enum Method {
+    Get(String),
+    Unknown,
+}
+
+impl Method {
+    pub fn new(src: &str) -> Result<Method, Error> {
+        const KIND_IDX: usize = 0;
+        const PATH_IDX: usize = 1;
+        const PROTOCOL_IDX: usize = 2;
+
+        const MAX_PARTS: usize = 3;
+        let p = src
+            .split_ascii_whitespace()
+            .map(|s| s.to_string())
+            .take(MAX_PARTS)
+            .collect::<ArrayVec<String, MAX_PARTS>>();
+
+        if p[PROTOCOL_IDX] != RTSP_VER {
+            return Err(Error::ProtocolError);
+        }
+
+        let path = || p[PATH_IDX].to_owned();
+
+        match &p[KIND_IDX] {
+            k if k == "GET" => Ok(Method::Get(path())),
+            _ => Err(Error::ProtocolError),
+        }
+    }
+}
 
 #[derive(Debug, new)]
 #[allow(dead_code)]
 pub struct Frame {
-    method: Option<String>,
-    path: Option<String>,
+    pub method: Method,
     headers: HashMap<String, String>,
-    content: Option<Vec<u8>>,
+    content: Option<ContentType>,
+    consumed: u64,
 }
 
 impl Frame {
-    pub fn get_content(&self) -> Result<ContentType, Error> {
-        use plist::from_bytes;
-
-        // has_content() allows safe unwrapping
-        if self.has_content() {
-            match self.headers.get(CONTENT_TYPE) {
-                Some(t) if t == APP_PLIST => {
-                    if let Some(content) = &self.content {
-                        if let Ok(prefix) = content[0..PLIST_PREFIX.len()].to_str() {
-                            if prefix == PLIST_PREFIX {
-                                let plist = from_bytes::<Dictionary>(content);
-                                return Ok(ContentType::Plist(plist.ok().unwrap()));
-                            }
-                        }
-
-                        Err(Error::InvalidPlist)
-                    } else {
-                        Err(Error::ProtocolError)
-                    }
-                }
-                Some(_) => Ok(ContentType::Raw(self.content.to_owned().unwrap())),
-                None => Err(Error::ProtocolError),
-            }
-        } else {
-            Err(Error::ProtocolError)
-        }
-    }
-
-    pub fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
-        use bstr::B;
-        use Error::Incomplete;
-
-        let splitter = B("\r\n\r\n");
-
-        match src.get_ref().split_str(splitter).count() {
-            // complete message contains two separators
-            parts if parts < 2 => Err(Incomplete),
-            parts if parts == 2 => {
-                let needle = splitter;
-
-                match src.get_ref().rfind(needle) {
-                    Some(delim) if delim != 0 => {
-                        {
-                            let msg = src.chunk()[0..delim].to_str()?;
-                            debug!("complete message:\n{}", msg);
-                        }
-
-                        // if there is content be sure to include it
-                        if let Some(cnt) = get_content_len(src.chunk()) {
-                            src.advance(cnt);
-                        }
-
-                        src.advance(delim + needle.len());
-
-                        debug!(
-                            "cursor_pos={} remaining={}",
-                            src.position(),
-                            src.remaining()
-                        );
-
-                        Ok(())
-                    }
-                    _ => Err(Incomplete),
-                }
-            }
-
-            parts => {
-                error!("parts found={}", parts);
-                Err("invalid number of separators".into())
-            }
-        }
-    }
-
-    pub fn has_content(&self) -> bool {
-        self.headers.contains_key(CONTENT_LENGTH)
-            && self.headers.contains_key(CONTENT_TYPE)
-            && self.content.is_some()
+    pub fn content_ref(&self) -> &Option<ContentType> {
+        &self.content
     }
 
     pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, Error> {
         use bstr::B;
         use Error::Incomplete;
 
-        const CONTENT_LENGTH: &str = "Content-Length";
         let needle = B("\r\n\r\n");
 
         match src.chunk().find(needle) {
@@ -145,55 +103,44 @@ impl Frame {
                 let hdr_block = src.get_ref()[0..dpos].to_str()?;
 
                 // establish destinations for the data we'll extract
-                let mut method: Option<String> = None;
-                let mut path: Option<String> = None;
+                let mut method: Option<Method> = None;
                 let mut headers: HashMap<String, String> = HashMap::new();
-                let mut content: Option<Vec<u8>> = None;
 
-                let lines = hdr_block.lines();
+                for (n, line) in hdr_block.lines().enumerate() {
+                    match n {
+                        // line=0 is the method, url and protocol
+                        n if n == 0 => method = Some(Method::new(line)?),
 
-                lines.enumerate().for_each(|e| match e {
-                    // we use enumerate here to handle the first line differently
-                    // than the rest.  the first line is the method, path and protocol
-                    (n, u) if n == 0 => {
-                        let mut prelude = u.split_ascii_whitespace();
-                        if let (Some(m), Some(p)) = (prelude.next(), prelude.next()) {
-                            method = Some(m.to_string());
-                            path = Some(p.to_string());
+                        // line=1.. are headers
+                        _n if line.contains(':') => {
+                            const MAX_PARTS: usize = 2;
+
+                            let p = line
+                                .split_ascii_whitespace()
+                                .map(|s| s.trim_end_matches(':'))
+                                .take(MAX_PARTS)
+                                .collect::<ArrayVec<&str, MAX_PARTS>>();
+
+                            headers.insert(p[0].to_string(), p[1].to_string());
                         }
+                        _ => Err(Error::ProtocolError)?,
                     }
-                    // subsequent lines are headers
-                    (_n, u) => {
-                        let mut p = u.split(": ");
-
-                        if let (Some(k), Some(v)) = (p.next(), p.next()) {
-                            headers.insert(k.to_string(), v.to_string());
-                        }
-                    }
-                });
+                }
 
                 // done processing the prelude and headers block, move cursor
                 src.advance(dpos + needle.len());
 
-                // extract content, if present
-                if let Some(content_len) = headers.get(CONTENT_LENGTH) {
-                    let cnt: usize = content_len.parse()?;
-
-                    if src.remaining() >= cnt {
-                        content = Some(src.chunk()[0..cnt].to_vec());
-
-                        // done extracting content, move cursor
-                        src.advance(cnt);
-                    } else {
-                        return Err(Incomplete);
-                    }
-                }
+                let content = consume_body(src, &headers)?;
+                let consumed = src.position();
 
                 // NOTE
                 // the cursor position at the end of this function is used as the
-                // length of the src data processed so it can be consumed
+                // length of the src data processed for comsumption by the caller
 
-                Ok(Frame::new(method, path, headers, content))
+                match method {
+                    Some(method) => Ok(Frame::new(method, headers, content, consumed)),
+                    None => Err(Error::ProtocolError),
+                }
             }
             Some(_) => Err(Incomplete),
             None => Err(Incomplete),
@@ -201,39 +148,80 @@ impl Frame {
     }
 }
 
-#[allow(dead_code)]
-fn get_content_len(src: &[u8]) -> Option<usize> {
-    debug!("src={:?}", src.to_str());
-
-    let mut src = Cursor::new(src);
-    let needle = CONTENT_LENGTH;
-
-    if let Some(cnt) = src.chunk().find(needle) {
-        debug!("needle at pos={}", cnt);
-        src.advance(cnt + CONTENT_LENGTH.len());
-
-        if let Some(val) = src.chunk().words().next() {
-            debug!("found word={}", val);
-            if let Ok(len) = val.parse::<usize>() {
-                return Some(len);
-            }
+impl Display for Method {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Method::Get(path) => write!(fmt, "GET {}", path),
+            Method::Unknown => write!(fmt, "UNKNOWN"),
         }
     }
-
-    None
 }
+
+impl Display for Frame {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        write!(fmt, "{} {}\n{:#?}", self.method, RTSP_VER, self.headers)
+    }
+}
+
+///
+/// Frame module utilities
+///
+
+///
+/// Consume Message Body
+///
+
+fn consume_body(
+    src: &mut Cursor<&[u8]>,
+    headers: &HashMap<String, String>,
+) -> Result<Option<ContentType>, Error> {
+    use plist::from_bytes;
+
+    if src.remaining() == 0
+        || !headers.contains_key(CONTENT_TYPE)
+        || !headers.contains_key(CONTENT_LENGTH)
+    {
+        return Ok(None);
+    }
+
+    // we've confirmed the key exists so safe to unwrap
+    let cnt = headers.get(CONTENT_LENGTH).unwrap().parse::<usize>()?;
+    let raw = src.chunk()[0..cnt].as_bstr();
+
+    match headers.get(CONTENT_TYPE) {
+        // handle binary plists
+        Some(t) if t == APP_PLIST => {
+            let prefix = raw[0..PLIST_PREFIX.len()].to_str()?;
+
+            if prefix == PLIST_PREFIX {
+                let plist = from_bytes::<Dictionary>(raw)?;
+                src.advance(cnt);
+                return Ok(Some(ContentType::Plist(plist)));
+            }
+
+            Err(Error::InvalidPlist)
+        }
+
+        // default if unknown content type
+        Some(_) => {
+            let raw = raw.to_vec();
+            src.advance(cnt);
+
+            Ok(Some(ContentType::Raw(raw)))
+        }
+        None => Err(Error::ProtocolError),
+    }
+}
+
 #[test]
-fn can_get_content_len_from_cursor() {
-    let inner: &[u8] = r#"Content-Type: application/x-apple-binary-plist
-    Content-Length: 80"#
-        .as_bytes();
+fn can_create_method_for_get() -> Result<(), Error> {
+    let src: &str = r#"GET /info RTSP/1.0"#;
 
-    let src = Cursor::new(inner);
+    let method = Method::new(src)?;
 
-    let maybe_val = get_content_len(src.chunk());
+    assert!(matches!(method, Method::Get { .. }));
 
-    assert!(maybe_val.is_some());
-    assert!(maybe_val.unwrap() == 80);
+    Ok(())
 }
 
 #[derive(Debug)]

@@ -33,8 +33,8 @@ pub struct Session {
 }
 
 impl Session {
-    /// Create a new `Session`, backed by `socket`. Read and write buffers
-    /// are initialized.
+    /// Create a new `Session`, backed by `socket`.
+    /// Read and write buffers are initialized.
     pub fn new(socket: TcpStream) -> Session {
         Session {
             stream: BufWriter::new(socket),
@@ -97,57 +97,22 @@ impl Session {
         // with bytes.
         let mut buf = Cursor::new(&self.buffer[..]);
 
-        // The first step is to check if enough data has been buffered to parse
-        // a single frame. This step is usually much faster than doing a full
-        // parse of the frame, and allows us to skip allocating data structures
-        // to hold the frame data unless we know the full frame has been
-        // received.
-        match Frame::check(&mut buf) {
-            Ok(_) => {
-                // The `check` function will have advanced the cursor until the
-                // end of the frame. Since the cursor had position set to zero
-                // before `Frame::check` was called, we obtain the length of the
-                // frame by checking the cursor position.
-                let len = buf.position() as usize;
+        match Frame::parse(&mut buf) {
+            Ok(frame) => {
+                let cnt = buf.position() as usize;
+                self.buffer.advance(cnt);
 
-                // Reset the position to zero before passing the cursor to
-                // `Frame::parse`.
-                buf.set_position(0);
-
-                // Parse the frame from the buffer. This allocates the necessary
-                // structures to represent the frame and returns the frame
-                // value.
-                //
-                // If the encoded frame representation is invalid, an error is
-                // returned. This should terminate the **current** connection
-                // but should not impact any other connected client.
-                let frame = Frame::parse(&mut buf)?;
-
-                // Discard the parsed data from the read buffer.
-                //
-                // When `advance` is called on the read buffer, all of the data
-                // up to `len` is discarded. The details of how this works is
-                // left to `BytesMut`. This is often done by moving an internal
-                // cursor, but it may be done by reallocating and copying data.
-                self.buffer.advance(len);
-
-                info!(
-                    "advanced buffer cursor [len={} remaining={}]",
-                    len,
-                    self.buffer.remaining()
-                );
-
-                // Return the parsed frame to the caller.
                 Ok(Some(frame))
             }
+
             // There is not enough data present in the read buffer to parse a
             // single frame. We must wait for more data to be received from the
-            // socket. Reading from the socket will be done in the statement
-            // after this `match`.
+            // socket.
             //
             // We do not want to return `Err` from here as this "error" is an
             // expected runtime condition.
             Err(Incomplete) => Ok(None),
+
             // An error was encountered while parsing the frame. The connection
             // is now in an invalid state. Returning `Err` from here will result
             // in the connection being closed.

@@ -1,0 +1,62 @@
+
+      102.6ms CONFIG             PARSE           COMPLETE table size=6 elapsed=1.45ms
+      103.0ms CONFIG             INIT            sizeof=1 threads=1/1
+      103.2ms HOST               CREATED         host_uuid=9a848dde-11d1-4410-9b03-e3aec3a5a959
+      103.3ms HOST               CREATED         public key=50ee552b25f5f1f7bef547af4a9e7457abb49ee37bc630752b194542ca558884
+      103.3ms PIERRE             INIT            jophiel 00.00.03-221-g73b462d 2022-11-12T21:41:55
+      108.8ms MASTER CLOCK       CONSTRUCT       shm_name=/nqptp dest=127.0.0.1:9000
+      111.9ms FRAME_STATS        INIT_DB         success uri=http://localhost:8086?db=pierre db=0x555555647510
+      112.2ms FFT                INIT            wwf_size=512 elapsed=0.07ms
+      113.2ms FRAME              INIT            sizeof=272 lead_time=23.22ms fps=43
+      114.7ms DESK               INIT            sizeof=1064 threads=5/5 lead_time_min=7.66ms
+      114.8ms AIRPLAY            INIT            features=0x1c300405fc200
+      114.9ms DESK_CONTROL       CONNECT         reason=Transport endpoint is not connected
+      115.0ms DESK_STATS         INIT_DB         success db=0x7fffa40037f0
+      115.0ms mDNS               ZSERVICE        promise stored name=test-with-devs
+      356.4ms mDNS               RESOLVE_FOUND   found promise for name=test-with-devs
+      357.5ms DESK_CONTROL       CONNECT         192.168.2.4:42996 -> 192.168.2.162:49152 elapsed=1.02ms handle=28
+      360.3ms DESK_CONTROL       REMOTE          clock diff=1.407ms
+      373.2ms DESK_DATA          ACCEPTED        handle=30
+    31955.7ms RTSP SESSION       NEW             handle=31
+    42259.5ms RTSP SESSION       NEW             handle=31
+    42706.1ms av::FRAME          INFO            audio plane/linesize 1=0x7fffd00012a0/8192 2=0x7fffd0003330/0 nb_samples=1024 format=8 flags=0
+    42710.2ms RACKED             LOG_RACKED      FIRST REEL reels=1   wip_reel=REEL 0x1001 frames=21 seq a/b=11640933/11640953ts a/b=  3042064345/3042084825  
+    42712.8ms RACKED             LOG_RACKED      RACKED     reels=2   wip_reel=REEL 0x1002 frames=21 seq a/b=11640954/11640974ts a/b=  3042085849/3042106329  
+    42793.6ms ANCHOR             SAVE            have existing source=false
+                                                 OLD    : NONE
+                                                 NEW    : clock=0xbcd07473011f0008 rtp_time=3042042301 anchor=OK
+                                                 MASTER : clock=0xbcd07473011f0008 sample_time=OK master_for=151.74ms
+    42793.7ms RENDER             SET             false => true
+    42793.9ms DESK               FRAME_LOOP      DROP frame=seq_num=11640933 ts=3042064345   state=future sync_wait=499.73ms
+    43315.8ms MAJOR_PEAK         CONSTRUCT       base_color=hsb(   0.00 100.0 100.0)
+   238847.2ms RACKED             LOG_RACKED      FIRST REEL reels=1   wip_reel=REEL 0x1192 frames=21 seq a/b=11649354/11649374ts a/b=  3050687449/3050707929  
+   238854.0ms DESK               FRAME_LOOP      DROP frame=seq_num=11649354 ts=3050687449   state=outdated sync_wait=-25.44ms
+   238854.3ms DESK               FRAME_LOOP      DROP frame=seq_num=11649355 ts=3050688473   state=outdated sync_wait=-2.64ms
+   239023.5ms RACKED             HANDOFF         DISCARDING frame=seq_num=11649383 ts=3050717145   state=empty decipher_len=0
+   239667.6ms RACKED             FLUSH           ACTIVE seq_num=11649384 timestamp=3050717145  
+   239667.7ms REEL 0x1193        FLUSH           clearing ALL REEL 0x1193 frames=8  seq a/b=11649375/11649382ts a/b=  3050708953/3050716121  
+   240104.0ms RACKED             HANDOFF         DISCARDING frame=seq_num=11649384 ts=308700824    state=flushed decipher_len=0
+   240104.2ms FLUSH_REQUEST      COMPLETE        INACTIVE seq_num=11649384 timestamp=3050717145  
+   240107.2ms RACKED             LOG_RACKED      FIRST REEL reels=1   wip_reel=REEL 0x1193 frames=21 seq a/b=11649385/11649405ts a/b=   308701848/308722328   
+   240109.3ms RACKED             LOG_RACKED      RACKED     reels=2   wip_reel=REEL 0x1194 frames=21 seq a/b=11649406/11649426ts a/b=   308723352/308743832   
+   240230.4ms ANCHOR             SAVE            have existing source=false
+                                                 OLD    : NONE
+                                                 NEW    : clock=0xbcd07473011f0008 rtp_time=308678780 anchor=OK
+                                                 MASTER : clock=0xbcd07473011f0008 sample_time=OK master_for=3m 17s 588.52ms
+   240230.4ms RENDER             SET             false => true
+   240235.4ms DESK               FRAME_LOOP      DROP frame=seq_num=11649385 ts=308701848    state=future sync_wait=510.97ms
+   399772.4ms RACKED             MONITOR_WIP     INCOMPLETE REEL 0x13b1 frames=11 seq a/b=11660767/11660777ts a/b=   320357016/320367256   
+   505305.0ms RACKED             LOG_RACKED      FIRST REEL reels=1   wip_reel=REEL 0x13b2 frames=21 seq a/b=11660778/11660798ts a/b=   320368280/320388760   
+   505309.9ms DESK               FRAME_LOOP      DROP frame=seq_num=11660778 ts=320368280    state=outdated sync_wait=-17.68ms
+   505484.8ms RACKED             HANDOFF         DISCARDING frame=seq_num=11660807 ts=320397976    state=empty decipher_len=0
+   506057.6ms RACKED             FLUSH           ACTIVE seq_num=11660808 timestamp=320397976   
+   506057.6ms REEL 0x13b3        FLUSH           clearing ALL REEL 0x13b3 frames=8  seq a/b=11660799/11660806ts a/b=   320389784/320396952   
+   506144.5ms FLUSH_REQUEST      COMPLETE        INACTIVE seq_num=11660808 timestamp=320397976   
+   506147.1ms RACKED             LOG_RACKED      FIRST REEL reels=1   wip_reel=REEL 0x13b3 frames=21 seq a/b=11660808/11660828ts a/b=   396662013/396682493   
+   506175.4ms RACKED             LOG_RACKED      RACKED     reels=2   wip_reel=REEL 0x13b4 frames=21 seq a/b=11660829/11660849ts a/b=   396683517/396703997   
+   506244.4ms ANCHOR             SAVE            have existing source=false
+                                                 OLD    : NONE
+                                                 NEW    : clock=0xbcd07473011f0008 rtp_time=396639969 anchor=OK
+                                                 MASTER : clock=0xbcd07473011f0008 sample_time=OK master_for=7m 43s 602.53ms
+   506244.4ms RENDER             SET             false => true
+   506244.6ms DESK               FRAME_LOOP      DROP frame=seq_num=11660808 ts=396662013    state=future sync_wait=489.42ms

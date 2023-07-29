@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+      <key>rate</key>
+      <integer>1</integer>
+      <key>networkTimeTimelineID</key>
+      <integer>-6592170705466818552</integer>
+      <key>networkTimeSecs</key>
+      <integer>436043</integer>
+      <key>networkTimeFrac</key>
+      <integer>-3130090389147484160</integer>
+      <key>networkTimeFlags</key>
+      <integer>0</integer>
+      <key>rtpTime</key>
+      <integer>2968748473</integer>
+</dict>
+</plist>

@@ -19,6 +19,7 @@
 //! Provides an async `run` function that listens for inbound connections,
 //! spawning a task per connection.
 
+use crate::ContentType;
 use crate::{Session, Shutdown};
 
 use std::future::Future;
@@ -355,11 +356,12 @@ impl Handler {
                 None => return Ok(()),
             };
 
-            if let Ok(crate::frame::ContentType::Plist(plist)) = frame.get_content() {
+            if let Some(ContentType::Plist(plist)) = frame.content_ref() {
                 info!("plist={:?}", plist);
             }
 
             debug!(?frame);
+            info!("{}", frame);
 
             // Convert the redis frame into a command struct. This returns an
             // error if the frame is not a valid redis command or it is an
