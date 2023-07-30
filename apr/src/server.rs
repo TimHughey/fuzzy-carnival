@@ -19,8 +19,8 @@
 //! Provides an async `run` function that listens for inbound connections,
 //! spawning a task per connection.
 
-use crate::ContentType;
-use crate::{Session, Shutdown};
+// use crate::ContentType;
+use crate::{ContentType, Result, Session, Shutdown};
 
 use std::future::Future;
 use std::sync::Arc;
@@ -128,9 +128,9 @@ struct Handler {
 /// production (you'd think that all the disclaimers would make it obvious that
 /// this is not a serious project... but I thought that about mini-http as
 /// well).
-const MAX_CONNECTIONS: usize = 250;
+const MAX_CONNECTIONS: usize = 2;
 
-/// Run the mini-redis server.
+/// Run the server.
 ///
 /// Accepts connections from the supplied listener. For each inbound connection,
 /// a task is spawned to handle that connection. The server runs until the
@@ -232,7 +232,7 @@ impl Listener {
     /// The process is not able to detect when a transient error resolves
     /// itself. One strategy for handling this is to implement a back off
     /// strategy, which is what we do here.
-    async fn run(&mut self) -> crate::Result<()> {
+    async fn run(&mut self) -> Result<()> {
         info!("accepting inbound connections");
 
         loop {
@@ -294,7 +294,7 @@ impl Listener {
     /// After the second failure, the task waits for 2 seconds. Each subsequent
     /// failure doubles the wait time. If accepting fails on the 6th try after
     /// waiting for 64 seconds, then this function returns with an error.
-    async fn accept(&mut self) -> crate::Result<TcpStream> {
+    async fn accept(&mut self) -> Result<TcpStream> {
         let mut backoff = 1;
 
         // Try to accept a few times
@@ -333,7 +333,7 @@ impl Handler {
     ///
     /// When the shutdown signal is received, the connection is processed until
     /// it reaches a safe state, at which point it is terminated.
-    async fn run(&mut self) -> crate::Result<()> {
+    async fn run(&mut self) -> Result<()> {
         // As long as the shutdown signal has not been received, try to read a
         // new request frame.
         while !self.shutdown.is_shutdown() {

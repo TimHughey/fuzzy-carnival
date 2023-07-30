@@ -14,16 +14,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use apr::server;
-use apr::ApReceiver;
+use anyhow::anyhow;
+use apr::{server, ApReceiver, Result};
 
 use std::time::{Duration, Instant};
 use tokio::{net::TcpListener, signal, task::JoinSet};
 use tracing::info;
 
 #[tokio::main(worker_threads = 10)]
-pub async fn main() -> apr::Result<()> {
-    set_up_logging()?;
+pub async fn main() -> Result<()> {
+    // setup logging
+    if let Err(e) = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init()
+    {
+        return Err(anyhow!(e));
+    }
 
     let receiver = ApReceiver::new()?;
     let mut tasks = JoinSet::new();
@@ -63,11 +69,4 @@ pub async fn main() -> apr::Result<()> {
     }
 
     Ok(())
-}
-
-fn set_up_logging() -> apr::Result<()> {
-    // See https://docs.rs/tracing for more info
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init()
 }

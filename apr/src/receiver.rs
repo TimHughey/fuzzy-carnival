@@ -20,7 +20,9 @@ use alkali::{
     mem::FullAccess,
 };
 
-use anyhow::{anyhow, Result};
+use crate::Result;
+
+use anyhow::anyhow;
 
 use mdns_sd::{DaemonEvent, ServiceDaemon, ServiceInfo};
 use network_interface::{NetworkInterface, NetworkInterfaceConfig};
@@ -263,8 +265,7 @@ fn make_seed(device_id: &str) -> Result<Seed<FullAccess>> {
 #[cfg(test)]
 mod tests {
 
-    use crate::ApReceiver;
-    use anyhow::Result;
+    use crate::{ApReceiver, Result};
 
     fn test_mac_addr() -> String {
         "78:28:CA:B0:C5:64".to_string()

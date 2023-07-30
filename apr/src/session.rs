@@ -1,7 +1,8 @@
 // use crate::frame::{self, Frame};
 
-use crate::frame::{self, Frame};
+use crate::{frame::Frame, Result};
 
+use anyhow::anyhow;
 use bytes::{Buf, BytesMut};
 use std::io::Cursor;
 use tokio::io::{AsyncReadExt, BufWriter};
@@ -57,7 +58,7 @@ impl Session {
     /// On success, the received frame is returned. If the `TcpStream`
     /// is closed in a way that doesn't break a frame in half, it returns
     /// `None`. Otherwise, an error is returned.
-    pub async fn read_frame(&mut self) -> crate::Result<Option<Frame>> {
+    pub async fn read_frame(&mut self) -> Result<Option<Frame>> {
         loop {
             // Attempt to parse a frame from the buffered data. If enough data
             // has been buffered, the frame is returned.
@@ -78,7 +79,7 @@ impl Session {
                 if self.buffer.is_empty() {
                     return Ok(None);
                 } else {
-                    return Err("connection reset by peer".into());
+                    return Err(anyhow!("connection reset by peer"));
                 }
             }
         }
@@ -88,8 +89,8 @@ impl Session {
     /// data, the frame is returned and the data removed from the buffer. If not
     /// enough data has been buffered yet, `Ok(None)` is returned. If the
     /// buffered data does not represent a valid frame, `Err` is returned.
-    fn parse_frame(&mut self) -> crate::Result<Option<Frame>> {
-        use frame::Error::Incomplete;
+    fn parse_frame(&mut self) -> Result<Option<Frame>> {
+        use crate::FrameError::Incomplete;
 
         // Cursor is used to track the "current" location in the
         // buffer. Cursor also implements `Buf` from the `bytes` crate

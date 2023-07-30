@@ -16,19 +16,44 @@
 
 // use std::convert::TryInto;
 
-use std::{collections::HashMap, convert::From, fmt, fmt::Display, io::Cursor};
+use std::{collections::HashMap, fmt, fmt::Display, io::Cursor};
 
 extern crate plist;
 use plist::Dictionary;
 
 extern crate serde_derive;
 
+use anyhow::Result;
 use arrayvec::ArrayVec;
 use bstr::ByteSlice;
 use bytes::Buf;
 use derive_new::new;
+use thiserror::Error;
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
+
+#[derive(Error, Debug, Default)]
+pub enum FrameError {
+    #[error("should be complete frame, continue reading")]
+    Incomplete,
+    #[error("line {0} should be a method line")]
+    Method(String),
+    #[error("{0} should be a handled method")]
+    MethodUnknown(String),
+    #[error("{found:?} should be a header line")]
+    InvalidHeader { found: String },
+    #[error("content length should be convertable to numeric")]
+    InvalidContentLength(#[from] std::num::ParseIntError),
+    #[error("should be valid binary plist")]
+    InvalidPlist(#[from] plist::Error),
+    #[error("message should be convertible to UTF8")]
+    ProtocolError(#[from] bstr::Utf8Error),
+    #[error("message body contain content body for {0}")]
+    ContentBody(String),
+    #[default]
+    #[error("unknown error")]
+    Default,
+}
 
 #[derive(Debug)]
 pub enum ContentType {
@@ -40,17 +65,17 @@ const CONTENT_LENGTH: &str = "Content-Length";
 const CONTENT_TYPE: &str = "Content-Type";
 
 const APP_PLIST: &str = "application/x-apple-binary-plist";
-const PLIST_PREFIX: &str = "bplist";
 const RTSP_VER: &str = "RTSP/1.0";
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub enum Method {
     Get(String),
+    #[default]
     Unknown,
 }
 
 impl Method {
-    pub fn new(src: &str) -> Result<Method, Error> {
+    pub fn new(src: &str) -> Result<Method, FrameError> {
         const KIND_IDX: usize = 0;
         const PATH_IDX: usize = 1;
         const PROTOCOL_IDX: usize = 2;
@@ -63,14 +88,14 @@ impl Method {
             .collect::<ArrayVec<String, MAX_PARTS>>();
 
         if p[PROTOCOL_IDX] != RTSP_VER {
-            return Err(Error::ProtocolError);
+            return Err(FrameError::Method(src.to_string()));
         }
 
         let path = || p[PATH_IDX].to_owned();
 
         match &p[KIND_IDX] {
             k if k == "GET" => Ok(Method::Get(path())),
-            _ => Err(Error::ProtocolError),
+            k => Err(FrameError::MethodUnknown(k.to_string())),
         }
     }
 }
@@ -89,9 +114,8 @@ impl Frame {
         &self.content
     }
 
-    pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, Error> {
+    pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, FrameError> {
         use bstr::B;
-        use Error::Incomplete;
 
         let needle = B("\r\n\r\n");
 
@@ -103,13 +127,13 @@ impl Frame {
                 let hdr_block = src.get_ref()[0..dpos].to_str()?;
 
                 // establish destinations for the data we'll extract
-                let mut method: Option<Method> = None;
+                let mut method: Method = Method::default();
                 let mut headers: HashMap<String, String> = HashMap::new();
 
                 for (n, line) in hdr_block.lines().enumerate() {
                     match n {
                         // line=0 is the method, url and protocol
-                        n if n == 0 => method = Some(Method::new(line)?),
+                        n if n == 0 => method = Method::new(line)?,
 
                         // line=1.. are headers
                         _n if line.contains(':') => {
@@ -123,7 +147,9 @@ impl Frame {
 
                             headers.insert(p[0].to_string(), p[1].to_string());
                         }
-                        _ => Err(Error::ProtocolError)?,
+                        _n => Err(FrameError::InvalidHeader {
+                            found: line.to_string(),
+                        })?,
                     }
                 }
 
@@ -137,13 +163,10 @@ impl Frame {
                 // the cursor position at the end of this function is used as the
                 // length of the src data processed for comsumption by the caller
 
-                match method {
-                    Some(method) => Ok(Frame::new(method, headers, content, consumed)),
-                    None => Err(Error::ProtocolError),
-                }
+                Ok(Frame::new(method, headers, content, consumed))
             }
-            Some(_) => Err(Incomplete),
-            None => Err(Incomplete),
+            Some(_) => Err(FrameError::Incomplete),
+            None => Err(FrameError::Incomplete),
         }
     }
 }
@@ -174,9 +197,7 @@ impl Display for Frame {
 fn consume_body(
     src: &mut Cursor<&[u8]>,
     headers: &HashMap<String, String>,
-) -> Result<Option<ContentType>, Error> {
-    use plist::from_bytes;
-
+) -> Result<Option<ContentType>, FrameError> {
     if src.remaining() == 0
         || !headers.contains_key(CONTENT_TYPE)
         || !headers.contains_key(CONTENT_LENGTH)
@@ -191,15 +212,9 @@ fn consume_body(
     match headers.get(CONTENT_TYPE) {
         // handle binary plists
         Some(t) if t == APP_PLIST => {
-            let prefix = raw[0..PLIST_PREFIX.len()].to_str()?;
-
-            if prefix == PLIST_PREFIX {
-                let plist = from_bytes::<Dictionary>(raw)?;
-                src.advance(cnt);
-                return Ok(Some(ContentType::Plist(plist)));
-            }
-
-            Err(Error::InvalidPlist)
+            let plist = plist::from_bytes::<Dictionary>(raw)?;
+            src.advance(cnt);
+            Ok(Some(ContentType::Plist(plist)))
         }
 
         // default if unknown content type
@@ -209,12 +224,12 @@ fn consume_body(
 
             Ok(Some(ContentType::Raw(raw)))
         }
-        None => Err(Error::ProtocolError),
+        None => Ok(None),
     }
 }
 
 #[test]
-fn can_create_method_for_get() -> Result<(), Error> {
+fn can_create_method_for_get() -> Result<()> {
     let src: &str = r#"GET /info RTSP/1.0"#;
 
     let method = Method::new(src)?;
@@ -222,62 +237,4 @@ fn can_create_method_for_get() -> Result<(), Error> {
     assert!(matches!(method, Method::Get { .. }));
 
     Ok(())
-}
-
-#[derive(Debug)]
-pub enum Error {
-    Incomplete,
-    ProtocolError,
-    InvalidPlist,
-    /// Invalid message encoding
-    Other(crate::Error),
-}
-
-impl From<String> for Error {
-    fn from(src: String) -> Error {
-        Error::Other(src.into())
-    }
-}
-
-impl From<&str> for Error {
-    fn from(src: &str) -> Error {
-        src.to_string().into()
-    }
-}
-
-impl From<bstr::Utf8Error> for Error {
-    fn from(_src: bstr::Utf8Error) -> Error {
-        "protocol error; invalid frame format".into()
-    }
-}
-
-impl From<std::num::ParseIntError> for Error {
-    fn from(_src: std::num::ParseIntError) -> Error {
-        "protocol error; invalid frame format".into()
-    }
-}
-
-impl From<plist::Error> for Error {
-    fn from(src: plist::Error) -> Error {
-        src.into()
-    }
-}
-
-// impl From<TryFromIntError> for Error {
-//     fn from(_src: TryFromIntError) -> Error {
-//         "protocol error; invalid frame format".into()
-//     }
-// }
-
-impl std::error::Error for Error {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Error::Incomplete => "stream ended early".fmt(fmt),
-            Error::ProtocolError => "protocol error".fmt(fmt),
-            Error::InvalidPlist => "invalid plist".fmt(fmt),
-            Error::Other(err) => err.fmt(fmt),
-        }
-    }
 }

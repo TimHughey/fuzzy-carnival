@@ -49,6 +49,7 @@ mdns-sd = { version = ">=0.7.3" }
 network-interface = ">=1.0.1"
 plist = ">=0.1.5"
 serde_derive = ">=1.0.173"
+thiserror = ">=1.0"
 tinyvec = ">=1.6.0"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
