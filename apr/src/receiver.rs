@@ -20,50 +20,16 @@ use alkali::{
     mem::FullAccess,
 };
 
+use anyhow::{anyhow, Result};
+
 use mdns_sd::{DaemonEvent, ServiceDaemon, ServiceInfo};
 use network_interface::{NetworkInterface, NetworkInterfaceConfig};
-use std::{error::Error, fmt, result, time::Duration};
+use std::time::Duration;
 
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
 
 use crate::flags::{FeatureFlags, StatusFlags};
-
-/// Result Type for ApReceiver
-pub type ApReceiverResult<T> = result::Result<T, ApReceiverError>;
-
-// Define our error types. These may be customized for our error handling cases.
-// Now we will be able to write our own errors, defer to an underlying error
-// implementation, or do something in between.
-#[derive(Debug, Clone)]
-pub struct ApReceiverError {
-    details: String,
-}
-
-impl ApReceiverError {
-    pub fn new(detail_str: &str) -> Self {
-        Self {
-            details: detail_str.to_string(),
-        }
-    }
-}
-
-// Generation of an error is completely separate from how it is displayed.
-// There's no need to be concerned about cluttering complex logic with the display style.
-//
-// Note that we don't store any extra info about the errors. This means we can't state
-// which string failed to parse without modifying our types to carry that information.
-impl fmt::Display for ApReceiverError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "AP receiver failure")
-    }
-}
-
-impl Error for ApReceiverError {
-    fn description(&self) -> &str {
-        self.details.as_str()
-    }
-}
 
 const RECEIVER_NAME: &str = "Pierre";
 const ST_AIRPLAY: &str = "_airplay._tcp.local.";
@@ -79,145 +45,108 @@ pub struct ApReceiver {
 }
 
 impl ApReceiver {
-    pub fn new() -> ApReceiverResult<ApReceiver> {
+    pub fn new() -> Result<ApReceiver> {
         const GIT_VERSION: &str = git_version::git_version!();
 
-        if let Some((mac_addr, host_ip)) = Self::get_net() {
-            // create our device id and unique id
-            let (device_id, id) = Self::make_ids(&mac_addr);
+        let (mac_addr, host_ip) = get_net()?;
 
-            // create our security keys
-            let keypair = Self::make_keypair(&device_id);
+        // create our device id and unique id
+        let (device_id, id) = Self::make_ids(&mac_addr);
 
-            let host = Self::hostname();
-            let pk = Self::get_pub_key(&keypair);
-            let ff_hex = FeatureFlags::default().as_lsb_msb_hex();
-            let st_hex = format!("{:#x}", StatusFlags::default());
+        // create our security keys
+        let keypair = make_keypair(&device_id)?;
 
-            let serial_num = Self::serial_num(&device_id);
+        let host = get_hostname()?;
+        let pk = Self::get_pub_key(&keypair);
+        let ff_hex = FeatureFlags::default().as_lsb_msb_hex();
+        let st_hex = format!("{:#x}", StatusFlags::default());
 
-            let txt_raop = [
-                ("pk", pk.as_str()),
-                ("vs", "366.0"),
-                ("vn", "65537"),
-                ("tp", "UDP"),
-                ("sf", &st_hex),
-                ("md", "0,1,2"),
-                ("am", "Pierre"),
-                ("fv", GIT_VERSION),
-                ("ft", &ff_hex),
-                ("et", "0,4"),
-                ("da", "true"),
-                ("cn", "0,4"),
-            ];
+        let serial_num = Self::serial_num(&device_id);
 
-            // initialize our mdns daemon
-            let mdns = ServiceDaemon::new().expect("failed to create mdns daemon");
+        let txt_raop = [
+            ("pk", pk.as_str()),
+            ("vs", "366.0"),
+            ("vn", "65537"),
+            ("tp", "UDP"),
+            ("sf", &st_hex),
+            ("md", "0,1,2"),
+            ("am", "Pierre"),
+            ("fv", GIT_VERSION),
+            ("ft", &ff_hex),
+            ("et", "0,4"),
+            ("da", "true"),
+            ("cn", "0,4"),
+        ];
 
-            let si_raop = ServiceInfo::new(
+        let txt_airplay = [
+            ("pk", pk.as_str()),
+            ("gcgl", "0"),
+            ("gid", &mac_addr),
+            ("pi", &mac_addr),
+            ("srcvers", "366.0"),
+            ("protovers", "1.1"),
+            ("serial_num", &serial_num),
+            ("manufacturer", "Hughey"),
+            ("model", "Pierre"),
+            ("flags", &st_hex),
+            ("fv", GIT_VERSION),
+            ("rsf", "0x0"),
+            ("features", &ff_hex),
+            ("deviceid", &device_id),
+            ("acl", "0"),
+        ];
+
+        let services = vec![
+            ServiceInfo::new(
                 ST_RAOP,
                 format!("{}@{}", id, RECEIVER_NAME).as_str(),
-                host.as_str(),
-                host_ip.as_str(),
+                &host,
+                &host_ip,
                 ApReceiver::port(),
                 &txt_raop[..],
-            )
-            .unwrap();
-
-            let txt_airplay = [
-                ("pk", pk.as_str()),
-                ("gcgl", "0"),
-                ("gid", &mac_addr),
-                ("pi", &mac_addr),
-                ("srcvers", "366.0"),
-                ("protovers", "1.1"),
-                ("serial_num", &serial_num),
-                ("manufacturer", "Hughey"),
-                ("model", "Pierre"),
-                ("flags", &st_hex),
-                ("fv", GIT_VERSION),
-                ("rsf", "0x0"),
-                ("features", &ff_hex),
-                ("deviceid", &device_id),
-                ("acl", "0"),
-            ];
-
-            let si_airplay = ServiceInfo::new(
+            )?,
+            ServiceInfo::new(
                 ST_AIRPLAY,
                 RECEIVER_NAME,
                 &host,
                 &host_ip,
                 ApReceiver::port(),
                 &txt_airplay[..],
-            )
-            .expect("failure creating ServiceInfo");
+            )?,
+        ];
 
-            let services = vec![si_raop.to_owned(), si_airplay.to_owned()];
+        // initialize our mdns daemon
+        let mdns = ServiceDaemon::new()?;
 
-            // Register with the daemon, which publishes the service.
-            mdns.register(si_raop)
-                .expect("Failed to register raop service");
-
-            mdns.register(si_airplay)
-                .expect("Failed to register airplay service");
-
-            return Ok(ApReceiver {
-                mdns,
-                host_ip,
-                device_id,
-                id,
-                services,
-                keypair,
-            });
+        // Register with the daemon, which publishes the service.
+        for service_info in &services {
+            mdns.register(service_info.to_owned())?;
         }
 
-        Err(ApReceiverError {
-            details: "failed".to_string(),
+        Ok(ApReceiver {
+            mdns,
+            host_ip,
+            device_id,
+            id,
+            services,
+            keypair,
         })
     }
 
     pub fn bind_address(&self) -> String {
-        let mut ip_and_port = self.host_ip.to_owned();
-        ip_and_port.push_str(format!(":{}", Self::port()).as_str());
-
-        ip_and_port
+        format!("{}:{}", self.host_ip, Self::port())
     }
 
     pub fn device_id(&self) -> String {
         self.device_id.to_owned()
     }
 
-    pub fn hostname() -> String {
-        let mut host = gethostname::gethostname().to_ascii_lowercase();
-        host.push(".local.");
-
-        host.into_string().expect("failed to get hostname")
-    }
-
-    // pub fn id(&self) -> String {
-    //     self.device_id.replace(':', "")
-    // }
-
     fn make_ids(mac_addr: &str) -> (String, String) {
+        // use of temporary variables for readability
         let device_id = mac_addr.to_ascii_uppercase();
         let id = device_id.replace(':', "");
 
         (device_id, id)
-    }
-
-    fn make_keypair(device_id: &str) -> Keypair {
-        let seed = Self::make_seed(device_id);
-
-        Keypair::from_seed(&seed).expect("failed to create keypair")
-    }
-
-    fn make_seed(device_id: &str) -> Seed<FullAccess> {
-        let mut seed_src = Vec::from(device_id.to_owned());
-        seed_src.resize(32, 0x00);
-        let mut seed = Seed::new_empty().ok().unwrap();
-        seed.copy_from_slice(seed_src.as_slice());
-
-        seed
     }
 
     pub fn monitor(&self) -> mdns_sd::Receiver<DaemonEvent> {
@@ -230,29 +159,6 @@ impl ApReceiver {
 
     pub fn primary_ip(&self) -> String {
         self.host_ip.to_owned()
-    }
-
-    pub fn get_net() -> Option<(String, String)> {
-        let netif = NetworkInterface::show().expect("unable to get network interfaces");
-
-        // find the first useable interface defined as:
-        //  1. not loopback
-        //  2. has an ipv4 address
-        //  3. has a mac address
-
-        if let Some(iff) = netif
-            .iter()
-            .find(|i| !i.name.starts_with("lo") && i.mac_addr.is_some() && !i.addr.is_empty())
-        {
-            if let Some(addr) = iff.addr.iter().find(|addr| addr.ip().is_ipv4()) {
-                return Some((
-                    iff.mac_addr.as_ref().unwrap().to_owned(),
-                    addr.ip().to_string(),
-                ));
-            }
-        }
-
-        None
     }
 
     pub fn pub_key(&self) -> String {
@@ -292,33 +198,80 @@ impl ApReceiver {
     }
 }
 
+fn get_hostname() -> Result<String> {
+    gethostname::gethostname().to_str().map_or_else(
+        || Err(anyhow!("unable to get host name")),
+        |s| Ok(format!("{}.local.", s)),
+    )
+
+    // let host = format!("{}.local.", host.to)
+    // host.push(".local.");
+
+    // host.to_str().map_or_else(
+    //     || Err(anyhow!("unable to get host name")),
+    //     |host| Ok(host.to_string()),
+    // )
+}
+
+fn get_net() -> Result<(String, String)> {
+    // find the first useable interface defined as:
+    //  1. not loopback
+    //  2. has an ipv4 address
+    //  3. has a mac address
+
+    let good = |iff: &NetworkInterface| -> bool {
+        !iff.name.starts_with("lo") && iff.mac_addr.is_some() && !iff.addr.is_empty()
+    };
+
+    NetworkInterface::show()?
+        .iter()
+        .find(|iff| good(iff))
+        .map_or_else(
+            || Err(anyhow!("unable to find any network interfaces")),
+            |iff| {
+                let ip = iff.addr.iter().find(|a| a.ip().is_ipv4()).map_or_else(
+                    || Err(anyhow!("unable to find an IPv4 address")),
+                    |addr| Ok(addr.ip().to_string()),
+                )?;
+
+                let mac_addr = iff.mac_addr.as_ref().map_or_else(
+                    || Err(anyhow!("unable to find mac address")),
+                    |mac_addr| Ok(mac_addr.to_owned()),
+                )?;
+
+                Ok((mac_addr, ip))
+            },
+        )
+}
+
+fn make_keypair(device_id: &str) -> Result<Keypair> {
+    let seed = make_seed(device_id)?;
+
+    let keypair = Keypair::from_seed(&seed)?;
+    Ok(keypair)
+}
+
+fn make_seed(device_id: &str) -> Result<Seed<FullAccess>> {
+    let mut seed_src = Vec::from(device_id.to_owned());
+    seed_src.resize(32, 0x00);
+
+    let seed = Seed::try_from(seed_src.as_slice())?;
+
+    Ok(seed)
+}
+
 #[cfg(test)]
 mod tests {
 
     use crate::ApReceiver;
+    use anyhow::Result;
 
     fn test_mac_addr() -> String {
         "78:28:CA:B0:C5:64".to_string()
     }
 
     #[test]
-    fn apreceiver_can_get_hostname() {
-        let host = ApReceiver::hostname();
-
-        assert!(host.len() > 2);
-    }
-
-    #[test]
-    fn apreceiver_can_make_keypair() {
-        let (device_id, _) = ApReceiver::make_ids(&test_mac_addr());
-        let key_pair = ApReceiver::make_keypair(&device_id);
-
-        assert!(key_pair.public_key.len() > 1);
-        assert!(key_pair.private_key.len() > 1);
-    }
-
-    #[test]
-    fn apreceiver_can_make_ids() {
+    fn can_make_ids() -> Result<()> {
         let mac_addr = test_mac_addr();
         let (device_id, id) = ApReceiver::make_ids(&mac_addr);
 
@@ -335,6 +288,8 @@ mod tests {
 
         assert!(id.len() == 12);
         assert!(!id.contains(':') && !id.contains('-'));
+
+        Ok(())
     }
 
     #[test]

@@ -35,6 +35,7 @@ path = "src/bin/pierre2.rs"
 
 [dependencies]
 alkali = ">=0.3.0"
+anyhow = "1.0"
 arrayvec = ">=0.7.4"
 async-stream = "0.3.0"
 atoi = ">=2.0.0"
