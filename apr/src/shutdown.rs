@@ -36,7 +36,6 @@ pub(crate) struct Shutdown {
 
 impl Shutdown {
     /// Create a new `Shutdown` backed by the given `broadcast::Receiver`.
-    #[allow(dead_code)]
     pub(crate) fn new(notify: broadcast::Receiver<()>) -> Shutdown {
         Shutdown {
             is_shutdown: false,
@@ -45,13 +44,11 @@ impl Shutdown {
     }
 
     /// Returns `true` if the shutdown signal has been received.
-    #[allow(dead_code)]
     pub(crate) fn is_shutdown(&self) -> bool {
         self.is_shutdown
     }
 
     /// Receive the shutdown notice, waiting if necessary.
-    #[allow(dead_code)]
     pub(crate) async fn recv(&mut self) {
         // If the shutdown signal has already been received, then return
         // immediately.

@@ -15,57 +15,47 @@
 // limitations under the License.
 
 use anyhow::anyhow;
-use apr::{server, ApReceiver, Result};
+use apr::{server, Result};
 
-use std::time::{Duration, Instant};
-use tokio::{net::TcpListener, signal, task::JoinSet};
+use tokio::{net::TcpListener, signal};
 use tracing::info;
 
 #[tokio::main(worker_threads = 10)]
-pub async fn main() -> Result<()> {
-    // setup logging
-    if let Err(e) = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init()
-    {
-        return Err(anyhow!(e));
-    }
+pub async fn main() -> crate::Result<()> {
+    setup_logging()?;
 
-    let receiver = ApReceiver::new()?;
-    let mut tasks = JoinSet::new();
+    let (_mac_addr, host_ip) = server::get_net()?;
 
-    let bind_addr = receiver.bind_address();
+    let bind_addr = format!("{}:{}", host_ip, 7000);
 
     // let cli = Cli::parse();
     // let port = cli.port.unwrap_or(DEFAULT_PORT);
-
-    tasks.spawn(async move {
-        let monitor = receiver.monitor();
-
-        let start_at = Instant::now();
-        let max_runtime = Duration::from_secs(30);
-        let recv_timeout = Duration::from_millis(777);
-
-        while start_at.elapsed() <= max_runtime {
-            if let Ok(event) = monitor.recv_timeout(recv_timeout) {
-                info!("daemon event: {:?}", event);
-            }
-        }
-
-        receiver.shutdown();
-    });
 
     // Bind a TCP listener
     info!("binding to {}", bind_addr);
     let listener = TcpListener::bind(&bind_addr).await?;
 
-    server::run(listener, signal::ctrl_c()).await;
+    server::run(listener, signal::ctrl_c()).await
+}
 
-    while let Some(res) = tasks.join_next().await {
-        match res {
-            Ok(_) => info!("joined task"),
-            Err(e) => info!("join task error: {}", e),
-        }
+fn setup_logging() -> Result<()> {
+    let subscriber = tracing_subscriber::fmt()
+        // Use a more compact, abbreviated log format
+        .compact()
+        // Display source code file paths
+        .with_file(true)
+        // Display source code line numbers
+        .with_line_number(true)
+        // Display the thread ID an event was recorded on
+        .with_thread_ids(true)
+        // Don't display the event's target (module path)
+        .with_target(false)
+        // hard code max logging level (for now)
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
+    if let Err(e) = subscriber {
+        return Err(anyhow!(e));
     }
 
     Ok(())

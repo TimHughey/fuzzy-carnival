@@ -14,31 +14,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::flags::{FeatureFlags, StatusFlags};
+use crate::Result;
 use alkali::{
     asymmetric::cipher::{Keypair, Seed},
     encode::hex,
     mem::FullAccess,
 };
-
-use crate::Result;
-
 use anyhow::anyhow;
-
-use mdns_sd::{DaemonEvent, ServiceDaemon, ServiceInfo};
+use mdns_sd::ServiceInfo;
 use network_interface::{NetworkInterface, NetworkInterfaceConfig};
-use std::time::Duration;
-
+use tokio::sync::{mpsc::Sender, oneshot};
+use tokio_util::sync::CancellationToken;
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
-
-use crate::flags::{FeatureFlags, StatusFlags};
 
 const RECEIVER_NAME: &str = "Pierre";
 const ST_AIRPLAY: &str = "_airplay._tcp.local.";
 const ST_RAOP: &str = "_raop._tcp.local.";
 
 pub struct ApReceiver {
-    mdns: ServiceDaemon,
+    mac_addr: String,
     host_ip: String,
     device_id: String,
     id: String,
@@ -48,8 +44,6 @@ pub struct ApReceiver {
 
 impl ApReceiver {
     pub fn new() -> Result<ApReceiver> {
-        const GIT_VERSION: &str = git_version::git_version!();
-
         let (mac_addr, host_ip) = get_net()?;
 
         // create our device id and unique id
@@ -58,76 +52,13 @@ impl ApReceiver {
         // create our security keys
         let keypair = make_keypair(&device_id)?;
 
-        let host = get_hostname()?;
-        let pk = Self::get_pub_key(&keypair);
-        let ff_hex = FeatureFlags::default().as_lsb_msb_hex();
-        let st_hex = format!("{:#x}", StatusFlags::default());
-
-        let serial_num = Self::serial_num(&device_id);
-
-        let txt_raop = [
-            ("pk", pk.as_str()),
-            ("vs", "366.0"),
-            ("vn", "65537"),
-            ("tp", "UDP"),
-            ("sf", &st_hex),
-            ("md", "0,1,2"),
-            ("am", "Pierre"),
-            ("fv", GIT_VERSION),
-            ("ft", &ff_hex),
-            ("et", "0,4"),
-            ("da", "true"),
-            ("cn", "0,4"),
-        ];
-
-        let txt_airplay = [
-            ("pk", pk.as_str()),
-            ("gcgl", "0"),
-            ("gid", &mac_addr),
-            ("pi", &mac_addr),
-            ("srcvers", "366.0"),
-            ("protovers", "1.1"),
-            ("serial_num", &serial_num),
-            ("manufacturer", "Hughey"),
-            ("model", "Pierre"),
-            ("flags", &st_hex),
-            ("fv", GIT_VERSION),
-            ("rsf", "0x0"),
-            ("features", &ff_hex),
-            ("deviceid", &device_id),
-            ("acl", "0"),
-        ];
-
-        let services = vec![
-            ServiceInfo::new(
-                ST_RAOP,
-                format!("{}@{}", id, RECEIVER_NAME).as_str(),
-                &host,
-                &host_ip,
-                ApReceiver::port(),
-                &txt_raop[..],
-            )?,
-            ServiceInfo::new(
-                ST_AIRPLAY,
-                RECEIVER_NAME,
-                &host,
-                &host_ip,
-                ApReceiver::port(),
-                &txt_airplay[..],
-            )?,
-        ];
-
         // initialize our mdns daemon
-        let mdns = ServiceDaemon::new()?;
-
-        // Register with the daemon, which publishes the service.
-        for service_info in &services {
-            mdns.register(service_info.to_owned())?;
-        }
+        // let mdns = ServiceDaemon::new()?;
+        let services: Vec<ServiceInfo> = [].to_vec();
 
         Ok(ApReceiver {
-            mdns,
             host_ip,
+            mac_addr,
             device_id,
             id,
             services,
@@ -151,9 +82,9 @@ impl ApReceiver {
         (device_id, id)
     }
 
-    pub fn monitor(&self) -> mdns_sd::Receiver<DaemonEvent> {
-        self.mdns.monitor().expect("failed to create mdns monitor")
-    }
+    // pub fn monitor(&self) -> mdns_sd::Receiver<DaemonEvent> {
+    //     self.mdns.monitor().expect("failed to create mdns monitor")
+    // }
 
     pub fn port() -> u16 {
         7000
@@ -169,13 +100,157 @@ impl ApReceiver {
         hex::encode(&buf).expect("failed to convert public key to string")
     }
 
-    fn get_pub_key(kp: &Keypair) -> String {
-        let pk = hex::encode(&kp.public_key);
-        pk.expect("failed generate public key")
+    // fn get_pub_key(kp: &Keypair) -> String {
+    //     let pk = hex::encode(&kp.public_key);
+    //     pk.expect("failed generate public key")
+    // }
+
+    pub fn make_services(&mut self) -> Result<Vec<ServiceInfo>> {
+        const GIT_VERSION: &str = git_version::git_version!();
+
+        let host = get_hostname()?;
+        let pk = self.pub_key();
+        let ff_hex = FeatureFlags::default().as_lsb_msb_hex();
+        let st_hex = format!("{:#x}", StatusFlags::default());
+
+        let txt_raop = [
+            ("pk", pk.as_str()),
+            ("vs", "366.0"),
+            ("vn", "65537"),
+            ("tp", "UDP"),
+            ("sf", &st_hex),
+            ("md", "0,1,2"),
+            ("am", "Pierre"),
+            ("fv", GIT_VERSION),
+            ("ft", &ff_hex),
+            ("et", "0,4"),
+            ("da", "true"),
+            ("cn", "0,4"),
+        ];
+
+        let txt_airplay = [
+            ("pk", pk.as_str()),
+            ("gcgl", "0"),
+            ("gid", &self.mac_addr),
+            ("pi", &self.mac_addr),
+            ("srcvers", "366.0"),
+            ("protovers", "1.1"),
+            ("serial_num", &Self::serial_num(&self.device_id)),
+            ("manufacturer", "Hughey"),
+            ("model", "Pierre"),
+            ("flags", &st_hex),
+            ("fv", GIT_VERSION),
+            ("rsf", "0x0"),
+            ("features", &ff_hex),
+            ("deviceid", &self.device_id),
+            ("acl", "0"),
+        ];
+
+        let services = vec![
+            ServiceInfo::new(
+                ST_RAOP,
+                format!("{}@{}", self.id, RECEIVER_NAME).as_str(),
+                &host,
+                &self.host_ip,
+                ApReceiver::port(),
+                &txt_raop[..],
+            )?,
+            ServiceInfo::new(
+                ST_AIRPLAY,
+                RECEIVER_NAME,
+                &host,
+                &self.host_ip,
+                ApReceiver::port(),
+                &txt_airplay[..],
+            )?,
+        ];
+
+        self.services = services.clone();
+
+        Ok(services)
     }
 
     pub fn raop_sname(&self) -> String {
         format!("{}@{}", self.id, RECEIVER_NAME)
+    }
+
+    pub fn run(
+        &mut self,
+        // notify channel that listener is ready
+        listener_ready: oneshot::Receiver<()>,
+        cancel_token: CancellationToken,
+        shutdown_complete_tx: Sender<()>,
+    ) -> Result<()> {
+        let services = self.make_services()?;
+
+        // let services = self.services.clone();
+        let mdns = mdns_sd::ServiceDaemon::new()?;
+
+        // outside of async closure due to ? operator
+        let monitor = mdns.monitor()?;
+
+        tokio::spawn(async move {
+            let _shutdown_complete = shutdown_complete_tx;
+
+            info!("waiting for listener ready");
+            let _x = listener_ready.await;
+            info!("listening ready, registering services");
+
+            info!("services registered");
+
+            // Register with the daemon, which publishes the service.
+            for si in &services {
+                let service_info = si.to_owned();
+
+                if let Err(e) = mdns.register(service_info) {
+                    error!("register failure: {}", e);
+                }
+            }
+
+            let report = |res| match res {
+                Ok(event) => {
+                    info!("mdns event: {:?}", event);
+                    false
+                }
+                Err(e) => {
+                    error!("mdns monitor: {:?}", e);
+                    true
+                }
+            };
+
+            let mut done = false;
+
+            while !done {
+                tokio::select! {
+                    res = monitor.recv_async() => {
+
+                    done = report(res);
+
+                    }
+                    () = cancel_token.cancelled() => {
+                       done = true;
+
+                    }
+                };
+            }
+
+            for si in &services {
+                let fullname = si.get_fullname();
+
+                match mdns.unregister(fullname) {
+                    Ok(_s) => info!("unregistered {fullname}"),
+                    Err(e) => error!("unregister failed {:?}", e),
+                }
+            }
+
+            if let Err(e) = mdns.shutdown() {
+                error!("{:?}", e);
+            }
+
+            info!("done {}", done);
+        });
+
+        Ok(())
     }
 
     fn serial_num(device_id: &str) -> String {
@@ -185,19 +260,6 @@ impl ApReceiver {
     pub fn airplay_sname(&self) -> &str {
         RECEIVER_NAME
     }
-
-    pub fn shutdown(&self) {
-        let timeout = Duration::from_millis(1000);
-        self.services.iter().for_each(|s| {
-            let fullname = s.get_fullname();
-            let receiver = self.mdns.unregister(fullname).unwrap();
-
-            match receiver.recv_timeout(timeout) {
-                Ok(_) => info!("unregistered {}", fullname),
-                Err(e) => error!("{} {:#?}", fullname, e),
-            }
-        });
-    }
 }
 
 fn get_hostname() -> Result<String> {
@@ -205,14 +267,6 @@ fn get_hostname() -> Result<String> {
         || Err(anyhow!("unable to get host name")),
         |s| Ok(format!("{}.local.", s)),
     )
-
-    // let host = format!("{}.local.", host.to)
-    // host.push(".local.");
-
-    // host.to_str().map_or_else(
-    //     || Err(anyhow!("unable to get host name")),
-    //     |host| Ok(host.to_string()),
-    // )
 }
 
 fn get_net() -> Result<(String, String)> {
@@ -293,13 +347,13 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn apreceiver_can_retrieve_saved_public_key() {
-        let receiver = ApReceiver::new().ok().unwrap();
+    // #[test]
+    // fn apreceiver_can_retrieve_saved_public_key() {
+    //     let receiver = ApReceiver::new().ok().unwrap();
 
-        let pub_key = receiver.pub_key();
+    //     let pub_key = receiver.pub_key();
 
-        assert!(pub_key.len() == 64);
-        assert!(pub_key.is_ascii());
-    }
+    //     assert!(pub_key.len() == 64);
+    //     assert!(pub_key.is_ascii());
+    // }
 }

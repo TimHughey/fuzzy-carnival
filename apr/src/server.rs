@@ -20,13 +20,16 @@
 //! spawning a task per connection.
 
 // use crate::ContentType;
-use crate::{ContentType, Result, Session, Shutdown};
+use crate::{ApReceiver, Result, Session, Shutdown};
 
+use anyhow::anyhow;
+use network_interface::{NetworkInterface, NetworkInterfaceConfig};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, mpsc, Semaphore};
+use tokio::sync::{broadcast, mpsc, oneshot, Semaphore};
 use tokio::time::{self, Duration};
+use tokio_util::sync::CancellationToken;
 
 #[allow(unused)]
 use tracing::{debug, error, info};
@@ -86,13 +89,6 @@ struct Listener {
 /// commands to `db`.
 #[derive(Debug)]
 struct Handler {
-    /// Shared database handle.
-    ///
-    /// When a command is received from `connection`, it is applied with `db`.
-    /// The implementation of the command is in the `cmd` module. Each command
-    /// will need to interact with `db` in order to complete the work.
-    // db: Db,
-
     /// The TCP connection decorated with the redis protocol encoder / decoder
     /// implemented using a buffered `TcpStream`.
     ///
@@ -139,7 +135,7 @@ const MAX_CONNECTIONS: usize = 2;
 ///
 /// `tokio::signal::ctrl_c()` can be used as the `shutdown` argument. This will
 /// listen for a SIGINT signal.
-pub async fn run(listener: TcpListener, shutdown: impl Future) {
+pub async fn run(listener: TcpListener, shutdown: impl Future) -> Result<()> {
     // When the provided `shutdown` future completes, we must send a shutdown
     // message to all active connections. We use a broadcast channel for this
     // purpose. The call below ignores the receiver of the broadcast pair, and when
@@ -148,36 +144,32 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, mut shutdown_complete_rx) = mpsc::channel(1);
 
+    let cancel_token = CancellationToken::new();
+
+    let (listener_ready_tx, listener_ready_rx) = oneshot::channel::<()>();
+
     // Initialize the listener state
     let mut server = Listener {
         listener,
-        // db_holder: DbDropGuard::new(),
         limit_connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
         notify_shutdown,
-        shutdown_complete_tx,
+        shutdown_complete_tx: shutdown_complete_tx.clone(),
     };
 
-    // Concurrently run the server and listen for the `shutdown` signal. The
-    // server task runs until an error is encountered, so under normal
-    // circumstances, this `select!` statement runs until the `shutdown` signal
-    // is received.
-    //
-    // `select!` statements are written in the form of:
-    //
-    // ```
-    // <result of async op> = <async op> => <step to perform with result>
-    // ```
-    //
-    // All `<async op>` statements are executed concurrently. Once the **first**
-    // op completes, its associated `<step to perform with result>` is
-    // performed.
-    //
+    let mut receiver = ApReceiver::new()?;
+
+    receiver.run(
+        listener_ready_rx,
+        cancel_token.clone(),
+        shutdown_complete_tx,
+    )?;
+
     // The `select!` macro is a foundational building block for writing
     // asynchronous Rust. See the API docs for more details:
     //
     // https://docs.rs/tokio/*/tokio/macro.select.html
     tokio::select! {
-        res = server.run() => {
+        res = server.run(listener_ready_tx) => {
             // If an error is received here, accepting connections from the TCP
             // listener failed multiple times and the server is giving up and
             // shutting down.
@@ -190,7 +182,8 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
         }
         _ = shutdown => {
             // The shutdown signal has been received.
-            info!("shutting down");
+            info!("shutting down, stopping mdns");
+            cancel_token.cancel();
         }
     }
 
@@ -209,11 +202,15 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
     // Drop final `Sender` so the `Receiver` below can complete
     drop(shutdown_complete_tx);
 
+    info!("waiting for complete shutdown");
+
     // Wait for all active connections to finish processing. As the `Sender`
     // handle held by the listener has been dropped above, the only remaining
     // `Sender` instances are held by connection handler tasks. When those drop,
     // the `mpsc` channel will close and `recv()` will return `None`.
     let _ = shutdown_complete_rx.recv().await;
+
+    Ok(()) // tlh
 }
 
 impl Listener {
@@ -232,8 +229,10 @@ impl Listener {
     /// The process is not able to detect when a transient error resolves
     /// itself. One strategy for handling this is to implement a back off
     /// strategy, which is what we do here.
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self, listener_ready: oneshot::Sender<()>) -> Result<()> {
         info!("accepting inbound connections");
+
+        let _result = listener_ready.send(());
 
         loop {
             // Wait for a permit to become available
@@ -356,10 +355,6 @@ impl Handler {
                 None => return Ok(()),
             };
 
-            if let Some(ContentType::Plist(plist)) = frame.content_ref() {
-                info!("plist={:?}", plist);
-            }
-
             debug!(?frame);
             info!("{}", frame);
 
@@ -392,4 +387,35 @@ impl Handler {
 
         Ok(())
     }
+}
+
+pub fn get_net() -> Result<(String, String)> {
+    // find the first useable interface defined as:
+    //  1. not loopback
+    //  2. has an ipv4 address
+    //  3. has a mac address
+
+    let good = |iff: &NetworkInterface| -> bool {
+        !iff.name.starts_with("lo") && iff.mac_addr.is_some() && !iff.addr.is_empty()
+    };
+
+    NetworkInterface::show()?
+        .iter()
+        .find(|iff| good(iff))
+        .map_or_else(
+            || Err(anyhow!("unable to find any network interfaces")),
+            |iff| {
+                let ip = iff.addr.iter().find(|a| a.ip().is_ipv4()).map_or_else(
+                    || Err(anyhow!("unable to find an IPv4 address")),
+                    |addr| Ok(addr.ip().to_string()),
+                )?;
+
+                let mac_addr = iff.mac_addr.as_ref().map_or_else(
+                    || Err(anyhow!("unable to find mac address")),
+                    |mac_addr| Ok(mac_addr.to_owned()),
+                )?;
+
+                Ok((mac_addr, ip))
+            },
+        )
 }

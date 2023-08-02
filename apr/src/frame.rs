@@ -182,7 +182,19 @@ impl Display for Method {
 
 impl Display for Frame {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
-        write!(fmt, "{} {}\n{:#?}", self.method, RTSP_VER, self.headers)
+        let content = || match self.content_ref() {
+            Some(ContentType::Plist(plist)) => format!("\n{:?}", plist),
+            _ => String::new(),
+        };
+
+        write!(
+            fmt,
+            "frame\n{} {}\n{:#?}\n{}",
+            self.method,
+            RTSP_VER,
+            self.headers,
+            content()
+        )
     }
 }
 
