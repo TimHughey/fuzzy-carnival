@@ -19,15 +19,13 @@
 //! Provides an async `run` function that listens for inbound connections,
 //! spawning a task per connection.
 
-// use crate::ContentType;
-use crate::{ApReceiver, Result, Session, Shutdown};
-
-use anyhow::anyhow;
-use network_interface::{NetworkInterface, NetworkInterfaceConfig};
-use std::future::Future;
+use crate::serdis::SerDis;
+use crate::{Particulars, Result, Session, Shutdown};
+use mdns_sd as Mdns;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, mpsc, oneshot, Semaphore};
+use tokio::signal;
+use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
 use tokio_util::sync::CancellationToken;
 
@@ -135,66 +133,97 @@ const MAX_CONNECTIONS: usize = 2;
 ///
 /// `tokio::signal::ctrl_c()` can be used as the `shutdown` argument. This will
 /// listen for a SIGINT signal.
-pub async fn run(listener: TcpListener, shutdown: impl Future) -> Result<()> {
+
+pub async fn run(
+    particulars: Particulars,
+    listener: TcpListener,
+    cancel_token: CancellationToken,
+) -> Result<()> {
+    let particulars = Arc::new(particulars);
+
     // When the provided `shutdown` future completes, we must send a shutdown
     // message to all active connections. We use a broadcast channel for this
     // purpose. The call below ignores the receiver of the broadcast pair, and when
     // a receiver is needed, the subscribe() method on the sender is used to create
     // one.
     let (notify_shutdown, _) = broadcast::channel(1);
-    let (shutdown_complete_tx, mut shutdown_complete_rx) = mpsc::channel(1);
+    let (shutdown_complete_tx, mut _shutdown_complete_rx) = mpsc::channel(1);
 
-    let cancel_token = CancellationToken::new();
-
-    let (listener_ready_tx, listener_ready_rx) = oneshot::channel::<()>();
+    // let (listener_ready_tx, listener_ready_rx) = oneshot::channel::<()>();
 
     // Initialize the listener state
     let mut server = Listener {
         listener,
         limit_connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
-        notify_shutdown,
+        notify_shutdown: notify_shutdown.clone(),
         shutdown_complete_tx: shutdown_complete_tx.clone(),
     };
 
-    let mut receiver = ApReceiver::new()?;
+    let serdis = SerDis::build(&particulars)?;
 
-    receiver.run(
-        listener_ready_rx,
-        cancel_token.clone(),
-        shutdown_complete_tx,
-    )?;
+    let mdns = Mdns::ServiceDaemon::new()?;
+    let monitor = mdns.monitor()?;
+
+    serdis.register(&mdns)?;
 
     // The `select!` macro is a foundational building block for writing
     // asynchronous Rust. See the API docs for more details:
     //
     // https://docs.rs/tokio/*/tokio/macro.select.html
-    tokio::select! {
-        res = server.run(listener_ready_tx) => {
-            // If an error is received here, accepting connections from the TCP
-            // listener failed multiple times and the server is giving up and
-            // shutting down.
-            //
-            // Errors encountered when handling individual connections do not
-            // bubble up to this point.
-            if let Err(err) = res {
-                error!(cause = %err, "failed to accept");
+
+    // we do not want the listener or signal::ctrl_c restarted on
+    // invocation of select.  we wrap the async calls in a variable
+    // for select to interrogate
+    let listener_run = { server.run() };
+    tokio::pin!(listener_run);
+
+    let catch_shutdown = { signal::ctrl_c() };
+    tokio::pin!(catch_shutdown);
+
+    loop {
+        tokio::select! {
+            res = &mut listener_run => {
+                // If an error is received here, accepting connections from the TCP
+                // listener failed multiple times and the server is giving up and
+                // shutting down.
+                //
+                // Errors encountered when handling individual connections do not
+                // bubble up to this point.
+                if let Err(err) = res {
+                    error!(cause = %err, "failed to accept");
+                }
+                break;
+            }
+
+            res = &mut catch_shutdown => {
+                if let Err(e) = res {
+                    error!("catching ctrl-c: {}",e);
+                }
+
+                break;
+            }
+
+            event = monitor.recv_async() => mdns_report(event),
+
+            _res = cancel_token.cancelled() => {
+                info!("cancel requested");
+                break;
             }
         }
-        _ = shutdown => {
-            // The shutdown signal has been received.
-            info!("shutting down, stopping mdns");
-            cancel_token.cancel();
-        }
     }
+
+    drop(monitor);
 
     // Extract the `shutdown_complete` receiver and transmitter
     // explicitly drop `shutdown_transmitter`. This is important, as the
     // `.await` below would otherwise never complete.
-    let Listener {
-        shutdown_complete_tx,
-        notify_shutdown,
-        ..
-    } = server;
+    // let Listener {
+    //      shutdown_complete_tx,
+    //     notify_shutdown,
+    //     ..
+    // } = server;
+
+    serdis.unregister(&mdns)?;
 
     // When `notify_shutdown` is dropped, all tasks which have `subscribe`d will
     // receive the shutdown signal and can exit
@@ -208,7 +237,7 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) -> Result<()> {
     // handle held by the listener has been dropped above, the only remaining
     // `Sender` instances are held by connection handler tasks. When those drop,
     // the `mpsc` channel will close and `recv()` will return `None`.
-    let _ = shutdown_complete_rx.recv().await;
+    // let _ = shutdown_complete_rx.recv().await;
 
     Ok(()) // tlh
 }
@@ -229,10 +258,8 @@ impl Listener {
     /// The process is not able to detect when a transient error resolves
     /// itself. One strategy for handling this is to implement a back off
     /// strategy, which is what we do here.
-    async fn run(&mut self, listener_ready: oneshot::Sender<()>) -> Result<()> {
+    async fn run(&mut self) -> Result<()> {
         info!("accepting inbound connections");
-
-        let _result = listener_ready.send(());
 
         loop {
             // Wait for a permit to become available
@@ -389,33 +416,16 @@ impl Handler {
     }
 }
 
-pub fn get_net() -> Result<(String, String)> {
-    // find the first useable interface defined as:
-    //  1. not loopback
-    //  2. has an ipv4 address
-    //  3. has a mac address
+use mdns_sd::DaemonEvent;
+use std::fmt::Debug;
 
-    let good = |iff: &NetworkInterface| -> bool {
-        !iff.name.starts_with("lo") && iff.mac_addr.is_some() && !iff.addr.is_empty()
-    };
-
-    NetworkInterface::show()?
-        .iter()
-        .find(|iff| good(iff))
-        .map_or_else(
-            || Err(anyhow!("unable to find any network interfaces")),
-            |iff| {
-                let ip = iff.addr.iter().find(|a| a.ip().is_ipv4()).map_or_else(
-                    || Err(anyhow!("unable to find an IPv4 address")),
-                    |addr| Ok(addr.ip().to_string()),
-                )?;
-
-                let mac_addr = iff.mac_addr.as_ref().map_or_else(
-                    || Err(anyhow!("unable to find mac address")),
-                    |mac_addr| Ok(mac_addr.to_owned()),
-                )?;
-
-                Ok((mac_addr, ip))
-            },
-        )
+fn mdns_report<E: Debug>(event: anyhow::Result<DaemonEvent, E>) {
+    match event {
+        Ok(event) => {
+            info!("mdns event: {:?}", event);
+        }
+        Err(e) => {
+            error!("mdns error: {:?}", e);
+        }
+    }
 }

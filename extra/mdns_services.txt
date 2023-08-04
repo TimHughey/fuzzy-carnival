@@ -1,0 +1,84 @@
+
+= enp4s0 IPv6 xapham                 _airplay._tcp local                                    
+   hostname = [xapham.local] 
+   address = [192.168.2.72]                                                                   
+   port = [7000]                                             
+   txt = [
+    "srcvers=690.7.1"
+    "pk=24db56f0221284847096e65b7db48bd68bd16a9762467a8cab74989481a60d1c"
+    "psi=42A780F9-C2BB-416E-BA10-0CA0D1EE56A8"
+    "pi=00000000-0000-0000-0000-b87bc518d744"
+    "protovers=1.1"
+    "at=4"
+    "model=MacBookPro18,2"
+    "gcgl=0"
+    "igl=0"
+    "gid=4AB94547-5473-4C82-8A9E-500E76CFE32A"
+    "flags=0x204"
+    "rsf=0x8"
+    "features=0x4A7FCFD5,0xB8154FDE"
+    "fex=1c9/St5PFbgmIQQ"
+    "deviceid=BC:D0:74:73:01:1F"
+    "acl=0"
+    "act=2"
+  ]
+
+= enp4s0 IPv6 BCD07473011F@xapham    _raop._tcp local                                    
+   hostname = [xapham.local]                                    
+   address = [192.168.2.72]                                                               
+   port = [7000]                                                    
+   txt = [
+    "vv=0"
+    "vs=690.7.1"
+    "vn=65537"
+    "tp=UDP"
+    "pk=24db56f0221284847096e65b7db48bd68bd16a9762467a8cab74989481a60d1c"
+    "am=MacBookPro18,2"
+    "md=0,1,2"
+    "sf=0x204"
+    "ft=0x4A7FCFD5,0xB8154FDE"
+    "et=0,3,5"
+    "da=true"
+    "cn=0,1,2,3"
+  ]
+
+= enp4s0 IPv6 Bistro                 _airplay._tcp local                                           
+   hostname = [Sonos-7828CAB0C564.local]              
+   address = [192.168.2.179]                                                              
+   port  = [7000]                                               
+   txt = [
+    "pk=91ae0592129a596e8f89c4d652884844116f55fe00b950e99e76c414efbd7523"
+    "gcgl=0"
+    "gid=78:28:CA:B0:C5:64"
+    "pi=78:28:CA:B0:C5:64"
+    "srcvers=366.0"
+    "protovers=1.1"
+    "serialNumber=78-28-CA-B0-C5-64:C"
+    "manufacturer=Sonos"
+    "model=One"
+    "flags=0x4"
+    "fv=p20.73.0-42060"
+    "rsf=0x0"
+    "features=0x445F8A00,0x1C340"
+    "deviceid=78:28:CA:B0:C5:64"
+    "acl=0"
+    
+= enp4s0 IPv4 7828CAB0C564@Bistro    _raop._tcp local
+   hostname = [Sonos-7828CAB0C564.local]                      
+   address = [192.168.2.179] 
+   port = [7000]               
+   txt = [
+    "pk=91ae0592129a596e8f89c4d652884844116f55fe00b950e99e76c414efbd7523"
+    "vs=366.0"
+    "vn=65537"
+    "tp=UDP"
+    "sf=0x4"
+    "am=One"
+    "md=0,1,2"
+    "fv=p20.73.0-42060"
+    "ft=0x445F8A00,0x1C340"
+    "et=0,4"
+    "da=true"
+    "cn=0,1"
+  ]                                 
+                                                                                                                                             

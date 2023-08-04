@@ -15,27 +15,41 @@
 // limitations under the License.
 
 use anyhow::anyhow;
-use apr::{server, Result};
+use apr::{server, Particulars, Result};
 
-use tokio::{net::TcpListener, signal};
-use tracing::info;
+use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
 
 #[tokio::main(worker_threads = 10)]
 pub async fn main() -> crate::Result<()> {
     setup_logging()?;
 
-    let (_mac_addr, host_ip) = server::get_net()?;
-
-    let bind_addr = format!("{}:{}", host_ip, 7000);
-
     // let cli = Cli::parse();
     // let port = cli.port.unwrap_or(DEFAULT_PORT);
+
+    let particulars = Particulars::build()?;
+    let bind_addr = particulars.bind_address();
 
     // Bind a TCP listener
     info!("binding to {}", bind_addr);
     let listener = TcpListener::bind(&bind_addr).await?;
 
-    server::run(listener, signal::ctrl_c()).await
+    let cancel_token = CancellationToken::new();
+    let cancel_token2 = cancel_token.clone();
+
+    info!("cancel token created {:?}", cancel_token);
+
+    let handle = tokio::spawn(async move {
+        let cancel_token = cancel_token2;
+
+        match server::run(particulars, listener, cancel_token).await {
+            Ok(()) => info!("server has shutdown"),
+            Err(e) => error!("server error: {}", e),
+        }
+    });
+
+    Ok(handle.await?)
 }
 
 fn setup_logging() -> Result<()> {
