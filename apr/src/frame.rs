@@ -91,22 +91,18 @@ impl Method {
             return Err(FrameError::Method(src.to_string()));
         }
 
-        let path = || p[PATH_IDX].to_owned();
-
         match &p[KIND_IDX] {
-            k if k == "GET" => Ok(Method::Get(path())),
+            k if k == "GET" => Ok(Method::Get(p[PATH_IDX].to_owned())),
             k => Err(FrameError::MethodUnknown(k.to_string())),
         }
     }
 }
 
 #[derive(Debug, new)]
-#[allow(dead_code)]
 pub struct Frame {
     pub method: Method,
     headers: HashMap<String, String>,
     content: Option<ContentType>,
-    consumed: u64,
 }
 
 impl Frame {
@@ -156,14 +152,15 @@ impl Frame {
                 // done processing the prelude and headers block, move cursor
                 src.advance(dpos + needle.len());
 
+                // NOTE
+                // consume_body moves the cursor position forward, as needed
                 let content = consume_body(src, &headers)?;
-                let consumed = src.position();
 
                 // NOTE
                 // the cursor position at the end of this function is used as the
                 // length of the src data processed for comsumption by the caller
 
-                Ok(Frame::new(method, headers, content, consumed))
+                Ok(Frame::new(method, headers, content))
             }
             Some(_) => Err(FrameError::Incomplete),
             None => Err(FrameError::Incomplete),
