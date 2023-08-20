@@ -14,10 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    flags::{FeatureFlags, StatusFlags},
-    Particulars, Result,
-};
+use crate::{Particulars, Result};
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 
 #[derive(Debug)]
@@ -26,19 +23,21 @@ pub(crate) struct SerDis {
 }
 
 impl SerDis {
-    pub fn build(particulars: &Particulars) -> Result<SerDis> {
+    pub fn build() -> Result<SerDis> {
         const RECEIVER_NAME: &str = "Pierre";
         const ST_AIRPLAY: &str = "_airplay._tcp.local.";
         const ST_RAOP: &str = "_raop._tcp.local.";
         const PORT: u16 = 7000;
         const GIT_VERSION: &str = git_version::git_version!();
 
+        let particulars = Particulars::global();
+
         let host = particulars.host_name.as_str();
         let host_ip = particulars.host_ip.as_str();
         let mac_addr = particulars.mac_addr.as_str();
         let pk = particulars.public_key.as_str();
-        let ff_hex = FeatureFlags::default().as_lsb_msb_hex();
-        let st_hex = format!("{:#x}", StatusFlags::default());
+        let ff_hex = particulars.features().as_lsb_msb_hex();
+        let st_hex = format!("{:#x}", particulars.status());
         let device_id = particulars.device_id();
         let serial_num = device_id.replace(':', "-").to_ascii_uppercase();
 

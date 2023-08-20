@@ -14,7 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Result;
+use crate::{
+    flags::{FeatureFlags, StatusFlags},
+    Result,
+};
 use alkali::{
     asymmetric::cipher::{Keypair, Seed},
     encode::hex,
@@ -26,28 +29,61 @@ use network_interface::{NetworkInterface, NetworkInterfaceConfig};
 type MacAddr = String;
 type HostIp = String;
 
+use once_cell::sync::OnceCell;
+
+static PARTICULARS: OnceCell<Particulars> = OnceCell::new();
+static KEYPAIR: OnceCell<Keypair> = OnceCell::new();
+
+const DEFAULT_SERVICE_NAME: &str = "Pierre";
+
+#[derive(Debug, Clone)]
 pub struct Particulars {
+    pub service_name: String,
     pub host_name: String,
     pub mac_addr: MacAddr,
     pub host_ip: HostIp,
-    pub key_pair: Keypair,
     pub public_key: String,
+    feat_flags: FeatureFlags,
+    stat_flags: StatusFlags,
 }
 
 impl Particulars {
-    pub fn build() -> Result<Particulars> {
+    pub fn global() -> &'static Particulars {
+        if let Some(particulars) = PARTICULARS.get() {
+            return particulars;
+        }
+
+        panic!("global particulars are not available")
+    }
+
+    pub fn build() -> Result<Option<&'static Particulars>> {
         let host_name = get_hostname().map(|h| h + ".local.")?;
         let (mac_addr, host_ip) = get_net()?;
         let key_pair = make_keypair(&mac_addr)?;
-        let public_key = hex::encode(&key_pair.public_key)?;
 
-        Ok(Particulars {
-            host_name,
-            mac_addr,
-            host_ip,
-            key_pair,
-            public_key,
-        })
+        if KEYPAIR.set(key_pair).is_err() {
+            return Err(anyhow!("failed to set keypair"));
+        }
+
+        let buf = Self::get_keypair().public_key;
+        let public_key = hex::encode(&buf)?;
+
+        if PARTICULARS
+            .set(Particulars {
+                service_name: DEFAULT_SERVICE_NAME.into(),
+                host_name,
+                mac_addr,
+                host_ip,
+                public_key,
+                feat_flags: FeatureFlags::default(),
+                stat_flags: StatusFlags::default(),
+            })
+            .is_err()
+        {
+            return Err(anyhow!("faied to set particulars"));
+        }
+
+        Ok(PARTICULARS.get())
     }
 
     pub fn bind_address(&self) -> String {
@@ -58,8 +94,28 @@ impl Particulars {
         mac_to_id(&self.mac_addr)
     }
 
+    pub fn features(&self) -> &FeatureFlags {
+        &self.feat_flags
+    }
+
+    pub fn feature_bits(&self) -> u64 {
+        self.feat_flags.bits()
+    }
+
+    pub fn get_keypair() -> &'static Keypair {
+        KEYPAIR.get().expect("key pair not initialized")
+    }
+
     pub fn simple_id(&self) -> String {
         self.mac_addr.replace(':', "").to_lowercase()
+    }
+
+    pub fn status(&self) -> &StatusFlags {
+        &self.stat_flags
+    }
+
+    pub fn status_bits(&self) -> u32 {
+        self.stat_flags.bits()
     }
 }
 
@@ -91,10 +147,8 @@ fn get_net() -> Result<(MacAddr, HostIp)> {
                     |addr| Ok(addr.ip().to_string()),
                 )?;
 
-                let mac_addr = iff.mac_addr.as_ref().map_or_else(
-                    || Err(anyhow!("unable to find mac address")),
-                    |mac_addr| Ok(mac_addr.to_ascii_uppercase()),
-                )?;
+                // safe to directly unwrap - good() confirmed is_some
+                let mac_addr = iff.mac_addr.as_ref().unwrap().to_ascii_uppercase();
 
                 Ok((mac_addr, ip))
             },
@@ -144,7 +198,7 @@ mod tests {
     fn particulars_creates_hex_encoded_public_key() -> Result<()> {
         let p = Particulars::build()?;
 
-        assert!(p.public_key.len() == 64);
+        assert!(p.unwrap().public_key.len() == 64);
 
         Ok(())
     }

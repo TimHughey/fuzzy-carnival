@@ -130,6 +130,10 @@ impl Features {
         format!("{:#X},{:#X}", lsb, msb)
     }
 
+    pub fn as_u64(&self) -> u64 {
+        self.bits()
+    }
+
     pub fn as_plist_val(&self) -> i64 {
         self.bits() as i64
     }
@@ -141,6 +145,10 @@ impl Features {
     pub fn as_txt_raop(&self) -> TxtProperty {
         TxtProperty::from(("ft", self.as_lsb_msb_hex()))
     }
+
+    // fn as_ref(&self) -> &Features {
+    //     &self
+    // }
 }
 
 impl Default for Features {
@@ -162,6 +170,29 @@ impl Default for Features {
             | Self::B09_AIRPLAY_AUDIO
     }
 }
+
+// impl std::convert::From<u64> for Features {
+//     fn from(v: u64) -> Self {
+//         Features(v.into())
+//     }
+// }
+
+// impl From<plist::Integer> for Features {
+//     fn from(v: plist::Integer) -> Self {
+//         Features(v.)
+//     }
+// }
+
+// impl std::convert::TryFrom<plist::Integer> for Features {
+//     type Error = anyhow::Error;
+
+//     fn try_from(v: plist::Integer) -> Result<plist::Integer> {
+//         match v.as_unsigned() {
+//             Some(v) => Ok(Features(v.into())),
+//             None => Err(anyhow::anyhow!("failed to convert Value")),
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

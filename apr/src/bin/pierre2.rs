@@ -29,7 +29,7 @@ pub async fn main() -> crate::Result<()> {
     // let port = cli.port.unwrap_or(DEFAULT_PORT);
 
     let particulars = Particulars::build()?;
-    let bind_addr = particulars.bind_address();
+    let bind_addr = particulars.unwrap().bind_address();
 
     // Bind a TCP listener
     info!("binding to {}", bind_addr);
@@ -43,7 +43,7 @@ pub async fn main() -> crate::Result<()> {
     let handle = tokio::spawn(async move {
         let cancel_token = cancel_token2;
 
-        match server::run(particulars, listener, cancel_token).await {
+        match server::run(listener, cancel_token).await {
             Ok(()) => info!("server has shutdown"),
             Err(e) => error!("server error: {}", e),
         }

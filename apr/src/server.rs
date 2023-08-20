@@ -19,8 +19,7 @@
 //! Provides an async `run` function that listens for inbound connections,
 //! spawning a task per connection.
 
-use crate::serdis::SerDis;
-use crate::{Particulars, Result, Session, Shutdown};
+use crate::{cmd::Command, serdis::SerDis, Result, Session, Shutdown};
 use mdns_sd as Mdns;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -43,7 +42,6 @@ struct Listener {
     ///
     /// This holds a wrapper around an `Arc`. The internal `Db` can be
     /// retrieved and passed into the per connection state (`Handler`).
-    // db_holder: DbDropGuard,
 
     /// TCP listener supplied by the `run` caller.
     listener: TcpListener,
@@ -134,13 +132,7 @@ const MAX_CONNECTIONS: usize = 2;
 /// `tokio::signal::ctrl_c()` can be used as the `shutdown` argument. This will
 /// listen for a SIGINT signal.
 
-pub async fn run(
-    particulars: Particulars,
-    listener: TcpListener,
-    cancel_token: CancellationToken,
-) -> Result<()> {
-    let particulars = Arc::new(particulars);
-
+pub async fn run(listener: TcpListener, cancel_token: CancellationToken) -> Result<()> {
     // When the provided `shutdown` future completes, we must send a shutdown
     // message to all active connections. We use a broadcast channel for this
     // purpose. The call below ignores the receiver of the broadcast pair, and when
@@ -151,6 +143,13 @@ pub async fn run(
 
     // let (listener_ready_tx, listener_ready_rx) = oneshot::channel::<()>();
 
+    let serdis = SerDis::build()?;
+
+    let mdns = Mdns::ServiceDaemon::new()?;
+    let monitor = mdns.monitor()?;
+
+    serdis.register(&mdns)?;
+
     // Initialize the listener state
     let mut server = Listener {
         listener,
@@ -158,13 +157,6 @@ pub async fn run(
         notify_shutdown: notify_shutdown.clone(),
         shutdown_complete_tx: shutdown_complete_tx.clone(),
     };
-
-    let serdis = SerDis::build(&particulars)?;
-
-    let mdns = Mdns::ServiceDaemon::new()?;
-    let monitor = mdns.monitor()?;
-
-    serdis.register(&mdns)?;
 
     // The `select!` macro is a foundational building block for writing
     // asynchronous Rust. See the API docs for more details:
@@ -388,7 +380,11 @@ impl Handler {
             // Convert the redis frame into a command struct. This returns an
             // error if the frame is not a valid redis command or it is an
             // unsupported command.
-            // let cmd = Command::from_frame(frame)?;
+            let cmd = Command::from_frame(frame)?;
+
+            info!("{:#?}", cmd);
+
+            cmd.apply(&mut self.session).await?;
 
             // Logs the `cmd` object. The syntax here is a shorthand provided by
             // the `tracing` crate. It can be thought of as similar to:

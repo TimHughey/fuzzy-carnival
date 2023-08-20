@@ -16,21 +16,23 @@
 
 // use std::convert::TryInto;
 
-use std::{collections::HashMap, fmt, fmt::Display, io::Cursor};
+use std::{collections::BTreeMap, fmt, fmt::Display, io::Cursor};
 
 extern crate plist;
 use plist::Dictionary;
 
 extern crate serde_derive;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use arrayvec::ArrayVec;
 use bstr::ByteSlice;
 use bytes::Buf;
-use derive_new::new;
 use thiserror::Error;
+
 #[allow(unused_imports)]
 use tracing::{debug, error, info};
+
+use crate::cmd::RespCode;
 
 #[derive(Error, Debug, Default)]
 pub enum FrameError {
@@ -48,17 +50,21 @@ pub enum FrameError {
     InvalidPlist(#[from] plist::Error),
     #[error("message should be convertible to UTF8")]
     ProtocolError(#[from] bstr::Utf8Error),
-    #[error("message body contain content body for {0}")]
+    #[error("message body contains content body for {0}")]
     ContentBody(String),
+    #[error("invalid request")]
+    Request(String),
     #[default]
     #[error("unknown error")]
     Default,
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub enum ContentType {
     Plist(Dictionary),
-    Raw(Vec<u8>),
+    Bulk(Vec<u8>),
+    #[default]
+    Empty,
 }
 
 const CONTENT_LENGTH: &str = "Content-Length";
@@ -68,46 +74,64 @@ const APP_PLIST: &str = "application/x-apple-binary-plist";
 const RTSP_VER: &str = "RTSP/1.0";
 
 #[derive(Debug, Default, PartialEq)]
-pub enum Method {
-    Get(String),
-    #[default]
-    Unknown,
+pub struct Request {
+    pub method: String,
+    pub path: String,
 }
 
-impl Method {
-    pub fn new(src: &str) -> Result<Method, FrameError> {
+impl Request {
+    pub fn new(src: &str) -> Result<Request, FrameError> {
+        use tinyvec::ArrayVec;
+
         const KIND_IDX: usize = 0;
         const PATH_IDX: usize = 1;
         const PROTOCOL_IDX: usize = 2;
-
         const MAX_PARTS: usize = 3;
+
         let p = src
             .split_ascii_whitespace()
-            .map(|s| s.to_string())
             .take(MAX_PARTS)
-            .collect::<ArrayVec<String, MAX_PARTS>>();
+            .collect::<ArrayVec<[&str; MAX_PARTS]>>();
 
-        if p[PROTOCOL_IDX] != RTSP_VER {
-            return Err(FrameError::Method(src.to_string()));
+        if (p.len() != MAX_PARTS) || (p[PROTOCOL_IDX] != RTSP_VER) {
+            return Err(FrameError::Request(src.to_string()));
         }
 
-        match &p[KIND_IDX] {
-            k if k == "GET" => Ok(Method::Get(p[PATH_IDX].to_owned())),
-            k => Err(FrameError::MethodUnknown(k.to_string())),
-        }
+        Ok(Request {
+            method: p[KIND_IDX].into(),
+            path: p[PATH_IDX].into(),
+        })
     }
 }
 
-#[derive(Debug, new)]
-pub struct Frame {
-    pub method: Method,
-    headers: HashMap<String, String>,
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct Reply {
+    headers: tinyvec::ArrayVec<[(String, String); 10]>,
     content: Option<ContentType>,
+    resp_code: RespCode,
+}
+
+#[derive(Debug)]
+
+pub struct Frame {
+    pub request: Request,
+    pub headers: BTreeMap<String, String>,
+    pub content: ContentType,
+    pub reply: Option<Reply>,
 }
 
 impl Frame {
-    pub fn content_ref(&self) -> &Option<ContentType> {
+    pub fn content_ref(&self) -> &ContentType {
         &self.content
+    }
+
+    pub fn path(&self) -> &str {
+        self.request.path.as_str()
+    }
+
+    pub fn path_and_content(&self) -> (&str, &ContentType) {
+        (self.request.path.as_str(), &self.content)
     }
 
     pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, FrameError> {
@@ -123,13 +147,15 @@ impl Frame {
                 let hdr_block = src.get_ref()[0..dpos].to_str()?;
 
                 // establish destinations for the data we'll extract
-                let mut method: Method = Method::default();
-                let mut headers: HashMap<String, String> = HashMap::new();
+                let mut request = Request::default();
+                let mut headers = BTreeMap::<String, String>::new();
 
                 for (n, line) in hdr_block.lines().enumerate() {
                     match n {
                         // line=0 is the method, url and protocol
-                        n if n == 0 => method = Method::new(line)?,
+                        n if n == 0 => {
+                            request = Request::new(line)?;
+                        }
 
                         // line=1.. are headers
                         _n if line.contains(':') => {
@@ -160,35 +186,45 @@ impl Frame {
                 // the cursor position at the end of this function is used as the
                 // length of the src data processed for comsumption by the caller
 
-                Ok(Frame::new(method, headers, content))
+                Ok(Frame {
+                    request,
+                    headers,
+                    content,
+                    reply: None,
+                })
             }
             Some(_) => Err(FrameError::Incomplete),
             None => Err(FrameError::Incomplete),
         }
     }
+
+    pub fn seq_num(&self) -> Result<u32> {
+        if let Some(sn) = self.headers.get("CSeq") {
+            let sn: u32 = sn.parse()?;
+            return Ok(sn);
+        }
+
+        Err(anyhow!("CSeq header not available"))
+    }
 }
 
-impl Display for Method {
+impl Display for Request {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Method::Get(path) => write!(fmt, "GET {}", path),
-            Method::Unknown => write!(fmt, "UNKNOWN"),
-        }
+        write!(fmt, "{} {} RTSP/1.0", self.method, self.path)
     }
 }
 
 impl Display for Frame {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         let content = || match self.content_ref() {
-            Some(ContentType::Plist(plist)) => format!("\n{:?}", plist),
+            ContentType::Plist(plist) => format!("\n{:?}", plist),
             _ => String::new(),
         };
 
         write!(
             fmt,
-            "frame\n{} {}\n{:#?}\n{}",
-            self.method,
-            RTSP_VER,
+            "frame\n{}\n{:#?}\n{}",
+            self.request,
             self.headers,
             content()
         )
@@ -205,13 +241,13 @@ impl Display for Frame {
 
 fn consume_body(
     src: &mut Cursor<&[u8]>,
-    headers: &HashMap<String, String>,
-) -> Result<Option<ContentType>, FrameError> {
+    headers: &BTreeMap<String, String>,
+) -> Result<ContentType, FrameError> {
     if src.remaining() == 0
         || !headers.contains_key(CONTENT_TYPE)
         || !headers.contains_key(CONTENT_LENGTH)
     {
-        return Ok(None);
+        return Ok(ContentType::Empty);
     }
 
     // we've confirmed the key exists so safe to unwrap
@@ -223,7 +259,7 @@ fn consume_body(
         Some(t) if t == APP_PLIST => {
             let plist = plist::from_bytes::<Dictionary>(raw)?;
             src.advance(cnt);
-            Ok(Some(ContentType::Plist(plist)))
+            Ok(ContentType::Plist(plist))
         }
 
         // default if unknown content type
@@ -231,19 +267,20 @@ fn consume_body(
             let raw = raw.to_vec();
             src.advance(cnt);
 
-            Ok(Some(ContentType::Raw(raw)))
+            Ok(ContentType::Bulk(raw))
         }
-        None => Ok(None),
+        None => Ok(ContentType::Empty),
     }
 }
 
 #[test]
-fn can_create_method_for_get() -> Result<()> {
+fn can_create_request() -> Result<()> {
     let src: &str = r#"GET /info RTSP/1.0"#;
 
-    let method = Method::new(src)?;
+    let r = Request::new(src)?;
 
-    assert!(matches!(method, Method::Get { .. }));
+    assert!(r.method == "GET");
+    assert!(r.path == "/info");
 
     Ok(())
 }

@@ -27,9 +27,12 @@ pub use frame::ContentType;
 pub use frame::Frame;
 pub use frame::FrameError;
 
+pub(crate) mod cmd;
+
 pub(crate) mod particulars;
 pub use particulars::Particulars;
 
+pub mod rtsp;
 pub(crate) mod serdis;
 
 pub(crate) mod shutdown;

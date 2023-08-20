@@ -1,11 +1,18 @@
 // use crate::frame::{self, Frame};
 
+use crate::cmd::RespCode;
+use crate::ContentType;
 use crate::{frame::Frame, Result};
 
+use std::{fs::OpenOptions, path::Path};
+
 use anyhow::anyhow;
+#[allow(unused)]
+use bstr::{ByteSlice, ByteVec};
 use bytes::{Buf, BytesMut};
-use std::io::Cursor;
-use tokio::io::{AsyncReadExt, BufWriter};
+#[allow(unused)]
+use std::io::{Cursor, Write};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 #[allow(unused)]
 use tracing::info;
@@ -60,6 +67,20 @@ impl Session {
     /// `None`. Otherwise, an error is returned.
     pub async fn read_frame(&mut self) -> Result<Option<Frame>> {
         loop {
+            if !self.buffer.is_empty() {
+                let path = Path::new("foo");
+                let mut file = OpenOptions::new().create(true).write(true).open(path)?;
+
+                let n = file.write(&self.buffer)?;
+                info!("{:?} bytes={}", file.metadata(), n);
+
+                // let codec = AnyDelimiterCodec::new(b"\r\n".to_vec(), b"\r\n".to_vec());
+
+                // let mut fbuf = self.buffer.clone();
+
+                // let res = Framed::new(&mut fbuf, codec);
+            }
+
             // Attempt to parse a frame from the buffered data. If enough data
             // has been buffered, the frame is returned.
             if let Some(frame) = self.parse_frame()? {
@@ -121,40 +142,100 @@ impl Session {
         }
     }
 
-    // /// Write a single `Frame` value to the underlying stream.
-    // ///
-    // /// The `Frame` value is written to the socket using the various `write_*`
-    // /// functions provided by `AsyncWrite`. Calling these functions directly on
-    // /// a `TcpStream` is **not** advised, as this will result in a large number of
-    // /// syscalls. However, it is fine to call these functions on a *buffered*
-    // /// write stream. The data will be written to the buffer. Once the buffer is
-    // /// full, it is flushed to the underlying socket.
-    // pub async fn write_frame(&mut self, frame: &Frame) -> io::Result<()> {
-    //     // Arrays are encoded by encoding each entry. All other frame types are
-    //     // considered literals. For now, mini-redis is not able to encode
-    //     // recursive frame structures. See below for more details.
-    //     match frame {
-    //         Frame::Array(val) => {
-    //             // Encode the frame type prefix. For an array, it is `*`.
-    //             self.stream.write_u8(b'*').await?;
+    #[allow(unused)]
+    pub(crate) async fn write_reply(
+        &mut self,
+        seq_num: u32,
+        content: ContentType,
+        resp_code: RespCode,
+    ) -> Result<()> {
+        let writer = Cursor::new(self.stream.buffer());
 
-    //             // Encode the length of the array.
-    //             self.write_decimal(val.len() as u64).await?;
+        // let mut buf = Vec::from("RTSP/1.0 ");
 
-    //             // Iterate and encode each entry in the array.
-    //             for entry in &**val {
-    //                 self.write_value(entry).await?;
-    //             }
-    //         }
-    //         // The frame type is a literal. Encode the value directly.
-    //         _ => self.write_value(frame).await?,
-    //     }
+        // let x = buf.as_
 
-    //     // Ensure the encoded frame is written to the socket. The calls above
-    //     // are to the buffered stream and writes. Calling `flush` writes the
-    //     // remaining contents of the buffer to the socket.
-    //     self.stream.flush().await
-    // }
+        // write!(writer, "{}\r\n", resp_code.to_string())?;
+
+        // let mut hdrs: Vec<(String, String)> = Vec::new();
+        // hdrs.push(("CSeq".into(), seq_num.to_string()));
+        // hdrs.push(("Server".into(), "AirPierre/366.0".into()));
+
+        // match content {
+        //     ContentType::Plist(dict) => {
+        //         plist::to_writer_binary(&mut ccursor, &dict)?;
+
+        //         hdrs.push((
+        //             "ContentType".into(),
+        //             "application/x-apple-binary-plist".into(),
+        //         ));
+
+        //         hdrs.push(("ContentLength".into(), (ccursor.position() + 1).to_string()));
+
+        //         write!(cursor, "\r\n")?;
+
+        //         for (key, val) in hdrs {
+        //             write!(cursor, "{key}: {val}\r\n")?;
+        //         }
+
+        //         write!(cursor, "\r\n")?;
+
+        //         info!("message (without body):\n{:#?}\n", cursor);
+
+        //         let len = cursor.write(ccursor.get_ref())?;
+
+        //         info!("added message body len={len}");
+        //     }
+        //     ContentType::Empty => (),
+        //     _ => (),
+        // }
+
+        // info!("preparing to write bytes={}", cursor.position());
+
+        // self.stream.write_all_buf(&mut cursor).await?;
+        self.stream.flush().await?;
+
+        // info!("after write cursor position={}", cursor.position());
+
+        Ok(())
+    }
+
+    /// Write a single `Frame` value to the underlying stream.
+    ///
+    /// The `Frame` value is written to the socket using the various `write_*`
+    /// functions provided by `AsyncWrite`. Calling these functions directly on
+    /// a `TcpStream` is **not** advised, as this will result in a large number of
+    /// syscalls. However, it is fine to call these functions on a *buffered*
+    /// write stream. The data will be written to the buffer. Once the buffer is
+    /// full, it is flushed to the underlying socket.
+    pub async fn write_frame(&mut self, _frame: &Frame) -> Result<()> {
+        // Arrays are encoded by encoding each entry. All other frame types are
+        // considered literals. For now, mini-redis is not able to encode
+        // recursive frame structures. See below for more details.
+        // match frame {
+        //     Frame::Array(val) => {
+        //         // Encode the frame type prefix. For an array, it is `*`.
+        //         self.stream.write_u8(b'*').await?;
+
+        //         // Encode the length of the array.
+        //         self.write_decimal(val.len() as u64).await?;
+
+        //         // Iterate and encode each entry in the array.
+        //         for entry in &**val {
+        //             self.write_value(entry).await?;
+        //         }
+        //     }
+        //     // The frame type is a literal. Encode the value directly.
+        //     _ => self.write_value(frame).await?,
+        // }
+
+        // Ensure the encoded frame is written to the socket. The calls above
+        // are to the buffered stream and writes. Calling `flush` writes the
+        // remaining contents of the buffer to the socket.
+        self.stream.flush().await?;
+
+        Ok(())
+    }
 
     // /// Write a frame literal to the stream
     // async fn write_value(&mut self, frame: &Frame) -> io::Result<()> {
