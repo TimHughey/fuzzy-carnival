@@ -14,12 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Minimal AirPlay server implementation
+//! Minimal ``AirPlay`` server implementation
 //!
 //! Provides an async `run` function that listens for inbound connections,
 //! spawning a task per connection.
 
-use crate::{cmd::Command, serdis::SerDis, Result, Session, Shutdown};
+use crate::{serdis::SerDis, Result, Session, Shutdown};
 use mdns_sd as Mdns;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -35,10 +35,7 @@ use tracing::{debug, error, info};
 /// which performs the TCP listening and initialization of per-connection state.
 #[derive(Debug)]
 struct Listener {
-    /// Shared database handle.
-    ///
-    /// Contains the key / value store as well as the broadcast channels for
-    /// pub/sub.
+    /// RTSP Server Handle
     ///
     /// This holds a wrapper around an `Arc`. The internal `Db` can be
     /// retrieved and passed into the per connection state (`Handler`).
@@ -131,7 +128,10 @@ const MAX_CONNECTIONS: usize = 2;
 ///
 /// `tokio::signal::ctrl_c()` can be used as the `shutdown` argument. This will
 /// listen for a SIGINT signal.
-
+///
+/// # Errors
+///
+/// Returns an error for listener related errors
 pub async fn run(listener: TcpListener, cancel_token: CancellationToken) -> Result<()> {
     // When the provided `shutdown` future completes, we must send a shutdown
     // message to all active connections. We use a broadcast channel for this
@@ -276,15 +276,12 @@ impl Listener {
 
             // Create the necessary per-connection handler state.
             let mut handler = Handler {
-                // Get a handle to the shared database.
-                //  db: self.db_holder.db(),
-
                 // Initialize the connection state. This allocates read/write
                 // buffers to perform redis protocol frame parsing.
-                session: Session::new(socket),
+                session: Session::new(socket, &self.notify_shutdown),
 
                 // Receive shutdown notifications.
-                shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
+                shutdown: Shutdown::new(&self.notify_shutdown),
 
                 // Notifies the receiver half once all clones are
                 // dropped.
@@ -347,68 +344,89 @@ impl Handler {
     /// Currently, pipelining is not implemented. Pipelining is the ability to
     /// process more than one request concurrently per connection without
     /// interleaving frames. See for more details:
-    /// https://redis.io/topics/pipelining
+    /// <https://redis.io/topics/pipelining>
     ///
     /// When the shutdown signal is received, the connection is processed until
     /// it reaches a safe state, at which point it is terminated.
     async fn run(&mut self) -> Result<()> {
         // As long as the shutdown signal has not been received, try to read a
         // new request frame.
-        while !self.shutdown.is_shutdown() {
-            // While reading a request frame, also listen for the shutdown
-            // signal.
-            let maybe_frame = tokio::select! {
-                res = self.session.read_frame() => res?,
-                _ = self.shutdown.recv() => {
-                    // If a shutdown signal is received, return from `run`.
-                    // This will result in the task terminating.
-                    return Ok(());
-                }
-            };
 
-            // If `None` is returned from `read_frame()` then the peer closed
-            // the socket. There is no further work to do and the task can be
-            // terminated.
-            let frame = match maybe_frame {
-                Some(frame) => frame,
-                None => return Ok(()),
-            };
-
-            debug!(?frame);
-            info!("{}", frame);
-
-            // Convert the redis frame into a command struct. This returns an
-            // error if the frame is not a valid redis command or it is an
-            // unsupported command.
-            let cmd = Command::from_frame(frame)?;
-
-            info!("{:#?}", cmd);
-
-            cmd.apply(&mut self.session).await?;
-
-            // Logs the `cmd` object. The syntax here is a shorthand provided by
-            // the `tracing` crate. It can be thought of as similar to:
-            //
-            // ```
-            // debug!(cmd = format!("{:?}", cmd));
-            // ```
-            //
-            // `tracing` provides structured logging, so information is "logged"
-            // as key-value pairs.
-            // debug!(?cmd);
-
-            // Perform the work needed to apply the command. This may mutate the
-            // database state as a result.
-            //
-            // The connection is passed into the apply function which allows the
-            // command to write response frames directly to the connection. In
-            // the case of pub/sub, multiple frames may be send back to the
-            // peer.
-            // cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
-            //    .await?;
+        tokio::select! {
+            _ = self.session.run() =>  Ok(()),
+            _ = self.shutdown.recv() =>  Ok(())
         }
 
-        Ok(())
+        // Ok(())
+
+        // while !self.shutdown.is_shutdown() {
+        //     tokio::select! {
+
+        //     }
+        // }
+
+        // while !self.shutdown.is_shutdown() {
+        // While reading a request frame, also listen for the shutdown
+        // signal.
+        // let maybe_frame = tokio::select! {
+        //     res = self.session.read_frame() => res?,
+        //     _ = self.shutdown.recv() => {
+        //         // If a shutdown signal is received, return from `run`.
+        //         // This will result in the task terminating.
+        //         return Ok(());
+        //     }
+        // };
+
+        // If `None` is returned from `read_frame()` then the peer closed
+        // the socket. There is no further work to do and the task can be
+        // terminated.
+
+        // if maybe_frame.is_none() {
+        //     return Ok(());
+        // }
+
+        // let frame = maybe_frame.unwrap();
+
+        // let frame = match maybe_frame {
+        //     Some(frame) => frame,
+        //     None => return Ok(()),
+        // };
+
+        // debug!(?frame);
+        // info!("{}", frame);
+
+        // Convert the redis frame into a command struct. This returns an
+        // error if the frame is not a valid redis command or it is an
+        // unsupported command.
+        // let cmd = Command::from_frame(frame)?;
+
+        // info!("{:#?}", cmd);
+
+        // cmd.apply(&mut self.session).await?;
+
+        // Logs the `cmd` object. The syntax here is a shorthand provided by
+        // the `tracing` crate. It can be thought of as similar to:
+        //
+        // ```
+        // debug!(cmd = format!("{:?}", cmd));
+        // ```
+        //
+        // `tracing` provides structured logging, so information is "logged"
+        // as key-value pairs.
+        // debug!(?cmd);
+
+        // Perform the work needed to apply the command. This may mutate the
+        // database state as a result.
+        //
+        // The connection is passed into the apply function which allows the
+        // command to write response frames directly to the connection. In
+        // the case of pub/sub, multiple frames may be send back to the
+        // peer.
+        // cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
+        //    .await?;
+        // }
+
+        // Ok(())
     }
 }
 

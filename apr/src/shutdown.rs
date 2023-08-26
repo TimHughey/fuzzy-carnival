@@ -14,7 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use tokio::sync::broadcast;
+use tokio::sync::broadcast::{Receiver, Sender};
+use tracing::info;
 
 /// Listens for the server shutdown signal.
 ///
@@ -31,15 +32,15 @@ pub(crate) struct Shutdown {
     is_shutdown: bool,
 
     /// The receive half of the channel used to listen for shutdown.
-    notify: broadcast::Receiver<()>,
+    notify: Receiver<()>,
 }
 
 impl Shutdown {
     /// Create a new `Shutdown` backed by the given `broadcast::Receiver`.
-    pub(crate) fn new(notify: broadcast::Receiver<()>) -> Shutdown {
+    pub(crate) fn new(notifier: &Sender<()>) -> Shutdown {
         Shutdown {
             is_shutdown: false,
-            notify,
+            notify: notifier.subscribe(),
         }
     }
 
@@ -52,14 +53,13 @@ impl Shutdown {
     pub(crate) async fn recv(&mut self) {
         // If the shutdown signal has already been received, then return
         // immediately.
-        if self.is_shutdown {
-            return;
+
+        if !self.is_shutdown {
+            // Cannot receive a "lag error" as only one value is ever sent.
+            if let Ok(()) = self.notify.recv().await {
+                self.is_shutdown = true; // Remember that the signal has been received.
+                info!("shutdown received");
+            }
         }
-
-        // Cannot receive a "lag error" as only one value is ever sent.
-        let _ = self.notify.recv().await;
-
-        // Remember that the signal has been received.
-        self.is_shutdown = true;
     }
 }

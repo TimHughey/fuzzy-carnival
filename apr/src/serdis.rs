@@ -18,11 +18,15 @@ use crate::{Particulars, Result};
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 
 #[derive(Debug)]
-pub(crate) struct SerDis {
+pub struct SerDis {
     flavors: [ServiceInfo; 2],
 }
 
 impl SerDis {
+    ///
+    /// # Errors
+    ///
+    /// May return an error if ``ServiceInfo`` creation fails
     pub fn build() -> Result<SerDis> {
         const RECEIVER_NAME: &str = "Pierre";
         const ST_AIRPLAY: &str = "_airplay._tcp.local.";
@@ -95,15 +99,23 @@ impl SerDis {
         })
     }
 
+    ///
+    /// # Errors
+    ///
+    /// May return an error if mdns registration fails
     pub fn register(&self, mdns: &ServiceDaemon) -> Result<()> {
         for si in &self.flavors {
-            let service_info = si.to_owned();
+            let service_info = si.clone();
             mdns.register(service_info)?;
         }
 
         Ok(())
     }
 
+    ///
+    /// # Errors
+    ///
+    /// May return an error if mdns registration fails
     pub fn unregister(&self, mdns: &ServiceDaemon) -> Result<()> {
         for si in &self.flavors {
             let fullname = si.get_fullname();

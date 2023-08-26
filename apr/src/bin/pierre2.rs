@@ -16,24 +16,38 @@
 
 use anyhow::anyhow;
 use apr::{server, Particulars, Result};
-
+use std::env;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 #[tokio::main(worker_threads = 10)]
+
+///
+///
+/// # Errors
+///
+///
 pub async fn main() -> crate::Result<()> {
     setup_logging()?;
 
     // let cli = Cli::parse();
     // let port = cli.port.unwrap_or(DEFAULT_PORT);
 
-    let particulars = Particulars::build()?;
-    let bind_addr = particulars.unwrap().bind_address();
+    let particulars = Particulars::build()?.unwrap();
+
+    // Allow passing an address to listen on as the first argument of this
+    // program, but otherwise we'll just set up our TCP listener on
+    // 127.0.0.1:8080 for connections.
+    let addr = env::args()
+        .nth(1)
+        .unwrap_or_else(|| particulars.bind_address());
+
+    // let bind_addr = particulars.unwrap().bind_address();
 
     // Bind a TCP listener
-    info!("binding to {}", bind_addr);
-    let listener = TcpListener::bind(&bind_addr).await?;
+    info!("binding to {}", addr);
+    let listener = TcpListener::bind(&addr).await?;
 
     let cancel_token = CancellationToken::new();
     let cancel_token2 = cancel_token.clone();

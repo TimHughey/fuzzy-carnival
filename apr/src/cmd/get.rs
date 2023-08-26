@@ -45,9 +45,9 @@ impl Get {
             ("/info", ContentType::Plist(dict)) => {
                 let q = dict
                     .get(QUALIFIER)
-                    .and_then(|v| v.as_array())
+                    .and_then(plist::Value::as_array)
                     .and_then(|a| a.first())
-                    .and_then(|v| v.as_string());
+                    .and_then(plist::Value::as_string);
 
                 if QUALIFIER_VAL == q {
                     info!("found qualifier txtAirPlay");
@@ -58,12 +58,12 @@ impl Get {
                 let feat_flags = ValInt(pars.feature_bits().into());
                 let stat_flags = ValInt(pars.status_bits().into());
                 let dev_id = ValString(pars.device_id());
-                let serv_name = ValString(pars.service_name.to_owned());
+                let serv_name = ValString(pars.service_name.clone());
 
                 let key_vals = [
                     ("features".to_string(), feat_flags),
                     ("statusFlags".to_string(), stat_flags),
-                    ("deviceID".to_string(), dev_id.to_owned()),
+                    ("deviceID".to_string(), dev_id.clone()),
                     ("pi".to_string(), dev_id),
                     ("name".to_string(), serv_name),
                     ("model".to_string(), ValString("Hughey".into())),
@@ -72,9 +72,9 @@ impl Get {
                 let xml = include_bytes!("../../plists/get_info_resp.plist");
                 let mut dict: Dictionary = plist::from_bytes(xml)?;
 
-                key_vals.into_iter().for_each(|(k, v)| {
+                for (k, v) in key_vals {
                     dict.insert(k, v);
-                });
+                }
 
                 info!("created cmd::Get");
 

@@ -28,14 +28,6 @@ repository = "https://github.com/TimHughey/fuzzy-carnival.git"
 name = "pierre2"
 path = "src/bin/pierre2.rs"
 
-[[bin]]
-name = "pierre3"
-path = "src/bin/pierre3.rs"
-
-[[bin]]
-name = "pierre4"
-path = "src/bin/pierre4.rs"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

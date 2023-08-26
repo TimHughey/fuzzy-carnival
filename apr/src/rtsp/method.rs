@@ -28,7 +28,7 @@
 //! assert_eq!(Method::POST.as_str(), "POST");
 //! ```
 
-use self::Inner::*;
+use self::Inner::{Connect, Delete, Get, Head, Options, Patch, Post, Put, Trace};
 
 use std::convert::AsRef;
 use std::convert::TryFrom;
@@ -58,7 +58,7 @@ use std::{fmt, str};
 pub struct Method(Inner);
 
 /// A possible error value when converting `Method` from bytes.
-pub struct InvalidMethod {
+pub struct Invalid {
     _priv: (),
 }
 
@@ -104,60 +104,45 @@ impl Method {
     pub const TRACE: Method = Method(Trace);
 
     /// Converts a slice of bytes to an HTTP method.
-    pub fn from_bytes(src: &[u8]) -> Result<Method, InvalidMethod> {
+    ///
+    /// # Errors
+    ///
+    /// Returns Err for unknown method
+    ///
+    pub fn from_bytes(src: &[u8]) -> Result<Method, Invalid> {
         match src.len() {
-            0 => Err(InvalidMethod::new()),
+            0 => Err(Invalid::new()),
             3 => match src {
                 b"GET" => Ok(Method(Get)),
                 b"PUT" => Ok(Method(Put)),
-                _ => Err(InvalidMethod::new()),
+                _ => Err(Invalid::new()),
             },
             4 => match src {
                 b"POST" => Ok(Method(Post)),
                 b"HEAD" => Ok(Method(Head)),
-                _ => Err(InvalidMethod::new()),
+                _ => Err(Invalid::new()),
             },
             5 => match src {
                 b"PATCH" => Ok(Method(Patch)),
                 b"TRACE" => Ok(Method(Trace)),
-                _ => Err(InvalidMethod::new()),
+                _ => Err(Invalid::new()),
             },
             6 => match src {
                 b"DELETE" => Ok(Method(Delete)),
-                _ => Err(InvalidMethod::new()),
+                _ => Err(Invalid::new()),
             },
             7 => match src {
                 b"OPTIONS" => Ok(Method(Options)),
                 b"CONNECT" => Ok(Method(Connect)),
-                _ => Err(InvalidMethod::new()),
+                _ => Err(Invalid::new()),
             },
-            _unknown => Err(InvalidMethod { _priv: () }),
-        }
-    }
-
-    /// Whether a method is considered "safe", meaning the request is
-    /// essentially read-only.
-    ///
-    /// See [the spec](https://tools.ietf.org/html/rfc7231#section-4.2.1)
-    /// for more words.
-    pub fn is_safe(&self) -> bool {
-        matches!(self.0, Get | Head | Options | Trace)
-    }
-
-    /// Whether a method is considered "idempotent", meaning the request has
-    /// the same result if executed multiple times.
-    ///
-    /// See [the spec](https://tools.ietf.org/html/rfc7231#section-4.2.2) for
-    /// more words.
-    pub fn is_idempotent(&self) -> bool {
-        match self.0 {
-            Put | Delete => true,
-            _ => self.is_safe(),
+            _unknown => Err(Invalid { _priv: () }),
         }
     }
 
     /// Return a &str representation of the HTTP method
     #[inline]
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self.0 {
             Options => "OPTIONS",
@@ -249,7 +234,7 @@ impl<'a> From<&'a Method> for Method {
 }
 
 impl<'a> TryFrom<&'a [u8]> for Method {
-    type Error = InvalidMethod;
+    type Error = Invalid;
 
     #[inline]
     fn try_from(t: &'a [u8]) -> Result<Self, Self::Error> {
@@ -258,7 +243,7 @@ impl<'a> TryFrom<&'a [u8]> for Method {
 }
 
 impl<'a> TryFrom<&'a str> for Method {
-    type Error = InvalidMethod;
+    type Error = Invalid;
 
     #[inline]
     fn try_from(t: &'a str) -> Result<Self, Self::Error> {
@@ -267,7 +252,7 @@ impl<'a> TryFrom<&'a str> for Method {
 }
 
 impl FromStr for Method {
-    type Err = InvalidMethod;
+    type Err = Invalid;
 
     #[inline]
     fn from_str(t: &str) -> Result<Self, Self::Err> {
@@ -275,13 +260,13 @@ impl FromStr for Method {
     }
 }
 
-impl InvalidMethod {
-    fn new() -> InvalidMethod {
-        InvalidMethod { _priv: () }
+impl Invalid {
+    fn new() -> Invalid {
+        Invalid { _priv: () }
     }
 }
 
-impl fmt::Debug for InvalidMethod {
+impl fmt::Debug for Invalid {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("InvalidMethod")
             // skip _priv noise
@@ -289,13 +274,13 @@ impl fmt::Debug for InvalidMethod {
     }
 }
 
-impl fmt::Display for InvalidMethod {
+impl fmt::Display for Invalid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("invalid HTTP method")
     }
 }
 
-impl Error for InvalidMethod {}
+impl Error for Invalid {}
 
 #[cfg(test)]
 mod test {
@@ -320,20 +305,6 @@ mod test {
         assert!(Method::from_bytes(b"").is_err());
         assert!(Method::from_bytes(&[0xC0]).is_err()); // invalid utf-8
         assert!(Method::from_bytes(&[0x10]).is_err()); // invalid method characters
-    }
-
-    #[test]
-    fn test_is_idempotent() {
-        assert!(Method::OPTIONS.is_idempotent());
-        assert!(Method::GET.is_idempotent());
-        assert!(Method::PUT.is_idempotent());
-        assert!(Method::DELETE.is_idempotent());
-        assert!(Method::HEAD.is_idempotent());
-        assert!(Method::TRACE.is_idempotent());
-
-        assert!(!Method::POST.is_idempotent());
-        assert!(!Method::CONNECT.is_idempotent());
-        assert!(!Method::PATCH.is_idempotent());
     }
 
     #[test]

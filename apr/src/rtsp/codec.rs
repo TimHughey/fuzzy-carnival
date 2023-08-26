@@ -50,13 +50,13 @@ impl Pending {
         }
     }
 
-    pub fn new_or_update(src: &mut Option<Pending>, head: usize, body: usize) -> Option<Pending> {
+    pub fn new_or_update(src: &mut Option<Pending>, head: usize, body: usize) -> Pending {
         match src.as_ref() {
-            Some(p) => Some(Pending {
+            Some(p) => Pending {
                 attempts: p.attempts.saturating_add_signed(1),
-                ..p.to_owned()
-            }),
-            None => Some(Pending::new(head, body)),
+                ..p.clone()
+            },
+            None => Pending::new(head, body),
         }
     }
 }
@@ -73,6 +73,7 @@ impl Default for Pending {
 
 impl Rtsp {
     /// Returns a `RtspCode` for splitting creating Rtsp Frames from buffered bytes
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

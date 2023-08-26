@@ -20,17 +20,19 @@ use arrayvec::ArrayVec;
 use indexmap::IndexMap;
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
-pub struct HeaderMap {
+pub struct Map {
     inner: IndexMap<String, String>,
 }
 
 const CONTENT_LEN: &str = "Content-Length";
 
-impl HeaderMap {
+impl Map {
+    /// # Errors
+    ///
+    /// Will return `Err` if `filename` does not exist or the user does not have
+    /// permission to read it.
     pub fn append(&mut self, src: &str) -> Result<()> {
-        if !src.contains(':') {
-            Err(anyhow!("not a header: {}", src))
-        } else {
+        if src.contains(':') {
             const MAX_PARTS: usize = 2;
             const KEY: usize = 0;
             const VAL: usize = 1;
@@ -44,9 +46,15 @@ impl HeaderMap {
             self.inner.insert(p[KEY].into(), p[VAL].into());
 
             Ok(())
+        } else {
+            Err(anyhow!("not a header: {}", src))
         }
     }
 
+    /// # Errors
+    ///
+    /// Returns Err if content length key has a value and it
+    /// can not be parsed into a usize
     pub fn content_len(&self) -> Result<Option<usize>> {
         if let Some(len) = self.inner.get(CONTENT_LEN) {
             return Ok(Some(len.parse::<usize>()?));
@@ -55,20 +63,24 @@ impl HeaderMap {
         Ok(None)
     }
 
+    #[allow(clippy::must_use_candidate)]
     pub fn headers(&self) -> &IndexMap<String, String> {
         &self.inner
     }
 
+    #[allow(clippy::must_use_candidate)]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
+    #[allow(clippy::must_use_candidate)]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    pub fn new() -> HeaderMap {
-        HeaderMap {
+    #[must_use]
+    pub fn new() -> Map {
+        Map {
             inner: IndexMap::new(),
         }
     }
@@ -77,25 +89,23 @@ impl HeaderMap {
 #[cfg(test)]
 mod tests {
 
-    use super::HeaderMap;
+    use super::Map;
     use crate::Result;
 
     const CONTENT_LEN_LINE: &str = "Content-Length: 30";
 
     #[test]
-    fn can_append_header() -> Result<()> {
-        let mut hdr_map = HeaderMap::new();
+    fn can_append_header() {
+        let mut hdr_map = Map::new();
 
         let res = hdr_map.append(CONTENT_LEN_LINE);
 
         assert!(res.is_ok());
-
-        Ok(())
     }
 
     #[test]
     fn can_get_content_len_when_present() -> Result<()> {
-        let mut hdr_map = HeaderMap::new();
+        let mut hdr_map = Map::new();
 
         hdr_map.append(CONTENT_LEN_LINE)?;
 

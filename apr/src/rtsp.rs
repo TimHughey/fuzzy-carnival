@@ -22,7 +22,7 @@ pub(crate) mod method;
 pub use method::Method;
 
 pub(crate) mod header;
-pub use header::HeaderMap;
+pub use header::Map;
 
 pub mod codec;
 
@@ -36,7 +36,7 @@ use std::str::FromStr;
 pub struct Frame {
     method: Method,
     path: String,
-    headers: HeaderMap,
+    headers: Map,
     body: Option<Vec<u8>>,
 }
 
@@ -45,14 +45,20 @@ impl Frame {
     const SPACE: char = ' ';
     const PROTOCOL: &str = "RTSP/1.0";
 
+    /// # Errors
+    ///
+    /// Will return `Err` if content length value can not
+    /// be parsed into a usize
     pub fn content_len(&self) -> Result<Option<usize>> {
         self.headers.content_len()
     }
 
+    #[must_use]
     pub fn min_bytes(cnt: usize) -> bool {
         cnt >= Self::MIN_BYTES
     }
 
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -83,7 +89,7 @@ impl<'a> TryFrom<&'a [u8]> for Frame {
                 if let Some((method, path)) = line {
                     // get the header line slice and prepare the header map
                     let headers = rest.trim_start();
-                    let mut header_map = HeaderMap::new();
+                    let mut header_map = Map::new();
 
                     for line in headers.lines() {
                         header_map.append(line)?;

@@ -15,25 +15,24 @@
 // limitations under the License.
 
 pub(crate) mod flags;
-pub use flags::FeatureFlags;
 
 pub mod server; // AirPlay Server (receiver)
 
 pub(crate) mod session;
 pub use session::Session;
 
-pub(crate) mod frame;
-pub use frame::ContentType;
-pub use frame::Frame;
-pub use frame::FrameError;
+// pub(crate) mod frame;
+// pub use frame::ContentType;
+// pub use frame::Frame;
+// pub use frame::FrameError;
 
-pub(crate) mod cmd;
+// pub(crate) mod cmd;
 
 pub(crate) mod particulars;
 pub use particulars::Particulars;
 
 pub mod rtsp;
-pub(crate) mod serdis;
+pub mod serdis;
 
 pub(crate) mod shutdown;
 use shutdown::Shutdown;

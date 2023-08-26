@@ -2,7 +2,7 @@
 //
 // Copyright 2023 Tim Hughey
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License")
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -18,6 +18,9 @@ use bitflags::bitflags;
 use mdns_sd::TxtProperty;
 
 bitflags! {
+  ///
+  /// Features Flags
+  ///
   #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
   pub struct Features : u64 {
     const B00_VIDEO = 0x01;
@@ -122,37 +125,39 @@ bitflags! {
 }
 
 impl Features {
-    pub fn as_lsb_msb_hex(&self) -> String {
+    #[must_use]
+    pub fn as_lsb_msb_hex(self) -> String {
         let bits = self.bits();
-        let msb = bits >> 32;
-        let lsb = (bits << 32) >> 32;
+        let most_sb = bits >> 32;
+        let least_sb = (bits << 32) >> 32;
 
-        format!("{:#X},{:#X}", lsb, msb)
+        format!("{least_sb:#X},{most_sb:#X}")
     }
 
-    pub fn as_u64(&self) -> u64 {
+    #[must_use]
+    pub fn as_u64(self) -> u64 {
         self.bits()
     }
 
-    pub fn as_plist_val(&self) -> i64 {
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn as_plist_val(self) -> i64 {
         self.bits() as i64
     }
 
-    pub fn as_txt_airplay(&self) -> TxtProperty {
+    #[must_use]
+    pub fn as_txt_airplay(self) -> TxtProperty {
         TxtProperty::from(("features", self.as_lsb_msb_hex()))
     }
 
-    pub fn as_txt_raop(&self) -> TxtProperty {
+    #[must_use]
+    pub fn as_txt_raop(self) -> TxtProperty {
         TxtProperty::from(("ft", self.as_lsb_msb_hex()))
     }
-
-    // fn as_ref(&self) -> &Features {
-    //     &self
-    // }
 }
 
 impl Default for Features {
-    fn default() -> Features {
+    fn default() -> Self {
         Self::B48_TRANSIENT_PAIRING
             | Self::B47_PEER_MANAGEMENT
             | Self::B46_HOME_KIT_PAIRING
@@ -171,28 +176,58 @@ impl Default for Features {
     }
 }
 
-// impl std::convert::From<u64> for Features {
-//     fn from(v: u64) -> Self {
-//         Features(v.into())
-//     }
-// }
+bitflags! {
+  #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+  pub struct Status : u32 {
+    const B00_PROBLEMS_EXIST = 0x01;
+    const B01_NOT_YET_CONFIGURED = 0x01 << 1;
+    const B02_AUDIO_LINK = 0x01 << 2;  // must set
+    const B03_PIN_MODE = 0x01 << 3;
+    const B04_PIN_MATCH = 0x01 << 4;
+    const B05_SUPPORTS_AIRPLAY_FROM_CLOUD = 0x01 << 5;
+    const B06_PASSWORD_NEEDED = 0x01 << 6;
+    const B07_UNKNOWN = 0x01 << 7;
+    const B08_PAIRING_PIN_AKA_OTP = 0x01 << 8;
+    const B09_ENABLE_HK_ACCESS_CONTROL = 0x01 << 9;
+    const B10_REMOTE_CONTROL_RELAY = 0x01 << 10;
+    const B11_SILENT_PRIMARY = 0x01 << 11;
+    const B12_TIGHT_SYNC_IS_GROUP_LEADER = 0x01 << 12;
+    const B13_TIGHT_SYNC_BUDDY_NOT_REACHABLE = 0x01 << 13;
+    const B14_IS_APPLE_MUSIC_SUBSCRIBER = 0x01 << 14;
+    const B15_ICLOUD_LIBRARY_IS_ON = 0x01 << 15;
+    const B16_RECEIVER_SESSION_ACTIVE = 0x01 << 16; // toggle based on connection
+  }
+}
 
-// impl From<plist::Integer> for Features {
-//     fn from(v: plist::Integer) -> Self {
-//         Features(v.)
-//     }
-// }
+impl Status {
+    #[allow(dead_code)]
+    pub fn as_plist_val(self) -> i64 {
+        i64::from(self.bits())
+    }
 
-// impl std::convert::TryFrom<plist::Integer> for Features {
-//     type Error = anyhow::Error;
+    #[allow(dead_code)]
+    pub fn as_txt_airplay(self) -> TxtProperty {
+        TxtProperty::from(("status", format!("{:#x}", self.bits())))
+    }
 
-//     fn try_from(v: plist::Integer) -> Result<plist::Integer> {
-//         match v.as_unsigned() {
-//             Some(v) => Ok(Features(v.into())),
-//             None => Err(anyhow::anyhow!("failed to convert Value")),
-//         }
-//     }
-// }
+    #[allow(dead_code)]
+    pub fn as_txt_raop(self) -> TxtProperty {
+        TxtProperty::from(("st", format!("{:#x}", self.bits())))
+    }
+
+    #[allow(dead_code)]
+    pub fn set_session(&mut self, value: bool) -> &Self {
+        self.set(Status::B16_RECEIVER_SESSION_ACTIVE, value);
+
+        self
+    }
+}
+
+impl Default for Status {
+    fn default() -> Status {
+        Self::B02_AUDIO_LINK
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -201,7 +236,7 @@ mod tests {
 
     #[test]
     fn feature_flags_default() {
-        assert!(Features::default().bits() == 0x1C300405FC200);
+        assert!(Features::default().bits() == 0x1_C300_405F_C200);
     }
 
     #[test]
@@ -242,12 +277,12 @@ mod tests {
             let x: u64 = 0xff << r0;
             let y: u64 = (alpha.bits() & x) >> r0;
 
-            print!("{:08b} ", y);
+            print!("{y:08b} ");
         });
 
         println!();
 
-        let beta: u64 = 0x1C340445F8A00u64;
+        let beta: u64 = 0x1_C340_445F_8A00u64;
 
         let r = std::ops::Range { start: 0, end: 64 }.step_by(8);
 
@@ -256,28 +291,60 @@ mod tests {
             let x: u64 = 0xff << r0;
             let y: u64 = (beta & x) >> r0;
 
-            print!("{:08b} ", y);
+            print!("{y:08b} ");
         });
 
         println!();
 
-        fn as_str(x: u64) -> String {
-            let msb = x >> 32;
-            let lsb = (x << 32) >> 32;
+        let as_str = |x| -> String {
+            let most_sb = x >> 32;
+            let least_sb = (x << 32) >> 32;
 
-            format!("{:#X},{:#X}", lsb, msb)
-        }
+            format!("{least_sb:#X},{most_sb:#X}")
+        };
 
         println!("alpha: {}", as_str(alpha.bits()));
         println!("beta:  {}", as_str(beta));
 
         alpha.remove(Features::B03_VIDEO_VOL_CTRL);
-        println!("alpha={:#08b}", alpha);
+        println!("alpha={alpha:#08b}");
 
         let two = Features::B00_VIDEO | Features::B01_PHOTO;
 
-        let two_string = format!("{:#06x}", two);
+        let two_string = format!("{two:#06x}");
 
         assert_eq!(two_string, "0x0003");
+    }
+
+    #[test]
+    fn status_flags_default() {
+        assert!(Status::default().bits() == 0x04);
+    }
+
+    #[test]
+    fn status_flags_produces_raop_txt() {
+        let txt = Status::default().as_txt_raop();
+
+        assert!(txt.key() == "st");
+        assert!(txt.val_str() == "0x4");
+    }
+
+    #[test]
+    fn status_flags_produces_airplay_txt() {
+        let txt = Status::default().as_txt_airplay();
+
+        assert!(txt.key() == "status");
+        assert!(txt.val_str() == "0x4");
+    }
+
+    #[test]
+    fn status_flags_can_set_session() {
+        let mut st = Status::default();
+
+        assert!(st.bits() == 0x04);
+
+        st.set_session(true);
+
+        assert!(st.bits() == 0x10004);
     }
 }

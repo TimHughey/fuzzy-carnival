@@ -14,10 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    flags::{FeatureFlags, StatusFlags},
-    Result,
-};
+use crate::{flags::Features, flags::Status, Result};
 use alkali::{
     asymmetric::cipher::{Keypair, Seed},
     encode::hex,
@@ -43,11 +40,16 @@ pub struct Particulars {
     pub mac_addr: MacAddr,
     pub host_ip: HostIp,
     pub public_key: String,
-    feat_flags: FeatureFlags,
-    stat_flags: StatusFlags,
+    feat_flags: Features,
+    stat_flags: Status,
 }
 
 impl Particulars {
+    ///
+    /// # Panics
+    ///
+    /// Will panic if global() is called before build()
+
     pub fn global() -> &'static Particulars {
         if let Some(particulars) = PARTICULARS.get() {
             return particulars;
@@ -56,6 +58,11 @@ impl Particulars {
         panic!("global particulars are not available")
     }
 
+    ///
+    /// # Errors
+    ///
+    /// Will return an error if key pair creation fails or
+    /// retrieving the host's IP address fails
     pub fn build() -> Result<Option<&'static Particulars>> {
         let host_name = get_hostname().map(|h| h + ".local.")?;
         let (mac_addr, host_ip) = get_net()?;
@@ -75,8 +82,8 @@ impl Particulars {
                 mac_addr,
                 host_ip,
                 public_key,
-                feat_flags: FeatureFlags::default(),
-                stat_flags: StatusFlags::default(),
+                feat_flags: Features::default(),
+                stat_flags: Status::default(),
             })
             .is_err()
         {
@@ -86,34 +93,50 @@ impl Particulars {
         Ok(PARTICULARS.get())
     }
 
+    #[must_use]
+    #[inline]
     pub fn bind_address(&self) -> String {
         format!("{}:{}", self.host_ip, 7000)
     }
 
+    #[must_use]
+    #[inline]
     pub fn device_id(&self) -> String {
         mac_to_id(&self.mac_addr)
     }
 
-    pub fn features(&self) -> &FeatureFlags {
+    #[must_use]
+    #[inline]
+    pub fn features(&self) -> &Features {
         &self.feat_flags
     }
 
+    #[must_use]
+    #[inline]
     pub fn feature_bits(&self) -> u64 {
         self.feat_flags.bits()
     }
 
+    #[must_use]
+    #[inline]
     pub fn get_keypair() -> &'static Keypair {
         KEYPAIR.get().expect("key pair not initialized")
     }
 
+    #[must_use]
+    #[inline]
     pub fn simple_id(&self) -> String {
         self.mac_addr.replace(':', "").to_lowercase()
     }
 
-    pub fn status(&self) -> &StatusFlags {
+    #[must_use]
+    #[inline]
+    pub fn status(&self) -> &Status {
         &self.stat_flags
     }
 
+    #[must_use]
+    #[inline]
     pub fn status_bits(&self) -> u32 {
         self.stat_flags.bits()
     }
