@@ -1,8 +1,9 @@
 // use crate::frame::{self, Frame};
 
-use crate::rtsp::Frame;
+use crate::rtsp::{Body, Frame, Method, Response};
+use crate::Particulars;
 use crate::{rtsp::codec, Result, Shutdown};
-// use anyhow::anyhow;
+use anyhow::anyhow;
 #[allow(unused)]
 use bstr::{ByteSlice, ByteVec};
 // use bytes::{Buf, BytesMut};
@@ -54,20 +55,84 @@ impl Session {
         }
     }
 
-    pub fn handle_frame(&mut self, maybe_frame: Result<Frame>) -> bool {
+    ///
+    /// # Errors
+    ///
+    /// May return socket error
+    pub fn handle_frame(&mut self, maybe_frame: Option<Result<Frame>>) -> Result<()> {
+        let pars = Particulars::global();
+
         match maybe_frame {
-            Ok(frame) => {
+            Some(Ok(frame)) => {
                 info!("got frame: {}", frame);
-                self.frame = Some(frame);
+
+                // let response = Response::respond_to(frame, status_code)
+
+                match frame {
+                    Frame {
+                        method: Method::GET,
+                        path,
+                        headers,
+                        body: Body::Dict(dict),
+                        ..
+                    } if path.as_str() == "/info" => {
+                        let response = Frame {
+                            method: Method::GET,
+                            ..Frame::default()
+                        };
+
+                        info!("got GET /info\n{headers:?}\n{dict:?}");
+                    }
+
+                    Frame {
+                        method,
+                        path,
+                        headers,
+                        ..
+                    } => {
+                        info!("got {method} {path} \n{headers:?}");
+                    }
+                }
+
+                // match (method, path.as_str(), body) {
+                //     (Method::GET, "/info", Body::Dict(dict)) => {
+                //         info!("got GET /info\n{headers:?}\n{dict:?}");
+                //     }
+
+                //     (m, path, _) => {
+                //         error!("got {m} [{path}]");
+                //     }
+                // }
+
+                // self.frame = Some(frame);
+                self.active = true;
+
+                Ok(())
             }
-            Err(e) => {
+
+            Some(Err(e)) => {
                 error!("socket closed: {e}");
                 self.frame = None;
-                self.active = false;
+
+                Err(anyhow!(e))
             }
+
+            None => Ok(()),
         }
 
-        self.active
+        // match maybe_frame {
+        //     Ok(frame) => {
+        //         info!("got frame: {}", frame);
+        //         self.frame = Some(frame);
+        //     }
+        //     Err(e) => {
+        //         error!("socket closed: {e}");
+        //         self.frame = None;
+        //         self.active = false;
+        //     }
+        // }
+
+        // self.active
     }
 
     ///
@@ -76,21 +141,37 @@ impl Session {
     ///
     pub async fn run(&mut self) -> Result<()> {
         while !self.shutdown.is_shutdown() && self.active {
+            // default to end of session and override below if session
+            // remains active
+            self.active = false;
+
             tokio::select! {
                 maybe_frame = self.framed.next() => {
+                    self.handle_frame(maybe_frame)?;
 
-                    if let Some(maybe_frame) = maybe_frame {
-                        self.handle_frame(maybe_frame);
-                    } else {
-                        error!("maybe_frame: #{maybe_frame:?}");
-                        self.active = false;
-                    }
+                   self.active = true;
                 }
 
                 _res = self.shutdown.recv() => {
                     info!("session shutdown");
                 }
             }
+
+            // tokio::select! {
+            //     maybe_frame = self.framed.next() => {
+
+            //         if let Some(maybe_frame) = maybe_frame {
+            //             self.handle_frame(maybe_frame?);
+            //         } else {
+            //             error!("maybe_frame: #{maybe_frame:?}");
+            //             self.active = false;
+            //         }
+            //     }
+
+            //     _res = self.shutdown.recv() => {
+            //         info!("session shutdown");
+            //     }
+            // }
         }
 
         info!("session closing...");

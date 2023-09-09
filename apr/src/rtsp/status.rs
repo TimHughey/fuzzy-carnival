@@ -132,8 +132,8 @@ impl StatusCode {
     /// assert_eq!(status.as_u16(), 200);
     /// ```
     #[inline]
-    pub fn as_u16(&self) -> u16 {
-        (*self).into()
+    pub fn as_u16(self) -> u16 {
+        self.into()
     }
 
     /// Returns a &str representation of the `StatusCode`
@@ -184,12 +184,14 @@ impl StatusCode {
     /// let status = http::StatusCode::OK;
     /// assert_eq!(status.canonical_reason(), Some("OK"));
     /// ```
+    #[must_use]
     pub fn canonical_reason(&self) -> Option<&'static str> {
         canonical_reason(self.0.get())
     }
 
     /// Check if status is within 100-199.
     #[inline]
+    #[must_use]
     pub fn is_informational(&self) -> bool {
         200 > self.0.get() && self.0.get() >= 100
     }
@@ -202,18 +204,21 @@ impl StatusCode {
 
     /// Check if status is within 300-399.
     #[inline]
+    #[must_use]
     pub fn is_redirection(&self) -> bool {
         400 > self.0.get() && self.0.get() >= 300
     }
 
     /// Check if status is within 400-499.
     #[inline]
+    #[must_use]
     pub fn is_client_error(&self) -> bool {
         500 > self.0.get() && self.0.get() >= 400
     }
 
     /// Check if status is within 500-599.
     #[inline]
+    #[must_use]
     pub fn is_server_error(&self) -> bool {
         600 > self.0.get() && self.0.get() >= 500
     }
@@ -245,9 +250,8 @@ impl fmt::Display for StatusCode {
 }
 
 impl Default for StatusCode {
-    #[inline]
-    fn default() -> StatusCode {
-        StatusCode::OK
+    fn default() -> Self {
+        StatusCode::INTERNAL_SERVER_ERROR
     }
 }
 
@@ -349,7 +353,7 @@ status_codes! {
     (101, SWITCHING_PROTOCOLS, "Switching Protocols");
     /// 102 Processing
     /// [[RFC2518](https://tools.ietf.org/html/rfc2518)]
-    (102, PROCESSING, "Processing");
+    // (102, PROCESSING, "Processing");
 
     /// 200 OK
     /// [[RFC7231, Section 6.3.1](https://tools.ietf.org/html/rfc7231#section-6.3.1)]

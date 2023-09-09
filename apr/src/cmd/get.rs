@@ -55,10 +55,10 @@ impl Get {
 
                 let pars = Particulars::global();
 
-                let feat_flags = ValInt(pars.feature_bits().into());
-                let stat_flags = ValInt(pars.status_bits().into());
-                let dev_id = ValString(pars.device_id());
-                let serv_name = ValString(pars.service_name.clone());
+                let feat_flags: ValInt = pars.feature_bits().from();
+                let stat_flags: ValInt = pars.status_bits().from();
+                let dev_id: ValString = pars.device_id();
+                let serv_name: ValString = pars.service_name.clone();
 
                 let key_vals = [
                     ("features".to_string(), feat_flags),

@@ -21,14 +21,17 @@
 //! # Examples
 //!
 //! ```
-//! use http::Method;
+//! use rtsp::Method;
 //!
 //! assert_eq!(Method::GET, Method::from_bytes(b"GET").unwrap());
 //! assert!(Method::GET.is_idempotent());
 //! assert_eq!(Method::POST.as_str(), "POST");
 //! ```
 
-use self::Inner::{Connect, Delete, Get, Head, Options, Patch, Post, Put, Trace};
+use self::Inner::{
+    Continue, Feedback, FlushBuffered, Get, GetParameter, Options, Post, Record, SetParameter,
+    SetPeers, SetPeersX, SetRateAnchorTime, Setup, Teardown,
+};
 
 use std::convert::AsRef;
 use std::convert::TryFrom;
@@ -38,8 +41,8 @@ use std::{fmt, str};
 
 /// The Request Method (VERB)
 ///
-/// This type also contains constants for a number of common HTTP methods such
-/// as GET, POST, etc.
+/// This type also contains constants for a number of common RTSP methods such
+/// as GET, POST, etc. d
 ///
 /// Currently includes 8 variants representing the 8 methods defined in
 /// [RFC 7230](https://tools.ietf.org/html/rfc7231#section-4.1), plus PATCH,
@@ -64,16 +67,25 @@ pub struct Invalid {
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 enum Inner {
-    Options,
     Get,
     Post,
-    Put,
-    Delete,
-    Head,
-    Trace,
-    Connect,
-    Patch,
+    Setup,
+    Options,
+    Continue,
+    GetParameter,
+    SetParameter,
+    Record,
+    SetPeers,
+    SetPeersX,
+    SetRateAnchorTime,
+    Teardown,
+    FlushBuffered,
+    Feedback,
 }
+
+// Get, Post, Continue, Setup, Options, SetParameter, GetParameter,
+// Record, SetPeers, SetPeersX, SetRateAnchorTime, Teardown,
+// FlushBuffered
 
 impl Method {
     /// GET
@@ -82,28 +94,31 @@ impl Method {
     /// POST
     pub const POST: Method = Method(Post);
 
-    /// PUT
-    pub const PUT: Method = Method(Put);
+    /// SETUP
+    pub const SETUP: Method = Method(Setup);
 
-    /// DELETE
-    pub const DELETE: Method = Method(Delete);
+    /// ``SET_PARAMETER``
+    pub const SET_PARAMETER: Method = Method(SetParameter);
 
-    /// HEAD
-    pub const HEAD: Method = Method(Head);
+    /// ``GET_PARAMETER``
+    pub const GET_PARAMETER: Method = Method(GetParameter);
+
+    /// RECORD
+    pub const RECORD: Method = Method(Record);
 
     /// OPTIONS
     pub const OPTIONS: Method = Method(Options);
 
-    /// CONNECT
-    pub const CONNECT: Method = Method(Connect);
+    /// ``SET_PEERS``
+    pub const SET_PEERS: Method = Method(SetPeers);
 
-    /// PATCH
-    pub const PATCH: Method = Method(Patch);
+    /// ``SET_PEERSX``
+    pub const SET_PEERSX: Method = Method(SetPeersX);
 
-    /// TRACE
-    pub const TRACE: Method = Method(Trace);
+    /// ``SET_RATE_ANCHOR_TIME``
+    pub const SET_RATE_ANCHOR_TIME: Method = Method(SetRateAnchorTime);
 
-    /// Converts a slice of bytes to an HTTP method.
+    /// Converts a slice of bytes to a RTSP method.
     ///
     /// # Errors
     ///
@@ -112,48 +127,54 @@ impl Method {
     pub fn from_bytes(src: &[u8]) -> Result<Method, Invalid> {
         match src.len() {
             0 => Err(Invalid::new()),
-            3 => match src {
+            len if (3..=5).contains(&len) => match src {
                 b"GET" => Ok(Method(Get)),
-                b"PUT" => Ok(Method(Put)),
-                _ => Err(Invalid::new()),
-            },
-            4 => match src {
                 b"POST" => Ok(Method(Post)),
-                b"HEAD" => Ok(Method(Head)),
+                b"SETUP" => Ok(Method(Setup)),
                 _ => Err(Invalid::new()),
             },
-            5 => match src {
-                b"PATCH" => Ok(Method(Patch)),
-                b"TRACE" => Ok(Method(Trace)),
-                _ => Err(Invalid::new()),
-            },
-            6 => match src {
-                b"DELETE" => Ok(Method(Delete)),
-                _ => Err(Invalid::new()),
-            },
-            7 => match src {
+            len if (6..=7).contains(&len) => match src {
+                b"RECORD" => Ok(Method(Record)),
                 b"OPTIONS" => Ok(Method(Options)),
-                b"CONNECT" => Ok(Method(Connect)),
+                _ => Err(Invalid::new()),
+            },
+            len if (8..=9).contains(&len) => match src {
+                b"FEEDBACK" => Ok(Method(Feedback)),
+                b"SETPEERS" => Ok(Method(SetPeers)),
+                b"TEARDOWN" => Ok(Method(Teardown)),
+                b"CONTINUE" => Ok(Method(Continue)),
+                b"SETPEERSX" => Ok(Method(SetPeersX)),
+                _ => Err(Invalid::new()),
+            },
+            13 => match src.split_at(2) {
+                (b"GET", _) => Ok(Method(GetParameter)),
+                (b"SET", _) => Ok(Method(SetParameter)),
+                (b"FLU", b"SHBUFFERED") => Ok(Method(FlushBuffered)),
                 _ => Err(Invalid::new()),
             },
             _unknown => Err(Invalid { _priv: () }),
         }
     }
 
-    /// Return a &str representation of the HTTP method
+    /// Return a &str representation of the RTSP method
     #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self.0 {
-            Options => "OPTIONS",
             Get => "GET",
             Post => "POST",
-            Put => "PUT",
-            Delete => "DELETE",
-            Head => "HEAD",
-            Trace => "TRACE",
-            Connect => "CONNECT",
-            Patch => "PATCH",
+            Setup => "SETUP",
+            Options => "OPTIONS",
+            Continue => "CONTINUE",
+            GetParameter => "GET_PARAMETER",
+            SetParameter => "SET_PARAMETER",
+            Record => "RECORD",
+            SetPeers => "SETPEERS",
+            SetPeersX => "SETPEERSX",
+            SetRateAnchorTime => "SETRATEANCHORTIME",
+            Teardown => "TEARDOWN",
+            FlushBuffered => "FLUSHBUFFERED",
+            Feedback => "FEEDBACK",
         }
     }
 }

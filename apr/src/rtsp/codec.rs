@@ -14,12 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::rtsp::Frame;
+use crate::rtsp::{header, Body, Frame};
 use crate::Result;
 use anyhow::anyhow;
 use bstr::ByteSlice;
 use bytes::{Buf, BytesMut};
 use pretty_hex::PrettyHex;
+use std::fs::OpenOptions;
+use std::io::Write;
 use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
 use tracing::{debug, error, info};
@@ -72,7 +74,7 @@ impl Default for Pending {
 }
 
 impl Rtsp {
-    /// Returns a `RtspCode` for splitting creating Rtsp Frames from buffered bytes
+    /// Returns a `RtspCode` for creating Rtsp frames from buffered bytes
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -113,20 +115,27 @@ impl Decoder for Rtsp {
 
                     let mut frame = Frame::try_from(head)?;
 
-                    match frame.content_len()? {
+                    let path = frame.debug_file().unwrap_or_else(|| "bad_frame.bin".into());
+
+                    let mut file = OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .append(true)
+                        .open(path)?;
+
+                    match frame.content_len() {
                         // has content length header and all content is in buffer
-                        Some(content_len) if body.len() >= content_len => {
-                            frame.include_body(body);
-                            buf.advance(head.len() + content_len);
+                        Some(header::Val2::ContentLength(content_len))
+                            if body.len() >= *content_len =>
+                        {
+                            let body = &body[0..*content_len];
 
-                            self.pending = None;
+                            frame.include_body(body)?;
 
-                            Ok(Some(frame))
-                        }
+                            file.write_all(head)?;
+                            file.write_all(body)?;
 
-                        // no content header, frame is complete
-                        None => {
-                            buf.advance(head.len());
+                            buf.advance(head.len() + body.len());
 
                             self.pending = None;
 
@@ -135,12 +144,21 @@ impl Decoder for Rtsp {
 
                         // content header exists but full content check failed
                         // incomplete, need more bytes to proceed
-                        Some(content_len) => {
-                            Pending::new_or_update(&mut self.pending, head.len(), content_len);
+                        Some(header::Val2::ContentLength(len)) => {
+                            Pending::new_or_update(&mut self.pending, head.len(), *len);
 
                             info!("{:?}", self.pending);
 
                             Ok(None)
+                        }
+                        // no content header, frame is complete
+                        _ => {
+                            file.write_all(head)?;
+                            buf.advance(head.len());
+
+                            self.pending = None;
+
+                            Ok(Some(frame))
                         }
                     }
                 } else {
@@ -157,15 +175,29 @@ impl Decoder for Rtsp {
 
 // fn parse_buffer()
 
-impl<T> Encoder<T> for Rtsp
-where
-    T: Buf + bstr::ByteSlice,
-{
+impl Encoder<Frame> for Rtsp {
     type Error = anyhow::Error;
 
-    fn encode(&mut self, msg: T, buf: &mut BytesMut) -> Result<()> {
-        info!("msg:\n{:?}", &msg.as_bytes().hex_dump());
-        info!("buf:\n{:?}", buf.hex_dump());
+    fn encode(&mut self, frame: Frame, buf: &mut BytesMut) -> Result<()> {
+        info!("encoding:\n{frame}");
+
+        match frame {
+            Frame {
+                body: Body::Dict(dict),
+                ..
+            } => {
+                let mut temp: Vec<u8> = Vec::new();
+                plist::to_writer_binary(&mut temp, &dict)?;
+
+                info!("temp len={}", temp.len());
+                buf.extend_from_slice(temp.as_slice());
+            }
+
+            _frame => {}
+        }
+
+        // info!("msg:\n{:?}", &msg.as_bytes().hex_dump());
+        // info!("buf:\n{:?}", buf.hex_dump());
         // let line = line.as_ref();
         // buf.reserve(line.len() + 1);
         // buf.put(line.as_bytes());
@@ -173,3 +205,20 @@ where
         Ok(())
     }
 }
+
+// impl<T> Encoder<T> for Rtsp
+// where
+//     T: Buf + bstr::ByteSlice,
+// {
+//     type Error = anyhow::Error;
+//
+//     fn encode(&mut self, msg: T, buf: &mut BytesMut) -> Result<()> {
+//         info!("msg:\n{:?}", &msg.as_bytes().hex_dump());
+//         info!("buf:\n{:?}", buf.hex_dump());
+//         // let line = line.as_ref();
+//         // buf.reserve(line.len() + 1);
+//         // buf.put(line.as_bytes());
+//         // buf.put_u8(b'\n');
+//         Ok(())
+//     }
+// }
