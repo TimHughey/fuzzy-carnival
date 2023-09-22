@@ -1,16 +1,26 @@
-// use crate::frame::{self, Frame};
+// Rusty Pierre
+//
+// Copyright 2023 Tim Hughey
+//
+// Licensed under the Apache License, Version 2.0 (the "License")
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use crate::rtsp::{Body, Frame, Method, Response};
-use crate::Particulars;
-use crate::{rtsp::codec, Result, Shutdown};
+use crate::{
+    rtsp::{codec, Frame, Response},
+    HomeKit,
+};
+use crate::{Result, Shutdown};
 use anyhow::anyhow;
-#[allow(unused)]
-use bstr::{ByteSlice, ByteVec};
-// use bytes::{Buf, BytesMut};
-#[allow(unused)]
-use std::io::{Cursor, Write};
-// use std::{fs::OpenOptions, path::Path};
-// use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
+use futures::SinkExt;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
@@ -36,6 +46,7 @@ pub struct Session {
     // level buffering. The `BufWriter` implementation provided by Tokio is
     // sufficient for our needs.
     framed: tokio_util::codec::Framed<TcpStream, codec::Rtsp>,
+    homekit: Option<HomeKit>,
 
     frame: Option<Frame>,
 
@@ -46,12 +57,24 @@ pub struct Session {
 impl Session {
     /// Create a new `Session`, backed by `socket`.
     /// Read and write buffers are initialized.
+    ///
+    /// # Panics
+    ///
     pub fn new(socket: TcpStream, notify_shutdown: &broadcast::Sender<()>) -> Session {
-        Session {
-            framed: codec::Rtsp::new().framed(socket),
-            frame: None,
-            active: true,
-            shutdown: Shutdown::new(notify_shutdown),
+        let homekit = HomeKit::build();
+
+        match homekit {
+            Ok(homekit) => Session {
+                framed: codec::Rtsp::new().framed(socket),
+                homekit: Some(homekit),
+                frame: None,
+                active: true,
+                shutdown: Shutdown::new(notify_shutdown),
+            },
+            Err(e) => {
+                error!("failed to build homekit: {e}");
+                panic!("aborting");
+            }
         }
     }
 
@@ -59,55 +82,18 @@ impl Session {
     /// # Errors
     ///
     /// May return socket error
-    pub fn handle_frame(&mut self, maybe_frame: Option<Result<Frame>>) -> Result<()> {
-        let pars = Particulars::global();
-
+    pub fn handle_frame(&mut self, maybe_frame: Option<Result<Frame>>) -> Result<Option<Response>> {
         match maybe_frame {
             Some(Ok(frame)) => {
                 info!("got frame: {}", frame);
 
-                // let response = Response::respond_to(frame, status_code)
+                let response = Response::respond_to(frame)?;
 
-                match frame {
-                    Frame {
-                        method: Method::GET,
-                        path,
-                        headers,
-                        body: Body::Dict(dict),
-                        ..
-                    } if path.as_str() == "/info" => {
-                        let response = Frame {
-                            method: Method::GET,
-                            ..Frame::default()
-                        };
+                info!("response:\n{response}");
 
-                        info!("got GET /info\n{headers:?}\n{dict:?}");
-                    }
-
-                    Frame {
-                        method,
-                        path,
-                        headers,
-                        ..
-                    } => {
-                        info!("got {method} {path} \n{headers:?}");
-                    }
-                }
-
-                // match (method, path.as_str(), body) {
-                //     (Method::GET, "/info", Body::Dict(dict)) => {
-                //         info!("got GET /info\n{headers:?}\n{dict:?}");
-                //     }
-
-                //     (m, path, _) => {
-                //         error!("got {m} [{path}]");
-                //     }
-                // }
-
-                // self.frame = Some(frame);
                 self.active = true;
 
-                Ok(())
+                Ok(Some(response))
             }
 
             Some(Err(e)) => {
@@ -117,22 +103,8 @@ impl Session {
                 Err(anyhow!(e))
             }
 
-            None => Ok(()),
+            None => Ok(None),
         }
-
-        // match maybe_frame {
-        //     Ok(frame) => {
-        //         info!("got frame: {}", frame);
-        //         self.frame = Some(frame);
-        //     }
-        //     Err(e) => {
-        //         error!("socket closed: {e}");
-        //         self.frame = None;
-        //         self.active = false;
-        //     }
-        // }
-
-        // self.active
     }
 
     ///
@@ -147,31 +119,29 @@ impl Session {
 
             tokio::select! {
                 maybe_frame = self.framed.next() => {
-                    self.handle_frame(maybe_frame)?;
 
-                   self.active = true;
+                    match self.handle_frame(maybe_frame) {
+                        Ok(Some(response)) => {
+                            self.framed.send(response).await?;
+                            self.active = true;
+                        },
+
+                        Err(e) => {
+                            self.active = false;
+                            error!("handle_frame: {e:?}");
+                            Err(anyhow!(e))?;
+                        },
+
+                        res => {
+                            info!("handle frame: {res:?}");
+                        }
+                    }
                 }
 
                 _res = self.shutdown.recv() => {
                     info!("session shutdown");
                 }
             }
-
-            // tokio::select! {
-            //     maybe_frame = self.framed.next() => {
-
-            //         if let Some(maybe_frame) = maybe_frame {
-            //             self.handle_frame(maybe_frame?);
-            //         } else {
-            //             error!("maybe_frame: #{maybe_frame:?}");
-            //             self.active = false;
-            //         }
-            //     }
-
-            //     _res = self.shutdown.recv() => {
-            //         info!("session shutdown");
-            //     }
-            // }
         }
 
         info!("session closing...");
@@ -179,92 +149,35 @@ impl Session {
         Ok(())
     }
 
-    // /// Read a single `Frame` value from the underlying stream.
-    // ///
-    // /// The function waits until it has retrieved enough data to parse a frame.
-    // /// Any data remaining in the read buffer after the frame has been parsed is
-    // /// kept there for the next call to `read_frame`.
-    // ///
-    // /// # Returns
-    // ///
-    // /// On success, the received frame is returned. If the `TcpStream`
-    // /// is closed in a way that doesn't break a frame in half, it returns
-    // /// `None`. Otherwise, an error is returned.
-    // pub async fn read_frame(&mut self) -> Result<Option<Frame>> {
-    //     loop {
-    //         if !self.buffer.is_empty() {
-    //             let path = Path::new("foo");
-    //             let mut file = OpenOptions::new().create(true).write(true).open(path)?;
+    /// .
+    ///
+    /// # Panics
+    ///
+    /// Panics if .
+    pub fn take_homekit(self) -> (Self, HomeKit) {
+        if self.homekit.is_none() {
+            error!("Session does not contain HomeKit");
+            panic!("aborting");
+        }
 
-    //             let n = file.write(&self.buffer)?;
-    //             info!("{:?} bytes={}", file.metadata(), n);
+        let Session { homekit, .. } = self;
 
-    //             // let codec = AnyDelimiterCodec::new(b"\r\n".to_vec(), b"\r\n".to_vec());
+        (
+            Session {
+                homekit: None,
+                ..self
+            },
+            homekit.unwrap(),
+        )
+    }
 
-    //             // let mut fbuf = self.buffer.clone();
-
-    //             // let res = Framed::new(&mut fbuf, codec);
-    //         }
-
-    //         // Attempt to parse a frame from the buffered data. If enough data
-    //         // has been buffered, the frame is returned.
-    //         if let Some(frame) = self.parse_frame()? {
-    //             return Ok(Some(frame));
-    //         }
-
-    //         // There is not enough buffered data to read a frame. Attempt to
-    //         // read more data from the socket.
-    //         //
-    //         // On success, the number of bytes is returned. `0` indicates "end
-    //         // of stream".
-    //         if 0 == self.stream.read_buf(&mut self.buffer).await? {
-    //             // The remote closed the connection. For this to be a clean
-    //             // shutdown, there should be no data in the read buffer. If
-    //             // there is, this means that the peer closed the socket while
-    //             // sending a frame.
-    //             if self.buffer.is_empty() {
-    //                 return Ok(None);
-    //             }
-    //             return Err(anyhow!("connection reset by peer"));
-    //         }
-    //     }
-    // }
-
-    // /// Tries to parse a frame from the buffer. If the buffer contains enough
-    // /// data, the frame is returned and the data removed from the buffer. If not
-    // /// enough data has been buffered yet, `Ok(None)` is returned. If the
-    // /// buffered data does not represent a valid frame, `Err` is returned.
-    // fn parse_frame(&mut self) -> Result<Option<Frame>> {
-    //     use crate::FrameError::Incomplete;
-
-    //     // Cursor is used to track the "current" location in the
-    //     // buffer. Cursor also implements `Buf` from the `bytes` crate
-    //     // which provides a number of helpful utilities for working
-    //     // with bytes.
-    //     let mut buf = Cursor::new(&self.buffer[..]);
-
-    //     match Frame::parse(&mut buf) {
-    //         Ok(frame) => {
-    //             let cnt = buf.position() as usize;
-    //             self.buffer.advance(cnt);
-
-    //             Ok(Some(frame))
-    //         }
-
-    //         // There is not enough data present in the read buffer to parse a
-    //         // single frame. We must wait for more data to be received from the
-    //         // socket.
-    //         //
-    //         // We do not want to return `Err` from here as this "error" is an
-    //         // expected runtime condition.
-    //         Err(Incomplete) => Ok(None),
-
-    //         // An error was encountered while parsing the frame. The connection
-    //         // is now in an invalid state. Returning `Err` from here will result
-    //         // in the connection being closed.
-    //         Err(e) => Err(e.into()),
-    //     }
-    // }
+    #[must_use]
+    pub fn put_homekit(self, homekit: HomeKit) -> Self {
+        Session {
+            homekit: Some(homekit),
+            ..self
+        }
+    }
 
     // #[allow(unused)]
     // pub(crate) async fn write_reply(
@@ -357,60 +270,6 @@ impl Session {
     //     // are to the buffered stream and writes. Calling `flush` writes the
     //     // remaining contents of the buffer to the socket.
     //     self.stream.flush().await?;
-
-    //     Ok(())
-    // }
-
-    // /// Write a frame literal to the stream
-    // async fn write_value(&mut self, frame: &Frame) -> io::Result<()> {
-    //     match frame {
-    //         Frame::Simple(val) => {
-    //             self.stream.write_u8(b'+').await?;
-    //             self.stream.write_all(val.as_bytes()).await?;
-    //             self.stream.write_all(b"\r\n").await?;
-    //         }
-    //         Frame::Error(val) => {
-    //             self.stream.write_u8(b'-').await?;
-    //             self.stream.write_all(val.as_bytes()).await?;
-    //             self.stream.write_all(b"\r\n").await?;
-    //         }
-    //         Frame::Integer(val) => {
-    //             self.stream.write_u8(b':').await?;
-    //             self.write_decimal(*val).await?;
-    //         }
-    //         Frame::Null => {
-    //             self.stream.write_all(b"$-1\r\n").await?;
-    //         }
-    //         Frame::Bulk(val) => {
-    //             let len = val.len();
-
-    //             self.stream.write_u8(b'$').await?;
-    //             self.write_decimal(len as u64).await?;
-    //             self.stream.write_all(val).await?;
-    //             self.stream.write_all(b"\r\n").await?;
-    //         }
-    //         // Encoding an `Array` from within a value cannot be done using a
-    //         // recursive strategy. In general, async fns do not support
-    //         // recursion. Mini-redis has not needed to encode nested arrays yet,
-    //         // so for now it is skipped.
-    //         Frame::Array(_val) => unreachable!(),
-    //     }
-
-    //     Ok(())
-    // }
-
-    // /// Write a decimal frame to the stream
-    // async fn write_decimal(&mut self, val: u64) -> io::Result<()> {
-    //     use std::io::Write;
-
-    //     // Convert the value to a string
-    //     let mut buf = [0u8; 20];
-    //     let mut buf = Cursor::new(&mut buf[..]);
-    //     write!(&mut buf, "{}", val)?;
-
-    //     let pos = buf.position() as usize;
-    //     self.stream.write_all(&buf.get_ref()[..pos]).await?;
-    //     self.stream.write_all(b"\r\n").await?;
 
     //     Ok(())
     // }

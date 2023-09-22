@@ -1,0 +1,12 @@
+POST /pair-verify RTSP/1.0
+X-Apple-HKP: 6
+X-Apple-Client-Name: xapham
+X-Apple-PD: 1
+Content-Length: 37
+Content-Type: application/octet-stream
+CSeq: 1
+DACP-ID: 45D48F037CC7CA36
+Active-Remote: 2482705324
+User-Agent: AirPlay/695.5.1
+
+ ¼}å::¶¢PªgÁšz­U\ŽÄOWó5†ÖÌSb\Ž

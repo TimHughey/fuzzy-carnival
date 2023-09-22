@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Particulars, Result};
+use crate::{FlagsCalc, HostInfo, Result};
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 
 #[derive(Debug)]
@@ -28,70 +28,63 @@ impl SerDis {
     ///
     /// May return an error if ``ServiceInfo`` creation fails
     pub fn build() -> Result<SerDis> {
-        const RECEIVER_NAME: &str = "Pierre";
+        use crate::asym::Keys;
+
         const ST_AIRPLAY: &str = "_airplay._tcp.local.";
         const ST_RAOP: &str = "_raop._tcp.local.";
         const PORT: u16 = 7000;
         const GIT_VERSION: &str = git_version::git_version!();
 
-        let particulars = Particulars::global();
-
-        let host = particulars.host_name.as_str();
-        let host_ip = particulars.host_ip.as_str();
-        let mac_addr = particulars.mac_addr.as_str();
-        let pk = particulars.public_key.as_str();
-        let ff_hex = particulars.features().as_lsb_msb_hex();
-        let st_hex = format!("{:#x}", particulars.status());
-        let device_id = particulars.device_id();
-        let serial_num = device_id.replace(':', "-").to_ascii_uppercase();
-
         let txt_raop = [
             ("vs", "366.0"),
             ("vn", "65537"),
             ("tp", "UDP"),
-            ("pk", pk),
+            ("pk", Keys::get_signing_pub()),
             ("am", "Pierre"),
             ("md", "0,1,2"),
-            ("sf", &st_hex),
-            ("ft", &ff_hex),
+            ("sf", FlagsCalc::status_as_str()),
+            ("ft", FlagsCalc::features_as_lsb_msb_str()),
             ("et", "0,4"),
             ("da", "true"),
             ("cn", "0,4"),
         ];
 
         let txt_airplay = [
-            ("pk", pk),
+            ("pk", Keys::get_signing_pub()),
             ("gcgl", "0"),
-            ("gid", mac_addr),
-            ("pi", mac_addr),
+            ("gid", HostInfo::mac_as_str()),
+            ("pi", HostInfo::mac_as_str()),
             ("srcvers", "366.0"),
             ("protovers", "1.1"),
-            ("serialNumber", &serial_num),
+            ("serialNumber", HostInfo::id_as_str()),
             ("manufacturer", "Hughey"),
             ("model", "Pierre"),
-            ("flags", &st_hex),
+            ("flags", FlagsCalc::status_as_str()),
             ("fv", GIT_VERSION),
             ("rsf", "0x0"),
-            ("features", &ff_hex),
-            ("deviceid", &device_id),
+            ("features", FlagsCalc::features_as_lsb_msb_str()),
+            ("deviceid", HostInfo::mac_as_str()),
             ("acl", "0"),
         ];
+
+        let receiver_name = HostInfo::receiver_as_str();
+        let raop_name = format!("{}@{}", HostInfo::id_as_str(), receiver_name);
 
         Ok(SerDis {
             flavors: [
                 ServiceInfo::new(
                     ST_AIRPLAY,
-                    RECEIVER_NAME,
-                    host,
-                    host_ip,
+                    receiver_name,
+                    HostInfo::name_as_str(),
+                    HostInfo::ip_as_str(),
                     PORT,
                     &txt_airplay[..],
                 )?,
                 ServiceInfo::new(
                     ST_RAOP,
-                    format!("{}@{}", particulars.simple_id(), RECEIVER_NAME).as_str(),
-                    host,
-                    host_ip,
+                    raop_name.as_str(),
+                    HostInfo::name_as_str(),
+                    HostInfo::ip_as_str(),
                     PORT,
                     &txt_raop[..],
                 )?,

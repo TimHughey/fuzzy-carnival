@@ -16,6 +16,7 @@
 
 use bitflags::bitflags;
 use mdns_sd::TxtProperty;
+use once_cell::sync::Lazy;
 
 bitflags! {
   ///
@@ -134,26 +135,26 @@ impl Features {
         format!("{least_sb:#X},{most_sb:#X}")
     }
 
-    #[must_use]
-    pub fn as_u64(self) -> u64 {
-        self.bits()
-    }
+    // #[must_use]
+    // pub fn as_u64(self) -> u64 {
+    //     self.bits()
+    // }
 
-    #[must_use]
-    #[allow(clippy::cast_possible_wrap)]
-    pub fn as_plist_val(self) -> i64 {
-        self.bits() as i64
-    }
+    // #[must_use]
+    // #[allow(clippy::cast_possible_wrap)]
+    // pub fn as_plist_val(self) -> i64 {
+    //     self.bits() as i64
+    // }
 
-    #[must_use]
-    pub fn as_txt_airplay(self) -> TxtProperty {
-        TxtProperty::from(("features", self.as_lsb_msb_hex()))
-    }
+    // #[must_use]
+    // pub fn as_txt_airplay(self) -> TxtProperty {
+    //     TxtProperty::from(("features", self.as_lsb_msb_hex()))
+    // }
 
-    #[must_use]
-    pub fn as_txt_raop(self) -> TxtProperty {
-        TxtProperty::from(("ft", self.as_lsb_msb_hex()))
-    }
+    // #[must_use]
+    // pub fn as_txt_raop(self) -> TxtProperty {
+    //     TxtProperty::from(("ft", self.as_lsb_msb_hex()))
+    // }
 }
 
 impl Default for Features {
@@ -229,6 +230,54 @@ impl Default for Status {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct Calculated {
+    features_hex: String,
+    features: Features,
+    status_hex: String,
+    status: Status,
+}
+
+static CALCULATED: Lazy<Calculated> = Lazy::new(|| {
+    let features = Features::default();
+    let status = Status::default();
+
+    Calculated {
+        features_hex: features.as_lsb_msb_hex(),
+        features,
+        status_hex: format!("{status:#x}"),
+        status,
+    }
+});
+
+impl Calculated {
+    #[must_use]
+    #[inline]
+    pub fn features_as_lsb_msb_str() -> &'static str {
+        CALCULATED.features_hex.as_str()
+    }
+
+    #[must_use]
+    #[inline]
+    #[allow(dead_code)]
+    pub fn features_as_u64() -> u64 {
+        CALCULATED.features.bits()
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn status_as_str() -> &'static str {
+        CALCULATED.status_hex.as_str()
+    }
+
+    #[must_use]
+    #[inline]
+    #[allow(dead_code)]
+    pub fn status_as_u32() -> u32 {
+        CALCULATED.status.bits()
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -239,21 +288,21 @@ mod tests {
         assert!(Features::default().bits() == 0x1_C300_405F_C200);
     }
 
-    #[test]
-    fn feature_flags_produces_raop_txt() {
-        let txt = Features::default().as_txt_raop();
+    // #[test]
+    // fn feature_flags_produces_raop_txt() {
+    //     let txt = Features::default().as_txt_raop();
 
-        assert!(txt.key() == "ft");
-        assert!(txt.val_str() == "0x405FC200,0x1C300");
-    }
+    //     assert!(txt.key() == "ft");
+    //     assert!(txt.val_str() == "0x405FC200,0x1C300");
+    // }
 
-    #[test]
-    fn feature_flags_produces_airplay_txt() {
-        let txt = Features::default().as_txt_airplay();
+    // #[test]
+    // fn feature_flags_produces_airplay_txt() {
+    //     let txt = Features::default().as_txt_airplay();
 
-        assert!(txt.key() == "features");
-        assert!(txt.val_str() == "0x405FC200,0x1C300");
-    }
+    //     assert!(txt.key() == "features");
+    //     assert!(txt.val_str() == "0x405FC200,0x1C300");
+    // }
 
     #[test]
     #[ignore]
@@ -268,7 +317,7 @@ mod tests {
     fn feature_flags_dump() {
         let mut alpha = Features::default();
 
-        println!("alpha as plist val: {}", alpha.as_plist_val());
+        // println!("alpha as plist val: {}", alpha.as_plist_val());
 
         let r = std::ops::Range { start: 0, end: 64 }.step_by(8);
 

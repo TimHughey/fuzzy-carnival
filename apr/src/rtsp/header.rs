@@ -16,8 +16,10 @@
 
 use crate::Result;
 use anyhow::anyhow;
-use indexmap::IndexMap;
+// use bytes::{BufMut, BytesMut};
+use std::fmt::{self, Debug};
 use std::str::FromStr;
+use tracing::error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ContType {
@@ -37,7 +39,7 @@ impl ContType {
     const PEER_LIST_CHANGED: &str = "/peer-list-changed";
     const IMAGE_NONE: &str = "image/none";
 
-    pub fn description(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::AppAppleBinaryPlist => Self::BINARY_PLIST,
             Self::AppDMapTagged => Self::DMAP_TAGGED,
@@ -46,6 +48,13 @@ impl ContType {
             Self::PeerListChangedX => Self::PEER_LIST_CHANGED,
             Self::ImageNone => Self::IMAGE_NONE,
         }
+    }
+}
+
+impl AsRef<str> for ContType {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -86,9 +95,31 @@ impl Key2 {
     const CONTENT_LEN: &str = "Content-Length";
     const CONTENT_TYPE: &str = "Content-Type";
     const CSEQ: &str = "CSeq";
-    const DHCP_ID: &str = "DACP-ID";
+    const DACP_ID: &str = "DACP-ID";
     const RTP_INFO: &str = "RTP-INFO";
     const USER_AGENT: &str = "User-Agent";
+
+    #[inline]
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::ActiveRemote => Self::ACTIVE_REMOTE,
+            Self::Cseq => Self::CSEQ,
+            Self::ContentLength => Self::CONTENT_LEN,
+            Self::ContentType => Self::CONTENT_TYPE,
+            Self::DacpId => Self::DACP_ID,
+            Self::RtpInfo => Self::RTP_INFO,
+            Self::UserAgent => Self::USER_AGENT,
+            Self::Extension(ext) => ext.as_str(),
+        }
+    }
+}
+
+impl AsRef<str> for Key2 {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
 }
 
 impl FromStr for Key2 {
@@ -100,7 +131,7 @@ impl FromStr for Key2 {
             Self::CONTENT_LEN => Ok(Self::ContentLength),
             Self::CONTENT_TYPE => Ok(Self::ContentType),
             Self::CSEQ => Ok(Self::Cseq),
-            Self::DHCP_ID => Ok(Self::DacpId),
+            Self::DACP_ID => Ok(Self::DacpId),
             Self::RTP_INFO => Ok(Self::RtpInfo),
             Self::USER_AGENT => Ok(Self::UserAgent),
             ext if ext.starts_with("X-") => Ok(Self::Extension(ext.into())),
@@ -109,243 +140,154 @@ impl FromStr for Key2 {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Val2 {
-    ActiveRemote(u32),
-    Cseq(u64),
-    ContentLength(usize),
-    ContentType(ContType),
-    DacpId(String),
-    RtpInfo(u32),
-    UserAgent(String),
-    Extension(String),
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub struct List {
+    pub active_remote: Option<u32>,
+    pub cseq: Option<u32>,
+    pub content_length: Option<usize>,
+    pub content_type: Option<ContType>,
+    pub dacp_id: Option<String>,
+    rtp_info: Option<u64>,
+    user_agent: Option<String>,
+    extensions: Vec<(String, String)>,
 }
 
-impl Val2 {
-    fn new(key: &Key2, src: &str) -> Result<Val2> {
-        match key {
-            Key2::ActiveRemote => Ok(Self::ActiveRemote(src.parse()?)),
-            Key2::ContentLength => Ok(Self::ContentLength(src.parse()?)),
-            Key2::ContentType => Ok(Self::ContentType(ContType::from_str(src)?)),
-            Key2::Cseq => Ok(Self::Cseq(src.parse()?)),
-            Key2::DacpId => Ok(Self::DacpId(src.to_ascii_lowercase())),
-            Key2::RtpInfo => {
-                if let Some(("rtptime", rtp_time)) = src.split_once('=') {
-                    Ok(Self::RtpInfo(rtp_time.parse()?))
-                } else {
-                    Err(anyhow!("bad RTP-Info: {src}"))
-                }
-            }
-            Key2::UserAgent => Ok(Self::UserAgent(src.into())),
-            Key2::Extension(_) => Ok(Self::Extension(src.into())),
+impl List {
+    pub fn make_response(self, content: ContType, content_len: usize) -> Self {
+        List {
+            active_remote: None,
+            content_length: Some(content_len),
+            content_type: Some(content),
+            dacp_id: None,
+            rtp_info: None,
+            user_agent: None,
+            extensions: Vec::new(),
+            ..self
         }
     }
-}
 
-// #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub enum Key {
-//     ActiveRemote(u32),
-//     Cseq(u64),
-//     ContentLength(usize),
-//     ContentType(ContType),
-//     DacpId(u64),
-//     RtpInfo(u32),
-//     UserAgent(String),
-//     Extension(String),
-// }
-
-// impl Key {
-//     const ACTIVE_REMOTE: &str = "Active-Remote";
-//     const CONTENT_LEN: &str = "Content-Length";
-//     const CONTENT_TYPE: &str = "Content-Type";
-//     const CSEQ: &str = "CSeq";
-//     const DHCP_ID: &str = "DACP-ID";
-//     const RTP_INFO: &str = "RTP-INFO";
-//     const USER_AGENT: &str = "User-Agent";
-// }
-
-// impl FromStr for Key {
-//     type Err = anyhow::Error;
-
-//     fn from_str(src: &str) -> Result<Key> {
-//         if let Some((k, v)) = src.trim().split_once(": ") {
-//             match k {
-//                 Self::ACTIVE_REMOTE => Ok(Self::ActiveRemote(v.parse()?)),
-//                 Self::CONTENT_LEN => Ok(Self::ContentLength(v.parse()?)),
-//                 Self::CONTENT_TYPE => Ok(Self::ContentType(ContType::from_str(v)?)),
-//                 Self::CSEQ => Ok(Self::Cseq(v.parse()?)),
-//                 Self::DHCP_ID => Ok(Self::DacpId(v.parse()?)),
-//                 Self::RTP_INFO => {
-//                     if let Some(("rtptime", rtp_time)) = v.split_once("=") {
-//                         Ok(Self::RtpInfo(rtp_time.parse()?))
-//                     } else {
-//                         Err(anyhow!("bad RTP-Info: {v}"))
-//                     }
-//                 }
-//                 Self::USER_AGENT => Ok(Self::UserAgent(v.into())),
-//                 ext if ext.starts_with("X-") => Ok(Self::Extension(ext.into())),
-//                 unknown => Err(anyhow!("unknown header key: {unknown}")),
-//             }
-//         } else {
-//             Err(anyhow!("unknown content type: {src}"))
-//         }
-//     }
-// }
-
-// #[derive(Default, Debug, Clone, Eq, PartialEq)]
-// pub struct List {
-//     inner: Vec<Key>,
-//     _priv: (),
-// }
-
-// impl List {
-//     pub fn get_dacp_id(&self) -> Result<u64> {
-//         let id = self.inner.iter().find(|k| matches!(k, Key::DacpId(_)));
-
-//         if let Some(Key::DacpId(id)) = id {
-//             return Ok(id.to_owned());
-//         }
-
-//         Err(anyhow!("DACP-ID missing"))
-//     }
-// }
-
-// impl<'a> TryFrom<&'a str> for List {
-//     type Error = anyhow::Error;
-
-//     fn try_from(src: &'a str) -> Result<Self> {
-//         let mut inner = Vec::<Key>::new();
-
-//         for line in src.trim().lines() {
-//             inner.push(Key::from_str(line)?);
-//         }
-
-//         if !inner.is_empty() {
-//             Ok(List {
-//                 inner,
-//                 ..Self::default()
-//             })
-//         } else {
-//             Err(anyhow!("empty header list"))
-//         }
-//     }
-// }
-
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
-pub struct Map {
-    // inner: IndexMap<String, String>,
-    inner: IndexMap<Key2, Val2>,
-    _priv: (),
-}
-
-impl Map {
-    // pub fn add(mut self, kv_pairs: &[(&str, &str)]) -> Self {
-    //     for (k, v) in kv_pairs {
-    //         self.inner.insert(Key2::from_str(k)?, v.to_string());
-    //     }
-
-    //     self
-    // }
-
-    // /// # Errors
-    // ///
-    // /// Will return `Err` if `filename` does not exist or the user does not have
-    // /// permission to read it.
-    // pub fn append(&mut self, src: &str) -> Result<()> {
-    //     let parts = src.split_once(":");
-
-    //     // if let Some(parts) = parts {
-    //     //     match parts {
-    //     //         ("", "") => Err(anyhow!("not a header: {src}")),
-    //     //         (cat, detail) =>
-    //     //     }
-    //     // } else {
-    //     //     Err(anyhow!("not a header: {}", src))
-    //     // }
-
-    //     if src.contains(':') {
-    //         const MAX_PARTS: usize = 2;
-    //         const KEY: usize = 0;
-    //         const VAL: usize = 1;
-
-    //         let p: ArrayVec<&str, 2> = src
-    //             .split_ascii_whitespace()
-    //             .map(|s| s.trim_end_matches(':'))
-    //             .take(MAX_PARTS)
-    //             .collect();
-
-    //         self.inner.insert(p[KEY].into(), p[VAL].into());
-
-    //         Ok(())
-    //     } else {
-    //         Err(anyhow!("not a header: {}", src))
-    //     }
-    // }
-
-    #[must_use]
-    pub fn content_len(&self) -> Option<&Val2> {
-        let key = Key2::ContentLength;
-
-        self.inner.get(&key)
-
-        // if let Some(Val2::ContentLength(len)) = self.inner.get(&key) {
-        //     return Some(len.to_owned());
-        // }
-
-        // None
-    }
-
-    #[allow(clippy::must_use_candidate)]
-    pub fn headers(&self) -> &IndexMap<Key2, Val2> {
-        &self.inner
-    }
-
-    #[allow(clippy::must_use_candidate)]
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
-    #[allow(clippy::must_use_candidate)]
-    pub fn len(&self) -> usize {
-        self.inner.len()
-    }
-
-    #[must_use]
-    pub fn new() -> Map {
-        Map {
-            inner: IndexMap::new(),
-            _priv: (),
-        }
+    pub fn content_len(&self) -> usize {
+        self.content_length.unwrap()
     }
 }
 
-impl<'a> TryFrom<&'a str> for Map {
+impl<'a> TryFrom<&'a str> for List {
     type Error = anyhow::Error;
 
     fn try_from(src: &'a str) -> Result<Self> {
-        let mut map = Map::new();
+        let list = src
+            .trim()
+            .lines()
+            .fold(List::default(), |mut acc: List, line| {
+                if let Some((k, v)) = line.split_once(": ") {
+                    match k {
+                        Key2::ACTIVE_REMOTE => List {
+                            active_remote: v.parse().ok(),
+                            ..acc
+                        },
 
-        for line in src.trim().lines() {
-            if let Some((k, v)) = line.split_once(": ") {
-                let key = Key2::from_str(k)?;
-                let value = Val2::new(&key, v)?;
+                        Key2::CSEQ => List {
+                            cseq: v.parse().ok(),
+                            ..acc
+                        },
 
-                map.inner.insert(key, value);
-            }
-        }
+                        Key2::CONTENT_LEN => List {
+                            content_length: v.parse().ok(),
+                            ..acc
+                        },
 
-        if map.inner.is_empty() {
-            Err(anyhow!("empty header list"))
+                        Key2::CONTENT_TYPE => List {
+                            content_type: ContType::from_str(v).ok(),
+                            ..acc
+                        },
+
+                        Key2::DACP_ID => List {
+                            dacp_id: Some(v.to_ascii_lowercase()),
+                            ..acc
+                        },
+
+                        Key2::RTP_INFO => {
+                            if let Some(("rtptime", rptime)) = v.split_once('=') {
+                                List {
+                                    rtp_info: rptime.parse().ok(),
+                                    ..acc
+                                }
+                            } else {
+                                acc
+                            }
+                        }
+
+                        Key2::USER_AGENT => List {
+                            user_agent: Some(v.to_string()),
+                            ..acc
+                        },
+
+                        k if k.starts_with("X-") => {
+                            acc.extensions.push((k.to_string(), v.to_string()));
+
+                            acc
+                        }
+
+                        _k => {
+                            error!("unhandled header: {line}");
+                            acc
+                        }
+                    }
+                } else {
+                    acc
+                }
+            });
+
+        if list.cseq.is_some() {
+            Ok(list)
         } else {
-            Ok(map)
+            Err(anyhow!("failed to parse: {src}"))
         }
+    }
+}
+
+impl fmt::Display for List {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(active_remote) = self.active_remote {
+            writeln!(fmt, "{}: {active_remote}", Key2::ACTIVE_REMOTE)?;
+        }
+
+        if let Some(cseq) = self.cseq {
+            writeln!(fmt, "{}: {cseq}", Key2::CSEQ)?;
+        }
+
+        if let Some(content_len) = self.content_length {
+            writeln!(fmt, "{}: {content_len}", Key2::CONTENT_LEN)?;
+        }
+
+        if let Some(content_type) = &self.content_type {
+            writeln!(fmt, "{}: {}", Key2::CONTENT_TYPE, content_type.as_str())?;
+        }
+
+        if let Some(dacp_id) = &self.dacp_id {
+            writeln!(fmt, "{}: {dacp_id}", Key2::DACP_ID)?;
+        }
+
+        if let Some(rtp_info) = self.rtp_info {
+            writeln!(fmt, "{}: {rtp_info}", Key2::DACP_ID)?;
+        }
+
+        if let Some(user_agent) = &self.user_agent {
+            writeln!(fmt, "{}: {user_agent}", Key2::USER_AGENT)?;
+        }
+
+        for (key, val) in &self.extensions {
+            writeln!(fmt, "{key}: {val}")?;
+        }
+
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use super::Map;
+    use super::List;
     // use crate::Result;
 
     const CONTENT_LEN_LINE: &str =
@@ -353,21 +295,8 @@ mod tests {
 
     #[test]
     fn can_create_map() {
-        let res = Map::try_from(CONTENT_LEN_LINE);
+        let res = List::try_from(CONTENT_LEN_LINE);
 
         assert!(res.is_ok());
     }
-
-    // #[test]
-    // fn can_get_content_len_when_present() -> Result<()> {
-    //     let mut hdr_map = Map::new();
-
-    //     hdr_map.append(CONTENT_LEN_LINE)?;
-
-    //     let len = hdr_map.content_len()?;
-
-    //     assert_eq!(Some(30), len);
-
-    //     Ok(())
-    // }
 }
