@@ -19,14 +19,24 @@
 //! Provides an async `run` function that listens for inbound connections,
 //! spawning a task per connection.
 
-use crate::{serdis::SerDis, Result, Session, Shutdown};
+use crate::{
+    rtsp::{codec, Frame, Response},
+    serdis::SerDis,
+    Result, Shutdown,
+};
+use anyhow::anyhow;
+use futures::SinkExt;
 use mdns_sd as Mdns;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::signal;
 use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
-use tokio_util::sync::CancellationToken;
+use tokio_stream::StreamExt;
+use tokio_util::{
+    codec::{Decoder, Framed},
+    sync::CancellationToken,
+};
 
 #[allow(unused)]
 use tracing::{debug, error, info};
@@ -82,14 +92,13 @@ struct Listener {
 /// commands to `db`.
 #[derive(Debug)]
 struct Handler {
-    /// The TCP connection decorated with the redis protocol encoder / decoder
-    /// implemented using a buffered `TcpStream`.
+    /// The TCP connection decorated with a codec encoder / decoder which
+    /// operates in terms of `Frame` (complete messages).
     ///
-    /// When `Listener` receives an inbound connection, the `TcpStream` is
-    /// passed to `Connection::new`, which initializes the associated buffers.
-    /// `Connection` allows the handler to operate at the "frame" level and keep
-    /// the byte level protocol parsing details encapsulated in `Connection`.
-    session: Session,
+    /// The `Framed` codec allocates the required buffers and handles the
+    /// details of receiving data, ensuring it is a complete message before
+    /// returning the `Frame`.
+    framed: Framed<TcpStream, codec::Rtsp>,
 
     /// Listen for shutdown notifications.
     ///
@@ -106,6 +115,37 @@ struct Handler {
 }
 
 impl Handler {
+    ///
+    /// # Errors
+    ///
+    /// May return socket error
+    pub fn handle_frame(
+        maybe_frame: Option<Result<Frame>>,
+        active: &mut bool,
+    ) -> Result<Option<Response>> {
+        match maybe_frame {
+            Some(Ok(frame)) => {
+                info!("got frame: {}", frame);
+
+                let response = Response::respond_to(frame)?;
+
+                info!("response:\n{response}");
+
+                *active = true;
+
+                Ok(Some(response))
+            }
+
+            Some(Err(e)) => {
+                error!("socket closed: {e}");
+
+                Err(anyhow!(e))
+            }
+
+            None => Ok(None),
+        }
+    }
+
     /// Process a single connection.
     ///
     /// Request frames are read from the socket and processed. Responses are
@@ -119,12 +159,32 @@ impl Handler {
     /// When the shutdown signal is received, the connection is processed until
     /// it reaches a safe state, at which point it is terminated.
     async fn run(&mut self) -> Result<()> {
-        // As long as the shutdown signal has not been received, try to read a
-        // new request frame.
+        let mut active = true;
 
-        tokio::select! {
-            _ = self.session.run() =>  Ok(()),
-            _ = self.shutdown.recv() => Ok(()),
+        while !self.shutdown.is_shutdown() && active {
+            active = false;
+
+            tokio::select! {
+                maybe_frame = self.framed.next() => {
+                    match Self::handle_frame(maybe_frame, &mut active, ) {
+                        Ok(Some(response)) => {
+                            self.framed.send(response).await?;
+                            active = true;
+                        },
+
+                        Err(e) => {
+                            active = false;
+                            error!("handle_frame: {e:?}");
+                            Err(anyhow!(e))?;
+                        },
+
+                        res => {
+                            info!("handle frame: {res:?}");
+                        }
+                    }
+                },
+                _ = self.shutdown.recv() => (),
+            }
         }
 
         // cmd.apply(&mut self.session).await?;
@@ -140,7 +200,7 @@ impl Handler {
         //    .await?;
         // }
 
-        // Ok(())
+        Ok(())
     }
 }
 
@@ -304,7 +364,7 @@ impl Listener {
             let mut handler = Handler {
                 // Initialize the connection state. This allocates read/write
                 // buffers to perform redis protocol frame parsing.
-                session: Session::new(socket, &self.notify_shutdown),
+                framed: codec::Rtsp::new().framed(socket),
 
                 // Receive shutdown notifications.
                 shutdown: Shutdown::new(&self.notify_shutdown),

@@ -14,11 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Tag, TagVal, TagVariant};
+use super::tags;
 use anyhow::anyhow;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Generic(u8);
+pub struct Generic(pub u8);
 
 impl From<u8> for Generic {
     fn from(val: u8) -> Self {
@@ -34,17 +34,15 @@ pub enum Verify {
     Msg04 = 4,
 }
 
-impl TryFrom<Tag> for Verify {
+impl TryFrom<tags::Val> for Verify {
     type Error = anyhow::Error;
 
-    fn try_from(tlv: Tag) -> crate::Result<Self> {
-        match tlv {
-            Tag {
-                variant: TagVariant::State,
-                val: TagVal::State(s),
-            } => Self::try_from(s),
-            tlv => Err(anyhow!("conversion from generic state failed: {tlv:?}")),
+    fn try_from(val: tags::Val) -> crate::Result<Self> {
+        if let tags::Val::State(s) = val {
+            return Self::try_from(s);
         }
+
+        Err(anyhow!("unable to convert to verify state"))
     }
 }
 

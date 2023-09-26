@@ -16,7 +16,6 @@
 
 use crate::Result;
 use anyhow::anyhow;
-// use bytes::{BufMut, BytesMut};
 use std::fmt::{self, Debug};
 use std::str::FromStr;
 use tracing::error;
@@ -39,6 +38,7 @@ impl ContType {
     const PEER_LIST_CHANGED: &str = "/peer-list-changed";
     const IMAGE_NONE: &str = "image/none";
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::AppAppleBinaryPlist => Self::BINARY_PLIST,
@@ -153,6 +153,7 @@ pub struct List {
 }
 
 impl List {
+    #[must_use]
     pub fn make_response(self, content: ContType, content_len: usize) -> Self {
         List {
             active_remote: None,
@@ -166,6 +167,12 @@ impl List {
         }
     }
 
+    /// Returns the content len of this [`List`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if .
+    #[must_use]
     pub fn content_len(&self) -> usize {
         self.content_length.unwrap()
     }

@@ -21,7 +21,7 @@ use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-#[tokio::main(worker_threads = 10)]
+#[tokio::main(worker_threads = 2)]
 
 ///
 ///
@@ -56,6 +56,7 @@ pub async fn main() -> crate::Result<()> {
     Ok(handle.await?)
 }
 
+#[inline]
 fn setup_logging() -> Result<()> {
     let subscriber = tracing_subscriber::fmt()
         // Use a more compact, abbreviated log format

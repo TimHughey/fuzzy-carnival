@@ -15,38 +15,33 @@
 // limitations under the License.
 
 pub mod states;
-
 pub use states::Generic as GenericState;
 pub use states::Verify as VerifyState;
 
-pub mod verify;
-pub use verify::Context as VerifyCtx;
+pub mod tags;
+pub use tags::Map as Tags;
 
-pub mod tlv;
-pub use tlv::Tag;
-pub use tlv::TagList;
-pub use tlv::Val as TagVal;
-pub use tlv::Variant as TagVariant;
-
-use crate::{asym::Keys, rtsp::HeaderList, rtsp::Response};
+use crate::{
+    asym::Keys,
+    rtsp::{Body, HeaderContType, HeaderList, Response, StatusCode},
+    HostInfo, Result,
+};
+#[allow(unused)]
 use alkali::{
     asymmetric::{cipher, sign},
     mem,
+    symmetric::auth,
 };
+use anyhow::anyhow;
+use bytes::{Bytes, BytesMut};
 use once_cell::sync::Lazy;
+#[allow(unused)]
+use pretty_hex::PrettyHex;
 use std::{fmt, sync::RwLock};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 type SignSeed = sign::Seed<mem::FullAccess>;
 type SignKeyPair = sign::Keypair;
-
-// pub struct Context {
-//     // copy signing info from HostInfo for easy access
-//     signing_seed: SignSeed,
-//     signing_kp: SignKeyPair,
-//     server_eph: cipher::Keypair,
-//     client_eph_pk: RefCell<Option<cipher::PublicKey>>,
-// }
 
 pub struct Context {
     // copy signing info from HostInfo for easy access
@@ -60,6 +55,8 @@ pub struct Context {
 }
 
 pub use Context as HomeKit;
+
+unsafe impl Send for HomeKit {}
 
 impl fmt::Debug for HomeKit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -84,10 +81,9 @@ impl HomeKit {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if unable to
+    /// generate security `Seed` or `KeyPair`.
     pub fn build() -> crate::Result<Self> {
-        use crate::HostInfo;
-
         Ok(Self {
             signing_seed: HostInfo::clone_seed()?,
             signing_kp: Keys::clone_signing()?,
@@ -97,9 +93,53 @@ impl HomeKit {
         })
     }
 
+    /// .
+    ///
+    /// # Panics
+    ///
+    /// Panics if .
+    #[must_use]
+    pub fn get_client_eph_pk() -> cipher::PublicKey {
+        let pk_lock = HOMEKIT.client_eph_pk.read().unwrap();
+
+        if let Some(pk) = *pk_lock {
+            return pk;
+        }
+
+        panic!("foo");
+    }
+
+    #[must_use]
+    pub fn get_server_eph() -> &'static cipher::Keypair {
+        &HOMEKIT.server_eph
+    }
+
     #[must_use]
     pub fn get_signing_seed() -> &'static SignSeed {
         &HOMEKIT.signing_seed
+    }
+
+    #[must_use]
+    pub fn get_server_sign_keys() -> &'static SignKeyPair {
+        &HOMEKIT.signing_kp
+    }
+
+    /// .
+    ///
+    /// # Panics
+    ///
+    /// Panics if Session Key is not available.
+    #[must_use]
+    pub fn get_session_key() -> cipher::SessionKey<mem::FullAccess> {
+        let lock = HOMEKIT.session_key.read().unwrap();
+
+        if let Some(session_key) = &*lock {
+            if let Ok(key) = session_key.try_clone() {
+                return key;
+            }
+        }
+
+        panic!("coding error");
     }
 
     /// .
@@ -107,40 +147,88 @@ impl HomeKit {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub fn handle_request(_hdr_list: HeaderList, list: &TagList, path: &str) -> crate::Result<()> {
-        match path {
-            "/pair-verify" => {
-                use TagVal::PublicKey;
+    pub fn handle_request(headers: HeaderList, body: Body, path: &str) -> Result<Response> {
+        match (path, body) {
+            ("/pair-verify", Body::Bulk(bulk)) => {
                 use VerifyState::{Msg01, Msg02, Msg03, Msg04};
+
+                let buf: BytesMut = BytesMut::from(bulk.as_slice());
+
+                let list = Tags::try_from(buf)?;
 
                 let state = VerifyState::try_from(list.get_state()?)?;
 
                 match state {
                     Msg01 => {
-                        info!("state Msg01");
+                        info!("{path} {state:?}");
 
-                        if let Tag {
-                            val: PublicKey(pk), ..
-                        } = list.get(&TagVariant::PublicKey)?
-                        {
-                            HomeKit::push_client_pub_key(pk);
-                        }
+                        let pk = list.get_public_key()?;
+
+                        HomeKit::push_client_pub_key(pk);
+
+                        // create and sign accessory info
+                        let device_id = HostInfo::id_as_slice();
+                        let server_sign = HomeKit::get_server_sign_keys();
+                        let server_eph = HomeKit::get_server_eph();
+                        let server_pk = server_eph.public_key;
+                        let client_pk = HomeKit::get_client_eph_pk();
+
+                        let info: Bytes = [device_id, server_pk.as_slice(), client_pk.as_slice()]
+                            .concat()
+                            .into();
+
+                        let capacity = info.len() + sign::SIGNATURE_LENGTH;
+                        let mut signature = BytesMut::with_capacity(capacity);
+
+                        sign::sign(&info, server_sign, &mut signature)?;
+
+                        // info!("signature {:?}\nlen check {sig_len}", signature.hex_dump());
+
+                        let mut reply_tags = Tags::default();
+                        reply_tags.push(tags::Val::Identifier(device_id.into()));
+                        reply_tags.push(tags::Val::Signature(signature.into()));
+
+                        let part1: Bytes = reply_tags.clone().try_into()?;
+
+                        // HMAC
+                        let session_key = HomeKit::get_session_key();
+                        let mut auth_key = auth::Key::new_empty()?;
+
+                        auth_key.copy_from_slice(session_key.as_slice());
+
+                        let derived_key = auth::authenticate(&part1, &auth_key)?;
+
+                        info!("DERIVED KEY {:?}", derived_key);
+
+                        let body = reply_tags.encode();
+
+                        Ok(Response {
+                            status_code: StatusCode::OK,
+                            headers: HeaderList::make_response(
+                                headers,
+                                HeaderContType::AppOctetStream,
+                                0,
+                            ),
+                            body,
+                        })
                     }
-                    Msg02 => {
-                        info!("got state Msg02");
-                    }
-                    Msg03 => {
-                        info!("got state Msg03");
-                    }
-                    Msg04 => {
-                        info!("got state Msg04");
-                    }
+                    Msg02 | Msg03 | Msg04 => Err(anyhow!("{path}: got state {state:?}")),
                 }
             }
-            path => warn!("unhandled path: {path}"),
+            (path, body) => Err(anyhow!("unhandled path: {path}\nbody {}", body)),
         }
+    }
 
-        Ok(())
+    #[must_use]
+    pub fn make_info(a: &[u8], b: &[u8], c: &[u8]) -> Bytes {
+        let capacity = a.len() + c.len() + c.len();
+
+        let mut buf = BytesMut::with_capacity(capacity);
+        buf.extend_from_slice(a);
+        buf.extend_from_slice(b);
+        buf.extend_from_slice(c);
+
+        buf.into()
     }
 
     fn push_client_pub_key(client_eph_pk: cipher::PublicKey) {
@@ -153,41 +241,166 @@ impl HomeKit {
     }
 }
 
-#[cfg(test)]
-mod tests_homekit {
-    use super::HomeKit;
-    use pretty_hex::PrettyHex;
+mod helper {
+    use bytes::{Bytes, BytesMut};
 
-    #[test]
-    fn can_lazy_create_homekit() {
-        let signing_seed = HomeKit::get_signing_seed();
+    #[must_use]
+    #[allow(dead_code)]
+    pub fn make_info(a: &[u8], b: &[u8], c: &[u8]) -> Bytes {
+        let capacity = a.len() + c.len() + c.len();
 
-        println!("signing seed: {:?}", signing_seed.hex_dump());
+        let mut buf = BytesMut::with_capacity(capacity);
+        buf.extend_from_slice(a);
+        buf.extend_from_slice(b);
+        buf.extend_from_slice(c);
+
+        buf.into()
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use super::{HomeKit, TagList, HOMEKIT};
+    use super::{HomeKit, Result, Tags, HOMEKIT};
     use crate::HostInfo;
-    use alkali::asymmetric::{
-        cipher,
-        sign::{self, Keypair, Seed},
+    use alkali::{
+        asymmetric::{cipher, sign::Seed},
+        hash,
+        symmetric::auth,
     };
-    use anyhow::anyhow;
-    use bytes::BytesMut;
-    use der_parser::{
-        ber::{BerObject, BerObjectContent},
-        nom::AsBytes,
-        parse_ber,
-    };
-    use ed25519_compact as ed25519;
+    use bstr::ByteSlice;
+    use bytes::{BufMut, BytesMut};
     use num_bigint::BigUint;
     use pretty_hex::PrettyHex;
     use rand::RngCore;
     use sha2::Sha512;
     use srp::{client::SrpClient, groups::G_3072, server::SrpServer};
+
+    pub mod keys {
+        use crate::Result;
+        use alkali::{
+            asymmetric::cipher,
+            // hash::{self, generic::Key},
+            mem,
+            // symmetric::auth,
+        };
+        // use anyhow::anyhow;
+
+        pub struct Ephemral {
+            pub server: cipher::Keypair,
+            pub client: cipher::Keypair,
+        }
+
+        impl Ephemral {
+            pub fn client_pk(&self) -> &[u8] {
+                self.client.public_key.as_slice()
+            }
+
+            pub fn server_pk(&self) -> &[u8] {
+                self.server.public_key.as_slice()
+            }
+
+            pub fn server_sk(&self) -> &[u8] {
+                self.server.private_key.as_slice()
+            }
+
+            #[must_use = "mutates and returns self"]
+            pub fn put_client_pk(mut self, pk: cipher::PublicKey) -> Self {
+                self.client.public_key = pk;
+
+                self
+            }
+
+            pub fn zero(mut self) -> Result<Ephemral> {
+                let sk = cipher::PrivateKey::<mem::FullAccess>::new_empty()?;
+
+                self.server = cipher::Keypair {
+                    public_key: [0u8; cipher::PUBLIC_KEY_LENGTH],
+                    private_key: sk.try_clone()?,
+                };
+
+                self.client = cipher::Keypair {
+                    public_key: [0u8; cipher::PUBLIC_KEY_LENGTH],
+                    private_key: sk,
+                };
+
+                Ok(self)
+            }
+        }
+
+        impl Default for Ephemral {
+            fn default() -> Self {
+                Self {
+                    server: cipher::Keypair::generate().expect("failed to generate server keys"),
+                    client: cipher::Keypair::generate().expect("failed to generate client keys"),
+                }
+            }
+        }
+
+        // #[derive(Default)]
+        // pub struct Keys {
+        //     eph: Ephemral,
+        // }
+
+        // impl Keys {
+        //     pub fn eph_server(&self) -> (&[u8], &[u8]) {
+        //         (self.eph.server_pk(), self.eph.server_sk())
+        //     }
+        // }
+    }
+
+    #[test]
+    pub fn can_generate_ephermal_keys() -> Result<()> {
+        let mut eph = keys::Ephemral::default();
+
+        println!("CLIENT PublicKey{:?}\n", eph.client_pk().hex_dump());
+
+        eph = eph.zero()?;
+
+        println!("SERVER  PublicKey{:?}\n", eph.server_pk().hex_dump());
+        println!("SERVER PrivateKey{:?}\n", eph.server_sk().hex_dump());
+
+        let new_key = cipher::Keypair::generate()?;
+
+        let (eph, ()) = (eph.put_client_pk(new_key.public_key), ());
+
+        println!("CLIENT PublicKey{:?}\n", eph.client_pk().hex_dump());
+
+        Ok(())
+    }
+
+    #[test]
+    pub fn can_generate_derived_key() -> Result<()> {
+        use hash::generic::hash;
+
+        let server_eph = cipher::Keypair::generate()?;
+        let client_eph = cipher::Keypair::generate()?;
+
+        let mut message = BytesMut::try_from(server_eph.public_key.as_slice())?;
+        message.extend_from_slice(client_eph.public_key.as_slice());
+
+        println!("MESSAGE {:?}\n", message.hex_dump());
+
+        let salt_raw = b"Pair-Verify-Encrypt-Salt";
+        let mut salt = BytesMut::with_capacity(32);
+
+        salt.extend_from_slice(salt_raw);
+        salt.put_bytes(0u8, 32 - salt_raw.len());
+
+        println!("SALT {:?}\n", salt.hex_dump());
+
+        let hashed = hash(&message, Some(&salt))?;
+
+        println!("HASHED {:?}\n", hashed.hex_dump());
+
+        let key = auth::Key::try_from(salt.to_vec().as_slice())?;
+
+        let derived_key = auth::authenticate(&message, &key)?;
+
+        println!("DERIVED KEY: {:?}", derived_key.0.hex_dump());
+
+        Ok(())
+    }
 
     #[derive(Debug)]
     pub struct Musing {
@@ -224,6 +437,13 @@ mod tests {
     }
 
     #[test]
+    fn can_lazy_create_homekit() {
+        let signing_seed = HomeKit::get_signing_seed();
+
+        println!("signing seed: {:?}", signing_seed.hex_dump());
+    }
+
+    #[test]
     pub fn can_push_client_eph_public_key() -> crate::Result<()> {
         let kp = cipher::Keypair::generate()?;
         let pk = kp.public_key;
@@ -245,46 +465,8 @@ mod tests {
     }
 
     #[test]
-    pub fn create_server_keys() -> crate::Result<()> {
+    pub fn create_srp() {
         let mut rng = rand::rngs::OsRng;
-
-        //
-        // INITIAL ED25519 UNSECURE KEY PAIR SEEDED WITH DEVICE ID
-        //
-
-        let device_id = HostInfo::id_as_slice();
-
-        let mut seed_src = [0u8; sign::KEYPAIR_SEED_LENGTH];
-        seed_src[..device_id.len()].copy_from_slice(device_id);
-
-        let seed = ed25519::Seed::try_from(seed_src)?;
-        let key_pair = ed25519::KeyPair::from_seed(seed);
-        let pub_key1 = key_pair.pk.as_slice();
-        let sec_key1 = key_pair.sk.as_slice();
-
-        // println!(
-        //     "\npk {:?}\nsk {:?}\n\n",
-        //     PrettyHex::hex_dump(pub_key1),
-        //     PrettyHex::hex_dump(sec_key1)
-        // );
-
-        let mut seed_src = [0u8; 32];
-        seed_src[..device_id.len()].copy_from_slice(device_id.as_bytes());
-
-        let seed2 = Seed::try_from(seed_src.as_slice())?;
-        let key_pair = Keypair::from_seed(&seed2)?;
-
-        let pub_key2 = key_pair.public_key.as_slice();
-        let sec_key2 = key_pair.private_key.as_slice();
-
-        // println!(
-        //     "\npk {:?}\nsk {:?}\n\n",
-        //     PrettyHex::hex_dump(pub_key2),
-        //     PrettyHex::hex_dump(sec_key2)
-        // );
-
-        assert_eq!(pub_key1, pub_key2);
-        assert_eq!(sec_key1, sec_key2);
 
         let username = b"alice";
         let true_pwd = b"password";
@@ -325,72 +507,6 @@ mod tests {
         assert_ne!(b_pub_sum, BigUint::new(vec![0]));
 
         // Server sends salt and b_pub to client
-
-        Ok(())
-    }
-
-    #[test]
-    pub fn parse_verify_request1() -> crate::Result<()> {
-        let bytes = [
-            0x06, 0x01, 0x01, 0x03, 0x20, 0xf0, 0x0B, 0x71, 0x42, 0x70, 0x26, 0xe1, 0x7e, 0x23,
-            0xed, 0x0a, 0x8b, 0x71, 0x17, 0x87, 0xa6, 0x79, 0x3d, 0x50, 0xd3, 0x21, 0x48, 0x4a,
-            0xa6, 0x49, 0xac, 0xaa, 0x44, 0x26, 0x81, 0x9f, 0x38,
-        ];
-
-        let mut objs = Vec::<BerObject>::with_capacity(10);
-        let mut rest = bytes.as_slice();
-
-        while !rest.is_empty() {
-            match parse_ber(rest) {
-                Ok((tail, obj)) => {
-                    rest = tail;
-                    println!("{obj:?}");
-                    objs.push(obj);
-                }
-                Err(e) => Err(anyhow!(e))?,
-            }
-        }
-
-        objs.iter().for_each(|obj| match &obj.content {
-            BerObjectContent::BitString(unused, obj) => {
-                println!("\nunused: {}, public key: {:?}", unused, obj.hex_dump());
-            }
-            BerObjectContent::OID(oid) => {
-                println!("\nstate: {}", oid.as_bytes().hex_dump());
-            }
-            _ => (),
-        });
-
-        // let (rem, x) = parse_ber(&bytes)?;
-
-        // let state = x.as_bytes();
-
-        // println!("state: {:?}", state.hex_dump());
-        // println!("\nfull parse remain: {:?}", rem.hex_dump());
-
-        // let (rem, x) = BitString::from_ber(rem)?;
-        // let x2 = x.to_der_vec()?;
-        // println!(
-        //     "\nfull second parse obj: {:?}",
-        //     PrettyHex::hex_dump(&x2[2..])
-        // );
-
-        // let (rem, obj1) = parse_ber_oid(&bytes)?;
-        // println!("first {obj1:?}");
-
-        // println!("\nremaining: {:?}", PrettyHex::hex_dump(rem));
-
-        // let (rem, obj2) = parse_ber_bitstring(rem)?;
-
-        // println!("\nparsed second: {obj2:?}");
-
-        // let data = obj2.as_bitstring()?.data;
-
-        // println!("second {:?}", PrettyHex::hex_dump(&data));
-
-        assert_eq!(rest.len(), 0);
-
-        Ok(())
     }
 
     #[test]
@@ -404,10 +520,9 @@ mod tests {
         let mut buf = BytesMut::new();
         buf.extend_from_slice(bytes.as_bytes());
 
-        match TagList::try_from(buf) {
-            Ok(list) => println!("{list:?}"),
-            Err(e) => println!("TVVList2::try_from() error: {e}"),
-        }
+        let tags = Tags::try_from(buf);
+
+        assert!(tags.is_ok());
     }
 
     #[test]
@@ -417,12 +532,10 @@ mod tests {
         let dev_id1 = HostInfo::seed();
         let seed1 = Seed::try_from(dev_id1.as_bytes())?;
 
-        println!("host seed {:?}", dev_id1.hex_dump());
-        println!("seed1 {:?}", seed1.hex_dump());
+        // println!("host seed {:?}", dev_id1.hex_dump());
+        // println!("seed1 {:?}", seed1.hex_dump());
 
         assert_eq!(dev_id1.as_slice(), seed1.as_slice());
-
-        // assert_eq!(seed0, seed1);
 
         Ok(())
     }

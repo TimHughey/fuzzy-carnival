@@ -14,15 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This is defined as a convenience.
+pub type Result<T> = anyhow::Result<T>;
+
 pub(crate) mod flags;
 pub(crate) use flags::Calculated as FlagsCalc;
 
 pub(crate) mod host;
 pub use host::Info as HostInfo;
 pub mod server; // AirPlay Server (receiver)
-
-pub(crate) mod session;
-pub use session::Session;
 
 pub(crate) mod homekit;
 pub use homekit::HomeKit;
@@ -33,6 +33,3 @@ pub mod serdis;
 
 pub(crate) mod shutdown;
 use shutdown::Shutdown;
-
-// This is defined as a convenience.
-pub type Result<T> = anyhow::Result<T>;
