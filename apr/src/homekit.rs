@@ -14,44 +14,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod states;
-pub use states::Generic as GenericState;
-pub use states::Verify as VerifyState;
-
-pub mod tags;
-pub use tags::Map as Tags;
-
 use crate::{
-    asym::Keys,
-    rtsp::{Body, HeaderContType, HeaderList, Response, StatusCode},
+    rtsp::{Body, Frame, HeaderList, Response},
     HostInfo, Result,
-};
-#[allow(unused)]
-use alkali::{
-    asymmetric::{cipher, sign},
-    mem,
-    symmetric::auth,
 };
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
-use once_cell::sync::Lazy;
-#[allow(unused)]
-use pretty_hex::PrettyHex;
-use std::{fmt, sync::RwLock};
+use std::fmt;
 use tracing::{error, info};
 
-type SignSeed = sign::Seed<mem::FullAccess>;
-type SignKeyPair = sign::Keypair;
+pub mod info;
+pub mod states;
+pub mod tags;
+pub mod verify;
+
+pub use states::Generic as GenericState;
+pub use states::Verify as VerifyState;
+pub use tags::Map as Tags;
+pub use tags::Val as TagVal;
+pub use verify::Context as VerifyCtx;
 
 pub struct Context {
-    // copy signing info from HostInfo for easy access
-    signing_seed: SignSeed,
-    #[allow(unused)]
-    signing_kp: SignKeyPair,
-    #[allow(unused)]
-    server_eph: cipher::Keypair,
-    client_eph_pk: RwLock<Option<cipher::PublicKey>>,
-    session_key: RwLock<Option<cipher::SessionKey<mem::FullAccess>>>,
+    pub device_id: BytesMut,
+    pub verify: VerifyCtx,
 }
 
 pub use Context as HomeKit;
@@ -64,18 +49,6 @@ impl fmt::Debug for HomeKit {
     }
 }
 
-static HOMEKIT: Lazy<HomeKit> = Lazy::new(|| {
-    let homekit = Context::build();
-
-    match homekit {
-        Ok(hk) => hk,
-        Err(e) => {
-            error!("HomeKit build failed: {e}");
-            panic!("unable to continue");
-        }
-    }
-});
-
 impl HomeKit {
     /// .
     ///
@@ -83,63 +56,21 @@ impl HomeKit {
     ///
     /// This function will return an error if unable to
     /// generate security `Seed` or `KeyPair`.
-    pub fn build() -> crate::Result<Self> {
-        Ok(Self {
-            signing_seed: HostInfo::clone_seed()?,
-            signing_kp: Keys::clone_signing()?,
-            server_eph: cipher::Keypair::generate()?,
-            client_eph_pk: RwLock::new(None),
-            session_key: RwLock::new(None),
-        })
-    }
-
-    /// .
-    ///
-    /// # Panics
-    ///
-    /// Panics if .
     #[must_use]
-    pub fn get_client_eph_pk() -> cipher::PublicKey {
-        let pk_lock = HOMEKIT.client_eph_pk.read().unwrap();
+    pub fn build() -> Self {
+        let mut id_buf = BytesMut::with_capacity(64);
+        id_buf.extend_from_slice(HostInfo::id_as_slice());
 
-        if let Some(pk) = *pk_lock {
-            return pk;
+        Self {
+            device_id: id_buf,
+            // signing_seed: HostInfo::clone_seed()?,
+            // signing_kp: Keys::clone_signing()?,
+            // server_eph: cipher::Keypair::generate()?,
+            // client_eph_pk: OnceCell::new(),
+            // shared_secret: OnceCell::new(),
+            // session_key: None,
+            verify: VerifyCtx::build(),
         }
-
-        panic!("foo");
-    }
-
-    #[must_use]
-    pub fn get_server_eph() -> &'static cipher::Keypair {
-        &HOMEKIT.server_eph
-    }
-
-    #[must_use]
-    pub fn get_signing_seed() -> &'static SignSeed {
-        &HOMEKIT.signing_seed
-    }
-
-    #[must_use]
-    pub fn get_server_sign_keys() -> &'static SignKeyPair {
-        &HOMEKIT.signing_kp
-    }
-
-    /// .
-    ///
-    /// # Panics
-    ///
-    /// Panics if Session Key is not available.
-    #[must_use]
-    pub fn get_session_key() -> cipher::SessionKey<mem::FullAccess> {
-        let lock = HOMEKIT.session_key.read().unwrap();
-
-        if let Some(session_key) = &*lock {
-            if let Ok(key) = session_key.try_clone() {
-                return key;
-            }
-        }
-
-        panic!("coding error");
     }
 
     /// .
@@ -147,75 +78,76 @@ impl HomeKit {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub fn handle_request(headers: HeaderList, body: Body, path: &str) -> Result<Response> {
-        match (path, body) {
-            ("/pair-verify", Body::Bulk(bulk)) => {
+    pub fn hkdf_extract_expand(&self, in_km: BytesMut) -> [u8; 32] {
+        // use hex::ToHex;
+        use bytes::BufMut;
+        use hmac_sha256::HKDF;
+
+        let salt = "Pair-Verify-Encrypt-Salt".as_bytes();
+        let info = "Pair-Verify-Encrypt-Info".as_bytes();
+
+        let mut info1 = BytesMut::from(info);
+        info1.put_u8(1);
+
+        let mut out_km = [0u8; 32];
+
+        let prk = HKDF::extract(salt, in_km);
+        HKDF::expand(&mut out_km, prk, info);
+
+        out_km
+    }
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn respond_to(&mut self, frame: Frame) -> Result<Response> {
+        let path = frame.path.as_str();
+
+        match (path, frame.body) {
+            (path, Body::Bulk(bulk)) if path.ends_with("verify") => {
                 use VerifyState::{Msg01, Msg02, Msg03, Msg04};
 
-                let buf: BytesMut = BytesMut::from(bulk.as_slice());
-
+                let buf = BytesMut::from(bulk.as_slice());
                 let list = Tags::try_from(buf)?;
-
                 let state = VerifyState::try_from(list.get_state()?)?;
 
                 match state {
                     Msg01 => {
                         info!("{path} {state:?}");
+                        let verify = &self.verify;
 
                         let pk = list.get_public_key()?;
+                        let tags = verify.m1_m2(pk)?;
 
-                        HomeKit::push_client_pub_key(pk);
-
-                        // create and sign accessory info
-                        let device_id = HostInfo::id_as_slice();
-                        let server_sign = HomeKit::get_server_sign_keys();
-                        let server_eph = HomeKit::get_server_eph();
-                        let server_pk = server_eph.public_key;
-                        let client_pk = HomeKit::get_client_eph_pk();
-
-                        let info: Bytes = [device_id, server_pk.as_slice(), client_pk.as_slice()]
-                            .concat()
-                            .into();
-
-                        let capacity = info.len() + sign::SIGNATURE_LENGTH;
-                        let mut signature = BytesMut::with_capacity(capacity);
-
-                        sign::sign(&info, server_sign, &mut signature)?;
-
-                        // info!("signature {:?}\nlen check {sig_len}", signature.hex_dump());
-
-                        let mut reply_tags = Tags::default();
-                        reply_tags.push(tags::Val::Identifier(device_id.into()));
-                        reply_tags.push(tags::Val::Signature(signature.into()));
-
-                        let part1: Bytes = reply_tags.clone().try_into()?;
-
-                        // HMAC
-                        let session_key = HomeKit::get_session_key();
-                        let mut auth_key = auth::Key::new_empty()?;
-
-                        auth_key.copy_from_slice(session_key.as_slice());
-
-                        let derived_key = auth::authenticate(&part1, &auth_key)?;
-
-                        info!("DERIVED KEY {:?}", derived_key);
-
-                        let body = reply_tags.encode();
+                        let body = Body::OctetStream(tags.encode().to_vec());
 
                         Ok(Response {
-                            status_code: StatusCode::OK,
-                            headers: HeaderList::make_response(
-                                headers,
-                                HeaderContType::AppOctetStream,
-                                0,
-                            ),
+                            headers: HeaderList::make_response2(frame.headers, &body)?,
                             body,
+                            ..Response::default()
                         })
                     }
                     Msg02 | Msg03 | Msg04 => Err(anyhow!("{path}: got state {state:?}")),
                 }
             }
-            (path, body) => Err(anyhow!("unhandled path: {path}\nbody {}", body)),
+
+            (path, Body::Bulk(bulk)) if path.ends_with("setup") => {
+                let buf = BytesMut::from(bulk.as_slice());
+                let list = Tags::try_from(buf)?;
+                let state = list.get_state()?;
+
+                info!("\nstate: {state:?} {path} {list:?}");
+
+                Ok(Response::default())
+            }
+
+            (path, body) => {
+                error!("{body:?}");
+
+                Err(anyhow!("unhandled path: {path}"))
+            }
         }
     }
 
@@ -230,15 +162,28 @@ impl HomeKit {
 
         buf.into()
     }
+}
 
-    fn push_client_pub_key(client_eph_pk: cipher::PublicKey) {
-        let server_kp = &HOMEKIT.server_eph;
-        let mut cpk = HOMEKIT.client_eph_pk.write().unwrap();
-        let mut sess_key = HOMEKIT.session_key.write().unwrap();
+/// Creates a response to a `Frame`
+///
+///
+///
+/// # Errors
+///
+/// This function will return an error if .
+pub fn respond_to(mut frame: Frame) -> Result<Response> {
+    if let Some(mut kit) = frame.homekit.take() {
+        let response = kit.respond_to(frame)?;
 
-        *sess_key = Some(server_kp.session_key(&client_eph_pk).unwrap());
-        *cpk = Some(client_eph_pk);
+        return Ok(Response {
+            homekit: Some(kit),
+            ..response
+        });
     }
+
+    error!("homekit not present in {frame}");
+
+    Err(anyhow!("frame missing homekit"))
 }
 
 mod helper {
@@ -261,7 +206,7 @@ mod helper {
 #[cfg(test)]
 mod tests {
 
-    use super::{HomeKit, Result, Tags, HOMEKIT};
+    use super::{Result, Tags};
     use crate::HostInfo;
     use alkali::{
         asymmetric::{cipher, sign::Seed},
@@ -330,27 +275,18 @@ mod tests {
 
         impl Default for Ephemral {
             fn default() -> Self {
+                let msg = "failed to generate server keys";
+
                 Self {
-                    server: cipher::Keypair::generate().expect("failed to generate server keys"),
+                    server: cipher::Keypair::generate().expect(msg),
                     client: cipher::Keypair::generate().expect("failed to generate client keys"),
                 }
             }
         }
-
-        // #[derive(Default)]
-        // pub struct Keys {
-        //     eph: Ephemral,
-        // }
-
-        // impl Keys {
-        //     pub fn eph_server(&self) -> (&[u8], &[u8]) {
-        //         (self.eph.server_pk(), self.eph.server_sk())
-        //     }
-        // }
     }
 
     #[test]
-    pub fn can_generate_ephermal_keys() -> Result<()> {
+    fn can_generate_ephermal_keys() -> Result<()> {
         let mut eph = keys::Ephemral::default();
 
         println!("CLIENT PublicKey{:?}\n", eph.client_pk().hex_dump());
@@ -437,34 +373,6 @@ mod tests {
     }
 
     #[test]
-    fn can_lazy_create_homekit() {
-        let signing_seed = HomeKit::get_signing_seed();
-
-        println!("signing seed: {:?}", signing_seed.hex_dump());
-    }
-
-    #[test]
-    pub fn can_push_client_eph_public_key() -> crate::Result<()> {
-        let kp = cipher::Keypair::generate()?;
-        let pk = kp.public_key;
-
-        HomeKit::push_client_pub_key(kp.public_key);
-
-        let check_pk_lock = HOMEKIT.client_eph_pk.read().unwrap();
-        let check_pk_ref = check_pk_lock.as_ref().unwrap();
-        let check_pk = *check_pk_ref;
-
-        assert_eq!(check_pk, pk);
-
-        let sess_key_lock = HOMEKIT.session_key.read().unwrap();
-        let sess_key = sess_key_lock.as_ref();
-
-        assert!(matches!(sess_key, Some(_)));
-
-        Ok(())
-    }
-
-    #[test]
     pub fn create_srp() {
         let mut rng = rand::rngs::OsRng;
 
@@ -540,99 +448,3 @@ mod tests {
         Ok(())
     }
 }
-
-// enum pair_status {
-//     PAIR_STATUS_IN_PROGRESS,
-//     PAIR_STATUS_COMPLETED,
-//     PAIR_STATUS_AUTH_FAILED,
-//     PAIR_STATUS_INVALID,
-//   };
-
-// struct pair_setup_context {
-//     struct pair_definition *type;
-//
-//     enum pair_status status;
-//     const char *errmsg;
-//
-//     struct pair_result result;
-//     char result_str[256]; // Holds the hex string version of the keys that
-//                           // pair_verify_new() needs
-//
-//     // Hex-formatet concatenation of public + private, 0-terminated
-//     char auth_key[2 * (crypto_sign_PUBLICKEYBYTES + crypto_sign_SECRETKEYBYTES) + 1];
-//
-//     union pair_setup_union {
-//       struct pair_client_setup_context client;
-//       struct pair_server_setup_context server;
-//     } sctx;
-//   };
-
-// struct pair_server_setup_context {
-//     struct SRPVerifier *verifier;
-//
-//     uint8_t pin[4];
-//     char device_id[PAIR_AP_DEVICE_ID_LEN_MAX];
-//
-//     pair_cb add_cb;
-//     void *add_cb_arg;
-//
-//     uint8_t public_key[crypto_sign_PUBLICKEYBYTES];
-//     uint8_t private_key[crypto_sign_SECRETKEYBYTES];
-//
-//     bool is_transient;
-//
-//     uint8_t *pkA;
-//     uint64_t pkA_len;
-//
-//     uint8_t *pkB;
-//     int pkB_len;
-//
-//     uint8_t *b;
-//     int b_len;
-//
-//     uint8_t *M1;
-//     uint64_t M1_len;
-//
-//     const uint8_t *M2;
-//     int M2_len;
-//
-//     uint8_t *v;
-//     int v_len;
-//
-//     uint8_t *salt;
-//     int salt_len;
-//   };
-
-// struct pair_server_verify_context {
-//     char device_id[PAIR_AP_DEVICE_ID_LEN_MAX];
-//
-//     // Same keys as used for pair-setup, derived from device_id
-//     uint8_t server_public_key[crypto_sign_PUBLICKEYBYTES];  // 32
-//     uint8_t server_private_key[crypto_sign_SECRETKEYBYTES]; // 64
-//
-//     bool verify_client_signature;
-//     pair_cb get_cb;
-//     void *get_cb_arg;
-//
-//     // For establishing the shared secret for encrypted communication
-//     uint8_t server_eph_public_key[crypto_box_PUBLICKEYBYTES];  // 32
-//     uint8_t server_eph_private_key[crypto_box_SECRETKEYBYTES]; // 32
-//
-//     uint8_t client_eph_public_key[crypto_box_PUBLICKEYBYTES]; // 32
-//
-//     uint8_t shared_secret[crypto_scalarmult_BYTES]; // 32
-//   };
-
-// struct pair_verify_context {
-//     struct pair_definition *type;
-//
-//     enum pair_status status;
-//     const char *errmsg;
-//
-//     struct pair_result result;
-//
-//     union pair_verify_union {
-//       struct pair_client_verify_context client;
-//       struct pair_server_verify_context server;
-//     } vctx;
-//   };

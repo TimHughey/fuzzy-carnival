@@ -15,9 +15,11 @@
 // limitations under the License.
 
 use alkali::{asymmetric::sign, mem};
+use ed25519_dalek::{SecretKey, SigningKey};
 use network_interface::{NetworkInterface, NetworkInterfaceConfig};
 use once_cell::sync::Lazy;
 use tracing::error;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct Info {
@@ -25,8 +27,11 @@ pub struct Info {
     pub ip: String,
     pub mac: String,
     pub id: String,
+    pub id2: Uuid,
     pub reeceiver_name: String,
     pub sign_seed: sign::Seed<mem::FullAccess>,
+    pub accessory_secret_key: SecretKey,
+    pub accessory_sign_key: SigningKey,
 }
 
 static INFO: Lazy<Info> = Lazy::new(|| {
@@ -43,17 +48,21 @@ static INFO: Lazy<Info> = Lazy::new(|| {
 
                 if let Some(addr) = ni.addr.into_iter().find(|a| a.ip().is_ipv4()) {
                     let id = mac.replace(':', "");
-                    // let mut seed_bytes = [0u8; sign::KEYPAIR_SEED_LENGTH];
-                    // seed_bytes[0..id.len()].clone_from_slice(id.as_bytes());
                     seed[0..id.len()].clone_from_slice(id.as_bytes());
+
+                    let mut secret_key = SecretKey::default();
+                    secret_key.copy_from_slice(seed.as_slice());
 
                     return Info {
                         name: format!("{name}.local"),
                         ip: addr.ip().to_string(),
                         id,
+                        id2: Uuid::new_v4(),
                         mac,
                         reeceiver_name: "Alpha".into(),
                         sign_seed: seed,
+                        accessory_sign_key: SigningKey::from_bytes(&secret_key),
+                        accessory_secret_key: secret_key,
                     };
                 }
             }
@@ -96,8 +105,41 @@ impl Info {
 
     #[inline]
     #[must_use]
+    pub fn get() -> &'static Lazy<Info> {
+        &INFO
+    }
+
+    #[inline]
+    #[must_use]
     pub fn ip_as_str() -> &'static str {
         INFO.ip.as_str()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn id() -> &'static Uuid {
+        &INFO.id2
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn id2_as_key_src() -> [u8; 45] {
+        let mut buf = Uuid::encode_buffer();
+
+        INFO.id2.simple().encode_lower(&mut buf);
+
+        buf
+    }
+
+    #[must_use]
+    pub fn id_as_key_src() -> [u8; 32] {
+        let mut src = [0u8; 32];
+
+        let id = Self::id_as_slice();
+
+        src[0..id.len()].copy_from_slice(id);
+
+        src
     }
 
     #[must_use]

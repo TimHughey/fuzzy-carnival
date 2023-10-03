@@ -57,7 +57,7 @@ use std::{fmt, str};
 /// assert!(Method::GET.is_idempotent());
 /// assert_eq!(Method::POST.as_str(), "POST");
 /// ```
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Method(Inner);
 
 /// A possible error value when converting `Method` from bytes.
@@ -65,7 +65,7 @@ pub struct Invalid {
     _priv: (),
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Inner {
     Get,
     Post,
@@ -250,7 +250,7 @@ impl Default for Method {
 impl<'a> From<&'a Method> for Method {
     #[inline]
     fn from(t: &'a Method) -> Self {
-        t.clone()
+        Self(t.0)
     }
 }
 

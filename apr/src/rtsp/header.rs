@@ -14,10 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Result;
+use crate::{rtsp::Body, Result};
 use anyhow::anyhow;
-use std::fmt::{self, Debug};
-use std::str::FromStr;
+use once_cell::sync::OnceCell;
+use std::{
+    fmt::{self, Debug},
+    fs,
+    path::PathBuf,
+    str::FromStr,
+};
 use tracing::error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -75,6 +80,12 @@ impl FromStr for ContType {
         } else {
             Err(anyhow!("unknown content type: {src:?}"))
         }
+    }
+}
+
+impl fmt::Display for ContType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -140,7 +151,13 @@ impl FromStr for Key2 {
     }
 }
 
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
+impl fmt::Display for Key2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct List {
     pub active_remote: Option<u32>,
     pub cseq: Option<u32>,
@@ -150,23 +167,11 @@ pub struct List {
     rtp_info: Option<u64>,
     user_agent: Option<String>,
     extensions: Vec<(String, String)>,
+
+    debug_path: OnceCell<PathBuf>,
 }
 
 impl List {
-    #[must_use]
-    pub fn make_response(self, content: ContType, content_len: usize) -> Self {
-        List {
-            active_remote: None,
-            content_length: Some(content_len),
-            content_type: Some(content),
-            dacp_id: None,
-            rtp_info: None,
-            user_agent: None,
-            extensions: Vec::new(),
-            ..self
-        }
-    }
-
     /// Returns the content len of this [`List`].
     ///
     /// # Panics
@@ -176,119 +181,184 @@ impl List {
     pub fn content_len(&self) -> usize {
         self.content_length.unwrap()
     }
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn debug_file_path(&self, kind: &str) -> Result<PathBuf> {
+        let cseq = self.cseq.as_ref().ok_or(anyhow!("CSeq is missing"))?;
+        let file_name = format!("{cseq:03}-{kind}.bin");
+
+        Ok(self
+            .debug_path
+            .get_or_try_init(|| self.make_debug_path())?
+            .with_file_name(file_name))
+    }
+
+    fn make_debug_path(&self) -> Result<PathBuf> {
+        use std::env::var;
+
+        const KEY: &str = "CARGO_MANIFEST_DIR";
+        let path: PathBuf = var(KEY).map_err(|e| anyhow!(e))?.into();
+        let mut path = path.parent().unwrap().to_path_buf();
+
+        path.push("extra/ref/v2");
+
+        if let List {
+            dacp_id: Some(dacp_id),
+            active_remote: Some(active_remote),
+            ..
+        } = &self
+        {
+            path.push(dacp_id);
+            path.push(format!("{active_remote}"));
+
+            fs::create_dir_all(&path)?;
+
+            // this is replaced by with_filename
+            path.push("unset.bin");
+
+            return Ok(path);
+        }
+
+        Err(anyhow!("failed to create debug path"))
+    }
+
+    #[must_use]
+    pub fn make_response(self, ctype: ContType, len: usize) -> Self {
+        List {
+            active_remote: None,
+            content_length: Some(len),
+            content_type: Some(ctype),
+            dacp_id: None,
+            rtp_info: None,
+            user_agent: None,
+            extensions: Vec::new(),
+            ..self
+        }
+    }
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn make_response2(self, body: &Body) -> Result<Self> {
+        use Body::{Bulk, Dict, Empty, OctetStream, Text};
+
+        let len = body.len();
+
+        let ctype = match body {
+            Bulk(_) | OctetStream(_) => Some(ContType::AppOctetStream),
+            Text(_) => Some(ContType::TextParameters),
+            Empty => None,
+            Dict(_) => Err(anyhow!("unsupported response body: {body}"))?,
+        };
+
+        Ok(List {
+            active_remote: None,
+            content_length: Some(len),
+            content_type: ctype,
+            dacp_id: None,
+            rtp_info: None,
+            user_agent: None,
+            extensions: Vec::new(),
+            ..self
+        })
+    }
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    #[must_use]
+    pub fn push(mut self, k: &str, v: &str) -> Self {
+        match k {
+            Key2::ACTIVE_REMOTE => self.active_remote = v.parse().ok(),
+            Key2::CSEQ => self.cseq = v.parse().ok(),
+            Key2::CONTENT_LEN => self.content_length = v.parse().ok(),
+            Key2::CONTENT_TYPE => self.content_type = ContType::from_str(v).ok(),
+            Key2::DACP_ID => self.dacp_id = Some(v.to_ascii_lowercase()),
+            Key2::RTP_INFO => self.rtp_info = make_rtptime(v),
+            Key2::USER_AGENT => self.user_agent = Some(v.into()),
+
+            k if k.starts_with("X-") => self.extensions.push((k.into(), v.into())),
+            k => error!("unhandled header: {k} {v}"),
+        }
+
+        self
+    }
 }
 
 impl<'a> TryFrom<&'a str> for List {
     type Error = anyhow::Error;
 
     fn try_from(src: &'a str) -> Result<Self> {
+        const DELIMITER: &str = ": ";
+
+        let init = List::default();
+
         let list = src
             .trim()
             .lines()
-            .fold(List::default(), |mut acc: List, line| {
-                if let Some((k, v)) = line.split_once(": ") {
-                    match k {
-                        Key2::ACTIVE_REMOTE => List {
-                            active_remote: v.parse().ok(),
-                            ..acc
-                        },
+            .filter_map(|l| l.split_once(DELIMITER))
+            .fold(init, |acc, (k, v)| acc.push(k, v));
 
-                        Key2::CSEQ => List {
-                            cseq: v.parse().ok(),
-                            ..acc
-                        },
-
-                        Key2::CONTENT_LEN => List {
-                            content_length: v.parse().ok(),
-                            ..acc
-                        },
-
-                        Key2::CONTENT_TYPE => List {
-                            content_type: ContType::from_str(v).ok(),
-                            ..acc
-                        },
-
-                        Key2::DACP_ID => List {
-                            dacp_id: Some(v.to_ascii_lowercase()),
-                            ..acc
-                        },
-
-                        Key2::RTP_INFO => {
-                            if let Some(("rtptime", rptime)) = v.split_once('=') {
-                                List {
-                                    rtp_info: rptime.parse().ok(),
-                                    ..acc
-                                }
-                            } else {
-                                acc
-                            }
-                        }
-
-                        Key2::USER_AGENT => List {
-                            user_agent: Some(v.to_string()),
-                            ..acc
-                        },
-
-                        k if k.starts_with("X-") => {
-                            acc.extensions.push((k.to_string(), v.to_string()));
-
-                            acc
-                        }
-
-                        _k => {
-                            error!("unhandled header: {line}");
-                            acc
-                        }
-                    }
-                } else {
-                    acc
-                }
-            });
-
-        if list.cseq.is_some() {
-            Ok(list)
-        } else {
-            Err(anyhow!("failed to parse: {src}"))
+        if list.cseq.is_none() {
+            return Err(anyhow!("CSeq not found: {src}"));
         }
+
+        Ok(list)
     }
 }
 
 impl fmt::Display for List {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(active_remote) = self.active_remote {
-            writeln!(fmt, "{}: {active_remote}", Key2::ACTIVE_REMOTE)?;
+        if let Some(active_remote) = self.active_remote.as_ref() {
+            fmt.write_fmt(format_args!("{}: {active_remote}\n", Key2::ACTIVE_REMOTE))?;
         }
 
-        if let Some(cseq) = self.cseq {
-            writeln!(fmt, "{}: {cseq}", Key2::CSEQ)?;
+        if let Some(cseq) = self.cseq.as_ref() {
+            fmt.write_fmt(format_args!("{}: {cseq}\n", Key2::CSEQ))?;
         }
 
-        if let Some(content_len) = self.content_length {
-            writeln!(fmt, "{}: {content_len}", Key2::CONTENT_LEN)?;
+        if let Some(x) = self.content_length.as_ref() {
+            fmt.write_fmt(format_args!("{}: {x}\n", Key2::CONTENT_LEN))?;
         }
 
-        if let Some(content_type) = &self.content_type {
-            writeln!(fmt, "{}: {}", Key2::CONTENT_TYPE, content_type.as_str())?;
+        if let Some(x) = self.content_type.as_ref() {
+            fmt.write_fmt(format_args!("{}: {x}\n", Key2::CONTENT_TYPE))?;
         }
 
-        if let Some(dacp_id) = &self.dacp_id {
-            writeln!(fmt, "{}: {dacp_id}", Key2::DACP_ID)?;
+        if let (key, Some(x)) = (Key2::DACP_ID, self.dacp_id.as_ref()) {
+            fmt.write_fmt(format_args!("{key}: {x}\n"))?;
         }
 
-        if let Some(rtp_info) = self.rtp_info {
-            writeln!(fmt, "{}: {rtp_info}", Key2::DACP_ID)?;
+        if let (key, Some(x)) = (Key2::RTP_INFO, self.rtp_info.as_ref()) {
+            fmt.write_fmt(format_args!("{key}: {x}\n"))?;
         }
 
-        if let Some(user_agent) = &self.user_agent {
-            writeln!(fmt, "{}: {user_agent}", Key2::USER_AGENT)?;
+        if let (key, Some(x)) = (Key2::USER_AGENT, self.user_agent.as_ref()) {
+            fmt.write_fmt(format_args!("{key}: {x}\n"))?;
         }
 
         for (key, val) in &self.extensions {
-            writeln!(fmt, "{key}: {val}")?;
+            fmt.write_fmt(format_args!("{}: {}\n", key.as_str(), val.as_str()))?;
         }
 
         Ok(())
     }
+}
+
+fn make_rtptime(v: &str) -> Option<u64> {
+    if let Some(("rtptime", rtptime)) = v.split_once('=') {
+        return rtptime.parse::<u64>().ok();
+    }
+
+    None
 }
 
 #[cfg(test)]

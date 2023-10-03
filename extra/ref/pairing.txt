@@ -1,23 +1,24 @@
-jophiel devel/pierre/build [3-4075-139] % /home/thughey/devel/pierre/build/pierre
+/home/thughey/devel/pierre/build/pierre
+jophiel devel/pierre/build [3-3969-0] % /home/thughey/devel/pierre/build/pierre
 pair_public_key_get: type=3
 HK ENTER public_key_get
 HK EXIT  public_key_get
 
-2023-09-25T13:32:12 START
+2023-09-30T09:11:54 START
         0.7ms conf.watch         init           sizeof=  536
         0.8ms stats              init           sizeof=  512 disabled db_uri=<set> val_map=26
-        2.3ms frame.clock        init           sizeof=  152 shm_name=/nqptp dest=127.0.0.1:9000 nqptp_len=144
-        2.6ms desk.units         load_config    el dance      dimmable  addr=2
-        2.6ms desk.units         load_config    el entry      dimmable  addr=3
-        2.7ms desk.units         load_config    led forest    dimmable  addr=4
-        2.7ms desk.units         load_config    disco ball    dimmable  addr=1
-        2.7ms desk.units         load_config    main spot     pinspot   addr=1 frame_len=6
-        2.7ms desk.units         load_config    fill spot     pinspot   addr=7 frame_len=6
-        2.7ms desk.units         load_config    ac power      switch    addr=1
-        2.7ms desk.units         init           sizeof=  448 unit_count=7
-        2.8ms fx                 set_silence    fx=major_peak timeout=33s 0.0ms frames=1421
-        2.9ms desk               init           sizeof=  664 fps=43
-        2.9ms desk               init           33s 0.0ms hsb(0.0 1.000 1.000) 0spl 20spl
+        2.5ms frame.clock        init           sizeof=  152 shm_name=/nqptp dest=127.0.0.1:9000 nqptp_len=144
+        2.8ms desk.units         load_config    el dance      dimmable  addr=2
+        2.9ms desk.units         load_config    el entry      dimmable  addr=3
+        2.9ms desk.units         load_config    led forest    dimmable  addr=4
+        2.9ms desk.units         load_config    disco ball    dimmable  addr=1
+        2.9ms desk.units         load_config    main spot     pinspot   addr=1 frame_len=6
+        2.9ms desk.units         load_config    fill spot     pinspot   addr=7 frame_len=6
+        2.9ms desk.units         load_config    ac power      switch    addr=1
+        2.9ms desk.units         init           sizeof=  448 unit_count=7
+        3.1ms fx                 set_silence    fx=major_peak timeout=33s 0.0ms frames=1421
+        3.1ms desk               init           sizeof=  664 fps=43
+        3.1ms desk               init           33s 0.0ms hsb(0.0 1.000 1.000) 0spl 20spl
                                                 color_spec high     hue step=0.5 peaks=[180Hz 0.0spl 11500Hz 20.0spl]
                                                 color_spec low      hue step=0.1 peaks=[60Hz 0.0spl 160Hz 20.0spl]
                                                 spot_spec  fill     fill spot color_spec=low fade[333.00ms hsb(360.0 1.000 1.000)]
@@ -25,145 +26,183 @@ HK EXIT  public_key_get
                                                 spot_spec  main     main spot color_spec=high fade[333.00ms hsb(360.0 1.000 1.000)]
                                                   alternate hsb(0.0 0.000 0.800) greater=true  freq=true  spl=true  last=true 
                                                   alternate hsb(0.0 0.000 0.500) greater=true  freq=true  spl=true  last=true 
-        2.9ms frame              init           sizeof=  176 lead_time=23.22ms
-        2.9ms desk               resume         stopped=true resuming=true
-        3.0ms frame.anchor       reset          source.has_value=false
-        3.0ms rtsp               init           sizeof=  128
-        3.0ms app                init           sizeof=  152
-        3.2ms desk.dmx_ctrl      init           sizeof=  752 n_thr=2 root=desk.dmx_ctrl uuid=b122c91a7656 size=2
-        3.2ms desk.dmx_ctrl      resume         sess_connected=false
-        3.4ms fx                 set_silence    fx=standby timeout=30m 30s 0.0ms frames=78814
-        3.4ms fx                 select         FX none -> standby
+        3.1ms frame              init           sizeof=  176 lead_time=23.22ms
+        3.1ms desk               resume         stopped=true resuming=true
+        3.2ms frame.anchor       reset          source.has_value=false
+        3.2ms rtsp               init           sizeof=  128
+        3.2ms app                init           sizeof=  152
+        3.4ms desk.dmx_ctrl      init           sizeof=  752 n_thr=2 root=desk.dmx_ctrl uuid=ada0e7fadd7e size=2
+        3.4ms desk.dmx_ctrl      resume         sess_connected=false
+        3.6ms fx                 set_silence    fx=standby timeout=30m 30s 0.0ms frames=78814
+        3.6ms fx                 select         FX none -> standby
        12.9ms desk.dmx_ctrl      rev_resolve    host=dmx.ruth.wisslanding.com
-       22.4ms desk.dmx_ctrl      host.connect   [OPEN]     192.168.2.4:51060   192.168.2.157:49152 9.70ms
-     8961.1ms rtsp.ctx           init           sizeof= 1336 socket=32
-     8961.1ms desk               resume         stopped=false resuming=true
-     8961.1ms rtsp.ctx           init           [O] 192.168.2.4:7000     192.168.2.72:52300  
+       14.6ms desk.dmx_ctrl      host.connect   [OPEN]     192.168.2.4:47486   192.168.2.157:49152 1.83ms
+    20796.9ms rtsp.ctx           init           sizeof= 1336 socket=30
+    20796.9ms desk               resume         stopped=false resuming=true
+    20796.9ms rtsp.ctx           init           [O] 192.168.2.4:7000     192.168.2.72:64595  
 ENTER pair_verify
-tlv_add_value_ type=6 len=1 -->
-0x000000: 01                                              .               
-tlv_add_value_ type=3 len=32 -->
-0x000000: ad 16 49 20 a7 9b 6a d7 a8 cb d4 18 9f f2 ec 0c ..I ..j.........
-0x000010: 70 b1 7c c7 08 ca 99 7a f1 d2 b4 e9 c8 1e 66 21 p.|....z......f!
-Received TLV values
+message_process inbound
 Type 6 value (1 bytes): 
 0x000000: 01                                              .               
 Type 3 value (32 bytes): 
-0x000000: ad 16 49 20 a7 9b 6a d7 a8 cb d4 18 9f f2 ec 0c ..I ..j.........
-0x000010: 70 b1 7c c7 08 ca 99 7a f1 d2 b4 e9 c8 1e 66 21 p.|....z......f!
+0x000000: f2 45 91 36 8b f9 10 55 b4 29 b0 7e da 49 21 1b .E.6...U.).~.I!.
+0x000010: 28 14 85 50 92 d6 cf 6c d3 92 e1 ea a3 89 65 41 (..P...l......eA
 HK state_get STATE 1
 pair_verify: state=1
 HK ENTER server_verify_request1
-tlv_add_value_ type=6 len=1 -->
-0x000000: 01                                              .               
-tlv_add_value_ type=3 len=32 -->
-0x000000: ad 16 49 20 a7 9b 6a d7 a8 cb d4 18 9f f2 ec 0c ..I ..j.........
-0x000010: 70 b1 7c c7 08 ca 99 7a f1 d2 b4 e9 c8 1e 66 21 p.|....z......f!
-Received TLV values
+message_process inbound
 Type 6 value (1 bytes): 
 0x000000: 01                                              .               
 Type 3 value (32 bytes): 
-0x000000: ad 16 49 20 a7 9b 6a d7 a8 cb d4 18 9f f2 ec 0c ..I ..j.........
-0x000010: 70 b1 7c c7 08 ca 99 7a f1 d2 b4 e9 c8 1e 66 21 p.|....z......f!
+0x000000: f2 45 91 36 8b f9 10 55 b4 29 b0 7e da 49 21 1b .E.6...U.).~.I!.
+0x000010: 28 14 85 50 92 d6 cf 6c d3 92 e1 ea a3 89 65 41 (..P...l......eA
 HK EXIT  server_verify_request1
-HK ENTER server_verify_response1 DEVICE_ID: 74563C4A29A2
-tlv_add_value_ type=1 len=12 -->
+
+
+server_verify_response1 *** ENTER ***
+server_verify_response1 DEVICE ID len: 12
 0x000000: 37 34 35 36 33 43 34 41 32 39 41 32             74563C4A29A2    
-tlv_add_value_ type=10 len=64 -->
-0x000000: d5 cf 0f 7d b9 bc 78 3b 45 09 f2 21 ad 9e 41 ca ...}..x;E..!..A.
-0x000010: 67 af 4c ab a3 57 40 ef f4 2d 81 a9 1c fd ed 20 g.L..W@..-..... 
-0x000020: 23 b4 09 1c da e7 ff c7 ab ba c8 ad ab 96 6d 4f #.............mO
-0x000030: 74 d0 0d 7a c3 ec bb a8 91 be b2 e0 11 1a cf 04 t..z............
-hkdf_extract_expand pair_key=PAIR_VERIFY_MSG02 <-- ENTER
-hkdf_extract_expand gcry_md_set_key salt:
+server_verify_response1 generated server eph pub key len: 32
+0x000000: 29 95 44 93 98 67 33 c7 bc f7 22 9e 8b 70 22 92 ).D..g3..."..p".
+0x000010: 2c 2d 60 63 c2 47 96 87 b7 36 81 b9 bf 83 ab 29 ,-`c.G...6.....)
+server_verify_response1 received client eph pub key len: 32
+0x000000: f2 45 91 36 8b f9 10 55 b4 29 b0 7e da 49 21 1b .E.6...U.).~.I!.
+0x000010: 28 14 85 50 92 d6 cf 6c d3 92 e1 ea a3 89 65 41 (..P...l......eA
+server_verify_response1 crypto_scalarmult() create shared_secret from
+server_verify_response1                     server eph priv and client eph public
+server_verify_response1 generated shared secret len: 32
+0x000000: 7a 38 67 e9 8e be f4 e1 a0 a9 69 c5 dc e6 04 e9 z8g.......i.....
+0x000010: 9f 04 5b 87 f9 f2 14 3b e5 4f 2b 2a b4 a8 5b 0b ..[....;.O+*..[.
+create_and_sign_accessory_info create signed accessory info from len: 12
+0x000000: 37 34 35 36 33 43 34 41 32 39 41 32             74563C4A29A2    
+create_and_sign_accessory_info -> from server pk + accessory id + client pk
+create_and_sign_accessory_info accessory info len: 76
+0x000000: 29 95 44 93 98 67 33 c7 bc f7 22 9e 8b 70 22 92 ).D..g3..."..p".
+0x000010: 2c 2d 60 63 c2 47 96 87 b7 36 81 b9 bf 83 ab 29 ,-`c.G...6.....)
+0x000020: 37 34 35 36 33 43 34 41 32 39 41 32 f2 45 91 36 74563C4A29A2.E.6
+0x000030: 8b f9 10 55 b4 29 b0 7e da 49 21 1b 28 14 85 50 ...U.).~.I!.(..P
+0x000040: 92 d6 cf 6c d3 92 e1 ea a3 89 65 41             ...l......eA    
+create_and_sign_accessory_info: (ed25519)
+        calling crypto_sign_detached(signature, NULL, accessory_info, accessory_info_len, sk)
+create_and_sign_accessory_info signature from accessory info len: 64
+0x000000: 42 8a e9 6a 7c 4c 8a a1 ae 14 77 64 e9 ef a6 0a B..j|L....wd....
+0x000010: 29 44 9e f2 c7 d7 f2 9c 87 d6 c3 2b 44 72 84 ce )D.........+Dr..
+0x000020: 54 d0 46 87 ac 37 f8 f6 1e 45 7e 63 55 50 1b 1f T.F..7...E~cUP..
+0x000030: db 8f 95 09 0a 0d ce 26 15 db a8 47 a9 38 14 0c .......&...G.8..
+create_and_sign_accessory_info add Identifier(accessory_id) and Signature
+pair_tlv_format formatting
+Type 1 value (12 bytes): 
+0x000000: 37 34 35 36 33 43 34 41 32 39 41 32             74563C4A29A2    
+Type 10 value (64 bytes): 
+0x000000: 42 8a e9 6a 7c 4c 8a a1 ae 14 77 64 e9 ef a6 0a B..j|L....wd....
+0x000010: 29 44 9e f2 c7 d7 f2 9c 87 d6 c3 2b 44 72 84 ce )D.........+Dr..
+0x000020: 54 d0 46 87 ac 37 f8 f6 1e 45 7e 63 55 50 1b 1f T.F..7...E~cUP..
+0x000030: db 8f 95 09 0a 0d ce 26 15 db a8 47 a9 38 14 0c .......&...G.8..
+create_and_sign_accessory_info returning formatted TLV len: 80
+0x000000: 01 0c 37 34 35 36 33 43 34 41 32 39 41 32 0a 40 ..74563C4A29A2.@
+0x000010: 42 8a e9 6a 7c 4c 8a a1 ae 14 77 64 e9 ef a6 0a B..j|L....wd....
+0x000020: 29 44 9e f2 c7 d7 f2 9c 87 d6 c3 2b 44 72 84 ce )D.........+Dr..
+0x000030: 54 d0 46 87 ac 37 f8 f6 1e 45 7e 63 55 50 1b 1f T.F..7...E~cUP..
+0x000040: db 8f 95 09 0a 0d ce 26 15 db a8 47 a9 38 14 0c .......&...G.8..
+server_verify_response1 signed accessory info len: 80
+0x000000: 01 0c 37 34 35 36 33 43 34 41 32 39 41 32 0a 40 ..74563C4A29A2.@
+0x000010: 42 8a e9 6a 7c 4c 8a a1 ae 14 77 64 e9 ef a6 0a B..j|L....wd....
+0x000020: 29 44 9e f2 c7 d7 f2 9c 87 d6 c3 2b 44 72 84 ce )D.........+Dr..
+0x000030: 54 d0 46 87 ac 37 f8 f6 1e 45 7e 63 55 50 1b 1f T.F..7...E~cUP..
+0x000040: db 8f 95 09 0a 0d ce 26 15 db a8 47 a9 38 14 0c .......&...G.8..
+server_verify_response1 calling: hkdf_extract_expand(derived_key, shared_secret, msg_state=9)
+hkdf_extract_expand pair_key=PAIR_VERIFY_MSG02 *** ENTER ***
+hkdf_extract_expand gcry_md_set_key salt len: 24
 0x000000: 50 61 69 72 2d 56 65 72 69 66 79 2d 45 6e 63 72 Pair-Verify-Encr
 0x000010: 79 70 74 2d 53 61 6c 74                         ypt-Salt        
-hkdf_extract_expand gcry_md_write ikm:
-0x000000: 22 b6 45 62 0a 48 21 d5 9a 9d 2a 02 f2 ee 2f 70 ".Eb.H!...*.../p
-0x000010: 03 d1 5a 37 52 14 23 b0 14 f9 72 33 a4 e6 9b 52 ..Z7R.#...r3...R
-hkdf_extract_expand calculated prk from salt:
-0x000000: 9a dd c3 92 e6 ba 43 4b 16 1a 5b b9 e4 dc a1 e4 ......CK..[.....
-0x000010: c6 2f b9 55 18 6a 3c 07 2b b6 d5 20 f7 f6 35 83 ./.U.j<.+.. ..5.
-0x000020: c9 16 5f 31 1f 24 75 fc fc 5d 33 b7 ef dc 61 bf .._1.$u..]3...a.
-0x000030: b2 44 79 bd f7 bc 7d 48 bf cd 7b ec 34 e6 f3 8b .Dy...}H..{.4...
-hkdf_extract_expand gcry_md_set_key prk:
-hkdf_extract_expand gcry_md_write info
+hkdf_extract_expand gcry_md_write ikm len: 32
+0x000000: 7a 38 67 e9 8e be f4 e1 a0 a9 69 c5 dc e6 04 e9 z8g.......i.....
+0x000010: 9f 04 5b 87 f9 f2 14 3b e5 4f 2b 2a b4 a8 5b 0b ..[....;.O+*..[.
+hkdf_extract_expand calculated prk from salt len: 64
+0x000000: 7a f0 e7 0b 6e 0b da 1f 23 1d 9e 96 e3 67 72 4b z...n...#....grK
+0x000010: c8 63 a3 13 cc 37 06 13 94 bc 0c f9 4d e0 ac 5d .c...7......M..]
+0x000020: 4d d9 26 39 ec 93 54 7f 00 70 bd 24 f8 94 72 00 M.&9..T..p.$..r.
+0x000030: f0 cd c7 a9 c5 9b eb 84 a9 7c 06 61 48 4c e1 b8 .........|.aHL..
+hkdf_extract_expand gcry_md_set_key len: 64
+0x000000: 7a f0 e7 0b 6e 0b da 1f 23 1d 9e 96 e3 67 72 4b z...n...#....grK
+0x000010: c8 63 a3 13 cc 37 06 13 94 bc 0c f9 4d e0 ac 5d .c...7......M..]
+0x000020: 4d d9 26 39 ec 93 54 7f 00 70 bd 24 f8 94 72 00 M.&9..T..p.$..r.
+0x000030: f0 cd c7 a9 c5 9b eb 84 a9 7c 06 61 48 4c e1 b8 .........|.aHL..
+hkdf_extract_expand gcry_md_write info len: 24
 0x000000: 50 61 69 72 2d 56 65 72 69 66 79 2d 45 6e 63 72 Pair-Verify-Encr
 0x000010: 79 70 74 2d 49 6e 66 6f                         ypt-Info        
-hkdf_extract_expand gcry_md_putc(1) to written info:
-hkdf_extract_expand calculated okm from info:
-0x000000: 77 4c b3 33 5a 76 9a a3 94 af b5 53 8f 3f da d9 wL.3Zv.....S.?..
-0x000010: b0 7f f9 6d ef 06 c1 a4 86 77 e0 12 9b bc ea 7b ...m.....w.....{
-hkdf_extract_expand: pair_key=9 <-- EXIT
-server_verify_response1 derived key:
-0x000000: 77 4c b3 33 5a 76 9a a3 94 af b5 53 8f 3f da d9 wL.3Zv.....S.?..
-0x000010: b0 7f f9 6d ef 06 c1 a4 86 77 e0 12 9b bc ea 7b ...m.....w.....{
-server_verify_response1 nonce:
+hkdf_extract_expand okm AFTER gcry_putc(1) len: 32
+0x000000: cf 97 cf f1 5f d3 e4 d8 21 78 6a 96 bf 40 dd 67 ...._...!xj..@.g
+0x000010: d8 76 7f 7a 7e df b1 65 47 8c 74 2a 61 2b 08 fa .v.z~..eG.t*a+..
+hkdf_extract_expand: pair_key=9 *** EXIT ***
+
+server_verify_response1 DERIVED KEY len: 32
+0x000000: cf 97 cf f1 5f d3 e4 d8 21 78 6a 96 bf 40 dd 67 ...._...!xj..@.g
+0x000010: d8 76 7f 7a 7e df b1 65 47 8c 74 2a 61 2b 08 fa .v.z~..eG.t*a+..
+server_verify_response1 NONCE len: 12
 0x000000: 00 00 00 00 50 56 2d 4d 73 67 30 00             ....PV-Msg0.    
-server_verify_response1 post encrypt:
-server_verify_response1 data:
+server_verify_response1 DATA before encryption len: 80
 0x000000: 01 0c 37 34 35 36 33 43 34 41 32 39 41 32 0a 40 ..74563C4A29A2.@
-0x000010: d5 cf 0f 7d b9 bc 78 3b 45 09 f2 21 ad 9e 41 ca ...}..x;E..!..A.
-0x000020: 67 af 4c ab a3 57 40 ef f4 2d 81 a9 1c fd ed 20 g.L..W@..-..... 
-0x000030: 23 b4 09 1c da e7 ff c7 ab ba c8 ad ab 96 6d 4f #.............mO
-0x000040: 74 d0 0d 7a c3 ec bb a8 91 be b2 e0 11 1a cf 04 t..z............
-server_verify_response1 derived key:
-0x000000: 77 4c b3 33 5a 76 9a a3 94 af b5 53 8f 3f da d9 wL.3Zv.....S.?..
-0x000010: b0 7f f9 6d ef 06 c1 a4 86 77 e0 12 9b bc ea 7b ...m.....w.....{
-server_verify_response1 auth tag:
-0x000000: 90 6f 68 96 79 b5 89 02 dd b1 53 5a dc 0c 04 4b .oh.y.....SZ...K
-server_verify_response1 nonce:
-0x000000: 00 00 00 00 50 56 2d 4d 73 67 30 00             ....PV-Msg0.    
-server_verify_response1 encrypted data:
-0x000000: 77 f4 5a 9b de f7 b4 5c 49 ec 7e 0f bc a9 14 a9 w.Z....\I.~.....
-0x000010: 46 92 a0 da 98 a4 e0 db e0 58 56 fe 71 27 3d 0d F........XV.q'=.
-0x000020: 7c d1 b9 c3 24 cd ca d7 7b 59 8f f9 38 89 b0 bc |...$...{Y..8...
-0x000030: 65 17 b4 af 20 90 f0 6a 7f b2 98 4e 7c 6c 72 96 e... ..j...N|lr.
-0x000040: 3d b2 73 7d ff 69 0d 3b 30 66 37 4a 3b 0a cf a9 =.s}.i.;0f7J;...
-0x000050: 50 3d ae f9 e1 55 00 00 40 3d ae f9 e1 55 00 00 P=...U..@=...U..
-tlv_add_value_ type=6 len=1 -->
+0x000010: 42 8a e9 6a 7c 4c 8a a1 ae 14 77 64 e9 ef a6 0a B..j|L....wd....
+0x000020: 29 44 9e f2 c7 d7 f2 9c 87 d6 c3 2b 44 72 84 ce )D.........+Dr..
+0x000030: 54 d0 46 87 ac 37 f8 f6 1e 45 7e 63 55 50 1b 1f T.F..7...E~cUP..
+0x000040: db 8f 95 09 0a 0d ce 26 15 db a8 47 a9 38 14 0c .......&...G.8..
+server_verify_response1 auth tag from encrypt_chacha len: 16
+0x000000: c2 7f 37 50 05 d1 06 03 a8 03 3d 28 b8 7b cc 5e ..7P......=(.{.^
+server_verify_response1 encrypted data len: 96
+0x000000: 31 d4 2c 61 b3 53 2d 71 68 3b 68 0c ac 89 af 57 1.,a.S-qh;h....W
+0x000010: 0a 21 ab 4f 44 3a c6 8d 77 e9 ba 66 fa 6d db cf .!.OD:..w..f.m..
+0x000020: b9 10 d8 d6 1a 41 cf be c9 be 77 bb ba dd 04 4a .....A....w....J
+0x000030: 20 cb 31 bd 64 5e 7b e2 b0 d2 7e 64 a3 b5 d7 0a  .1.d^{...~d....
+0x000040: a4 c8 f5 0f 17 39 b0 80 82 68 4c 23 d6 f7 80 e8 .....9...hL#....
+0x000050: 50 0d 09 fd ba 55 00 00 40 0d 09 fd ba 55 00 00 P....U..@....U..
+server_verify_response1 encrypted data + tag len: 112
+0x000000: 31 d4 2c 61 b3 53 2d 71 68 3b 68 0c ac 89 af 57 1.,a.S-qh;h....W
+0x000010: 0a 21 ab 4f 44 3a c6 8d 77 e9 ba 66 fa 6d db cf .!.OD:..w..f.m..
+0x000020: b9 10 d8 d6 1a 41 cf be c9 be 77 bb ba dd 04 4a .....A....w....J
+0x000030: 20 cb 31 bd 64 5e 7b e2 b0 d2 7e 64 a3 b5 d7 0a  .1.d^{...~d....
+0x000040: a4 c8 f5 0f 17 39 b0 80 82 68 4c 23 d6 f7 80 e8 .....9...hL#....
+0x000050: c2 7f 37 50 05 d1 06 03 a8 03 3d 28 b8 7b cc 5e ..7P......=(.{.^
+0x000060: 20 69 00 3c 07 7f 00 00 81 03 00 00 00 00 00 00  i.<............
+pair_tlv_format formatting
+Type 6 value (1 bytes): 
 0x000000: 02                                              .               
-tlv_add_value_ type=3 len=32 -->
-0x000000: 7f 73 98 91 cc 83 23 06 e1 6d cc 58 16 dc f0 d7 .s....#..m.X....
-0x000010: c8 ee 9a f4 80 cf 29 44 fa 6b b2 6e d8 b5 56 02 ......)D.k.n..V.
-tlv_add_value_ type=5 len=96 -->
-0x000000: 77 f4 5a 9b de f7 b4 5c 49 ec 7e 0f bc a9 14 a9 w.Z....\I.~.....
-0x000010: 46 92 a0 da 98 a4 e0 db e0 58 56 fe 71 27 3d 0d F........XV.q'=.
-0x000020: 7c d1 b9 c3 24 cd ca d7 7b 59 8f f9 38 89 b0 bc |...$...{Y..8...
-0x000030: 65 17 b4 af 20 90 f0 6a 7f b2 98 4e 7c 6c 72 96 e... ..j...N|lr.
-0x000040: 3d b2 73 7d ff 69 0d 3b 30 66 37 4a 3b 0a cf a9 =.s}.i.;0f7J;...
-0x000050: 90 6f 68 96 79 b5 89 02 dd b1 53 5a dc 0c 04 4b .oh.y.....SZ...K
-server_verify_response1 data: (len=135)
-0x000000: 06 01 02 03 20 7f 73 98 91 cc 83 23 06 e1 6d cc .... .s....#..m.
-0x000010: 58 16 dc f0 d7 c8 ee 9a f4 80 cf 29 44 fa 6b b2 X..........)D.k.
-0x000020: 6e d8 b5 56 02 05 60 77 f4 5a 9b de f7 b4 5c 49 n..V..`w.Z....\I
-0x000030: ec 7e 0f bc a9 14 a9 46 92 a0 da 98 a4 e0 db e0 .~.....F........
-0x000040: 58 56 fe 71 27 3d 0d 7c d1 b9 c3 24 cd ca d7 7b XV.q'=.|...$...{
-0x000050: 59 8f f9 38 89 b0 bc 65 17 b4 af 20 90 f0 6a 7f Y..8...e... ..j.
-0x000060: b2 98 4e 7c 6c 72 96 3d b2 73 7d ff 69 0d 3b 30 ..N|lr.=.s}.i.;0
-0x000070: 66 37 4a 3b 0a cf a9 90 6f 68 96 79 b5 89 02 dd f7J;....oh.y....
-0x000080: b1 53 5a dc 0c 04 4b                            .SZ...K         
-HK EXIT  server_verify_response1
+Type 3 value (32 bytes): 
+0x000000: 29 95 44 93 98 67 33 c7 bc f7 22 9e 8b 70 22 92 ).D..g3..."..p".
+0x000010: 2c 2d 60 63 c2 47 96 87 b7 36 81 b9 bf 83 ab 29 ,-`c.G...6.....)
+Type 5 value (96 bytes): 
+0x000000: 31 d4 2c 61 b3 53 2d 71 68 3b 68 0c ac 89 af 57 1.,a.S-qh;h....W
+0x000010: 0a 21 ab 4f 44 3a c6 8d 77 e9 ba 66 fa 6d db cf .!.OD:..w..f.m..
+0x000020: b9 10 d8 d6 1a 41 cf be c9 be 77 bb ba dd 04 4a .....A....w....J
+0x000030: 20 cb 31 bd 64 5e 7b e2 b0 d2 7e 64 a3 b5 d7 0a  .1.d^{...~d....
+0x000040: a4 c8 f5 0f 17 39 b0 80 82 68 4c 23 d6 f7 80 e8 .....9...hL#....
+0x000050: c2 7f 37 50 05 d1 06 03 a8 03 3d 28 b8 7b cc 5e ..7P......=(.{.^
+server_verify_response1 FINAL DATA len: 135
+
+0x000000: 06 01 02 03 20 29 95 44 93 98 67 33 c7 bc f7 22 .... ).D..g3..."
+0x000010: 9e 8b 70 22 92 2c 2d 60 63 c2 47 96 87 b7 36 81 ..p".,-`c.G...6.
+0x000020: b9 bf 83 ab 29 05 60 31 d4 2c 61 b3 53 2d 71 68 ....).`1.,a.S-qh
+0x000030: 3b 68 0c ac 89 af 57 0a 21 ab 4f 44 3a c6 8d 77 ;h....W.!.OD:..w
+0x000040: e9 ba 66 fa 6d db cf b9 10 d8 d6 1a 41 cf be c9 ..f.m.......A...
+0x000050: be 77 bb ba dd 04 4a 20 cb 31 bd 64 5e 7b e2 b0 .w....J .1.d^{..
+0x000060: d2 7e 64 a3 b5 d7 0a a4 c8 f5 0f 17 39 b0 80 82 .~d.........9...
+0x000070: 68 4c 23 d6 f7 80 e8 c2 7f 37 50 05 d1 06 03 a8 hL#......7P.....
+0x000080: 03 3d 28 b8 7b cc 5e                            .=(.{.^         
+server_verify_response1 *** EXIT *** 
 
 pair_verify out data: (len=135)
-0x000000: 06 01 02 03 20 7f 73 98 91 cc 83 23 06 e1 6d cc .... .s....#..m.
-0x000010: 58 16 dc f0 d7 c8 ee 9a f4 80 cf 29 44 fa 6b b2 X..........)D.k.
-0x000020: 6e d8 b5 56 02 05 60 77 f4 5a 9b de f7 b4 5c 49 n..V..`w.Z....\I
-0x000030: ec 7e 0f bc a9 14 a9 46 92 a0 da 98 a4 e0 db e0 .~.....F........
-0x000040: 58 56 fe 71 27 3d 0d 7c d1 b9 c3 24 cd ca d7 7b XV.q'=.|...$...{
-0x000050: 59 8f f9 38 89 b0 bc 65 17 b4 af 20 90 f0 6a 7f Y..8...e... ..j.
-0x000060: b2 98 4e 7c 6c 72 96 3d b2 73 7d ff 69 0d 3b 30 ..N|lr.=.s}.i.;0
-0x000070: 66 37 4a 3b 0a cf a9 90 6f 68 96 79 b5 89 02 dd f7J;....oh.y....
-0x000080: b1 53 5a dc 0c 04 4b                            .SZ...K         
+0x000000: 06 01 02 03 20 29 95 44 93 98 67 33 c7 bc f7 22 .... ).D..g3..."
+0x000010: 9e 8b 70 22 92 2c 2d 60 63 c2 47 96 87 b7 36 81 ..p".,-`c.G...6.
+0x000020: b9 bf 83 ab 29 05 60 31 d4 2c 61 b3 53 2d 71 68 ....).`1.,a.S-qh
+0x000030: 3b 68 0c ac 89 af 57 0a 21 ab 4f 44 3a c6 8d 77 ;h....W.!.OD:..w
+0x000040: e9 ba 66 fa 6d db cf b9 10 d8 d6 1a 41 cf be c9 ..f.m.......A...
+0x000050: be 77 bb ba dd 04 4a 20 cb 31 bd 64 5e 7b e2 b0 .w....J .1.d^{..
+0x000060: d2 7e 64 a3 b5 d7 0a a4 c8 f5 0f 17 39 b0 80 82 .~d.........9...
+0x000070: 68 4c 23 d6 f7 80 e8 c2 7f 37 50 05 d1 06 03 a8 hL#......7P.....
+0x000080: 03 3d 28 b8 7b cc 5e                            .=(.{.^         
 EXIT  pair_verify
 
-tlv_add_value_ type=0 len=1 -->
-0x000000: 00                                              .               
-tlv_add_value_ type=6 len=1 -->
-0x000000: 01                                              .               
-tlv_add_value_ type=19 len=1 -->
-0x000000: 10                                              .               
-Received TLV values
+message_process inbound
 Type 0 value (1 bytes): 
 0x000000: 00                                              .               
 Type 6 value (1 bytes): 
@@ -172,13 +211,7 @@ Type 19 value (1 bytes):
 0x000000: 10                                              .               
 HK state_get STATE 1
 pair_setup: state=1
-tlv_add_value_ type=0 len=1 -->
-0x000000: 00                                              .               
-tlv_add_value_ type=6 len=1 -->
-0x000000: 01                                              .               
-tlv_add_value_ type=19 len=1 -->
-0x000000: 10                                              .               
-Received TLV values
+message_process inbound
 Type 0 value (1 bytes): 
 0x000000: 00                                              .               
 Type 6 value (1 bytes): 
@@ -186,223 +219,167 @@ Type 6 value (1 bytes):
 Type 19 value (1 bytes): 
 0x000000: 10                                              .               
 Random value of s:
-0x000000: 17 69 a3 ba 76 18 1a 3e 65 12 6b 48 83 a6 32 77 .i..v..>e.kH..2w
+0x000000: b2 89 27 0d 45 d7 a3 c2 e0 90 0c 75 c4 fa e9 0c ..'.E......u....
 Random value of b:
-0x000000: 90 96 66 06 dd b8 b3 98 64 79 d8 f7 b0 32 f2 72 ..f.....dy...2.r
-0x000010: c5 83 85 89 fd d9 af e9 ba 2e 4a 00 ce dc 07 0f ..........J.....
-tlv_add_value_ type=6 len=1 -->
+0x000000: fc 12 39 ec d2 04 bd 90 cc 2a 6f fd e2 9b 64 48 ..9......*o...dH
+0x000010: 24 56 8f c7 87 12 60 fb e3 74 cb a0 4d e2 48 87 $V....`..t..M.H.
+pair_tlv_format formatting
+Type 6 value (1 bytes): 
 0x000000: 02                                              .               
-tlv_add_value_ type=2 len=16 -->
-0x000000: 17 69 a3 ba 76 18 1a 3e 65 12 6b 48 83 a6 32 77 .i..v..>e.kH..2w
-tlv_add_value_ type=3 len=384 -->
-0x000000: 93 5a 70 89 48 f0 b7 75 68 cb ff 08 5d 6f 25 e9 .Zp.H..uh...]o%.
-0x000010: 30 c0 67 53 7d b2 aa 54 0c 0c 39 76 c1 67 87 66 0.gS}..T..9v.g.f
-0x000020: a9 8a 91 54 d7 6e d8 b7 50 72 9f 09 82 91 9e 46 ...T.n..Pr.....F
-0x000030: 56 42 f4 e2 12 9e 5d 44 40 5a 1b e7 0c 0f 36 49 VB....]D@Z....6I
-0x000040: 2f cc 70 32 48 22 6d 34 e5 c1 f4 a2 ca ee 8b df /.p2H"m4........
-0x000050: 33 76 eb 98 8c 32 fa db 63 ee cc b8 95 2b d2 d4 3v...2..c....+..
-0x000060: 25 e6 b5 f9 fe b9 33 f7 19 fb 73 b2 30 44 80 0b %.....3...s.0D..
-0x000070: 85 cc e9 b2 0d 66 77 3c 73 7e 7f d3 5c ba 02 db .....fw<s~..\...
-0x000080: 47 4e 47 d4 4e 23 5a 61 c0 61 70 be 6b 75 73 3f GNG.N#Za.ap.kus?
-0x000090: 3f 98 32 3c 21 d0 0e 8a c4 e5 96 9d 88 68 b8 a2 ?.2<!........h..
-0x0000a0: b1 d8 5e b9 df 6c d3 18 76 68 45 1b ef 20 79 da ..^..l..vhE.. y.
-0x0000b0: 39 e5 5b 83 4d 42 fb 28 02 29 0c 98 39 23 93 43 9.[.MB.(.)..9#.C
-0x0000c0: 2c ac 2c 33 7c 70 bd 3a 5b f7 be 26 15 b3 9e 45 ,.,3|p.:[..&...E
-0x0000d0: fe 96 4d 99 a9 ef 42 e9 a8 cd 09 89 e4 2c f8 2e ..M...B......,..
-0x0000e0: 72 fb 2b 33 25 da e8 81 6c a3 e7 e1 d0 7c 4a c6 r.+3%...l....|J.
-0x0000f0: 28 31 cf d3 ad b4 8c 3d e3 68 5b d5 a2 c0 73 99 (1.....=.h[...s.
-0x000100: 28 53 93 30 03 fc c6 2a e2 46 c3 04 f9 6c 5e d3 (S.0...*.F...l^.
-0x000110: fa 97 23 5c e2 fa e3 a2 4a 28 34 62 b6 57 db de ..#\....J(4b.W..
-0x000120: eb fb 48 67 20 58 73 ef 79 79 cf 6c 61 6a dd 31 ..Hg Xs.yy.laj.1
-0x000130: 72 5c 9a c6 ae 70 97 9f b5 fd 2a 34 66 7f 89 56 r\...p....*4f..V
-0x000140: d3 9f 8b 80 60 fd bb 5c 77 22 4c c4 d1 72 c5 4c ....`..\w"L..r.L
-0x000150: da 33 e7 ed 0b 93 a9 18 28 f0 3c b0 e8 56 da 3d .3......(.<..V.=
-0x000160: 51 c7 41 92 d1 82 3d be d0 da d4 06 0a c1 76 95 Q.A...=.......v.
-0x000170: 9d e2 fe d5 28 0a a9 1c 20 04 0c dc b0 03 10 79 ....(... ......y
-tlv_add_value_ type=6 len=1 -->
-0x000000: 03                                              .               
-tlv_add_value_ type=3 len=384 -->
-0x000000: 88 10 75 75 00 2b d9 68 67 0e 1f 2f 69 be 46 c9 ..uu.+.hg../i.F.
-0x000010: eb e6 6f 7b b7 a4 f7 9d ac 71 eb 3f ad 96 3d 4f ..o{.....q.?..=O
-0x000020: bf 13 4c 33 a3 a0 d5 d7 08 b9 d7 3f f8 ac 69 87 ..L3.......?..i.
-0x000030: d3 d5 dc c9 1e 02 94 9c 8a a2 a3 d4 78 bc e8 b9 ............x...
-0x000040: 7e 03 1a e2 f4 22 26 c4 33 f8 7b 72 0f dc c3 93 ~...."&.3.{r....
-0x000050: de 21 26 23 86 0e ba 30 f8 82 4e 60 32 23 47 ec .!&#...0..N`2#G.
-0x000060: a2 18 86 b2 cf 27 d7 ca ac c6 7e 1b 4f f6 96 0a .....'....~.O...
-0x000070: 24 00 97 33 f2 e8 2c 37 9a 65 25 6a 2c df be eb $..3..,7.e%j,...
-0x000080: 93 56 6f 90 09 f1 2b 3c 55 c1 aa eb e3 25 86 5e .Vo...+<U....%.^
-0x000090: 8a 5f 72 20 c5 09 41 a3 04 c8 67 26 10 8a df 38 ._r ..A...g&...8
-0x0000a0: 8d ec 2c d0 74 dd 5a dd 76 2b ca 77 31 39 52 91 ..,.t.Z.v+.w19R.
-0x0000b0: a6 25 3c d2 b9 3c 29 aa 1b 28 9a 6c 08 b6 c9 19 .%<..<)..(.l....
-0x0000c0: e6 46 27 e3 4d 59 83 3c 00 35 eb 4f 47 96 89 be .F'.MY.<.5.OG...
-0x0000d0: 88 e0 3b c0 5a 21 57 5d b5 3e ce 98 cc ee 75 7d ..;.Z!W].>....u}
-0x0000e0: 09 eb 9c 7c 4b 2d 49 61 d2 f2 d3 e2 51 ae fb a6 ...|K-Ia....Q...
-0x0000f0: c1 5d c0 d5 62 08 80 db 7c 2c d6 c8 57 73 2b 19 .]..b...|,..Ws+.
-0x000100: 06 c6 c4 8b 22 a2 26 30 df 05 30 df 4a ea 74 b4 ....".&0..0.J.t.
-0x000110: 31 8c 6c 62 2b 32 d5 fc 4b 6a 36 86 9d 43 23 77 1.lb+2..Kj6..C#w
-0x000120: 6a 0d 74 12 53 26 df ac 2b 82 29 f7 6f bf 7a 85 j.t.S&..+.).o.z.
-0x000130: 8a e1 00 54 eb 58 4a 77 30 2f c7 8c 8b ff bc d0 ...T.XJw0/......
-0x000140: eb 48 1e 9f 39 ce 8a d4 e6 3b cb 0a fc 59 b0 aa .H..9....;...Y..
-0x000150: 94 38 d4 3b a9 7c a0 f9 83 52 22 49 27 42 92 b6 .8.;.|...R"I'B..
-0x000160: 4a fa c0 46 99 64 3d 54 10 27 cb c9 c4 b9 7f 51 J..F.d=T.'.....Q
-0x000170: c2 c0 a3 72 d3 81 a1 df 69 63 bb 10 40 7a b1 48 ...r....ic..@z.H
-tlv_add_value_ type=4 len=64 -->
-0x000000: 2e 47 80 4f e4 8e 75 17 16 dd 34 d8 93 2c f1 35 .G.O..u...4..,.5
-0x000010: c4 51 8e 81 62 09 67 87 d8 c9 20 2b a1 dd be 48 .Q..b.g... +...H
-0x000020: 32 2b 51 6e 12 25 f9 48 4a 8a 79 89 72 c9 c1 e0 2+Qn.%.HJ.y.r...
-0x000030: 40 64 3d 5b c2 1a c7 83 18 e1 de f5 25 57 74 58 @d=[........%WtX
-Received TLV values
+Type 2 value (16 bytes): 
+0x000000: b2 89 27 0d 45 d7 a3 c2 e0 90 0c 75 c4 fa e9 0c ..'.E......u....
+Type 3 value (384 bytes): 
+0x000000: dc 04 c7 6e 8c 43 86 44 6a 63 18 36 16 84 41 55 ...n.C.Djc.6..AU
+0x000010: 54 f3 13 0d e5 30 9e 04 ef 55 b9 e3 88 6f 3a 7a T....0...U...o:z
+0x000020: 46 94 35 6b a3 3b 42 dc 64 25 b0 f4 30 20 d4 83 F.5k.;B.d%..0 ..
+0x000030: 6e 0f 32 90 ff 02 37 7c 49 87 b2 75 58 a9 52 7d n.2...7|I..uX.R}
+0x000040: 7c a2 44 97 ad d4 aa c9 66 0b 4e 21 74 c6 9e 17 |.D.....f.N!t...
+0x000050: 46 1d 07 7a 59 b9 4b 69 2d 90 af 9e 1b 03 b2 c7 F..zY.Ki-.......
+0x000060: 97 0a 61 a1 fb 83 49 56 1e 53 a5 c5 3d 40 24 d6 ..a...IV.S..=@$.
+0x000070: 09 8f 3c 14 56 a9 ff 88 51 f8 7f 47 73 89 71 ac ..<.V...Q..Gs.q.
+0x000080: 61 5c d2 bb 85 dc 25 60 f1 b4 1e 92 78 7e 16 53 a\....%`....x~.S
+0x000090: 97 84 b1 50 51 2c 79 ac 3a 9c 69 f5 ba 68 5c 7f ...PQ,y.:.i..h\.
+0x0000a0: ed d3 37 ea ad c6 2e a4 11 a7 7b 83 42 f4 6e c1 ..7.......{.B.n.
+0x0000b0: 7a ad e9 19 c0 39 ae 52 3b c6 3e f6 b7 cf 35 fb z....9.R;.>...5.
+0x0000c0: b6 cf 36 24 fb c3 58 ca e9 7d ed 9f 4c a6 1e 83 ..6$..X..}..L...
+0x0000d0: 31 50 b0 19 77 a3 20 5b e7 a0 ad 0b bd 08 8e 9a 1P..w. [........
+0x0000e0: a2 48 78 df 4d ad e4 ad c2 4c c9 a9 bb f9 96 58 .Hx.M....L.....X
+0x0000f0: 89 6b 87 c6 52 2f a4 16 c0 d4 8f d5 bb 7e 64 c2 .k..R/.......~d.
+0x000100: 97 ce 98 6f 5e c8 69 2a b9 d4 51 83 4c 01 32 e7 ...o^.i*..Q.L.2.
+0x000110: b5 b0 49 fb 50 87 7f 91 4b af 12 f6 71 64 0b 90 ..I.P...K...qd..
+0x000120: d6 97 71 0a 06 bb 08 85 e6 2f 54 ba e9 0e e9 16 ..q....../T.....
+0x000130: 12 b9 90 94 44 bd 72 05 97 7a f5 6a 57 1b df c3 ....D.r..z.jW...
+0x000140: c8 cb dc ea db 1d 54 61 d7 fd a4 ad a5 3a 91 1e ......Ta.....:..
+0x000150: 4d bd 13 34 dd 6a 75 42 ca 33 75 9a b7 c5 ef bf M..4.juB.3u.....
+0x000160: 5c 2f 6e 22 5a 9d 81 a2 44 ad 7c c8 e4 99 98 16 \/n"Z...D.|.....
+0x000170: c3 2c 31 c5 b1 64 47 ec 25 5c 40 eb bf 73 c8 35 .,1..dG.%\@..s.5
+message_process inbound
 Type 6 value (1 bytes): 
 0x000000: 03                                              .               
 Type 3 value (384 bytes): 
-0x000000: 88 10 75 75 00 2b d9 68 67 0e 1f 2f 69 be 46 c9 ..uu.+.hg../i.F.
-0x000010: eb e6 6f 7b b7 a4 f7 9d ac 71 eb 3f ad 96 3d 4f ..o{.....q.?..=O
-0x000020: bf 13 4c 33 a3 a0 d5 d7 08 b9 d7 3f f8 ac 69 87 ..L3.......?..i.
-0x000030: d3 d5 dc c9 1e 02 94 9c 8a a2 a3 d4 78 bc e8 b9 ............x...
-0x000040: 7e 03 1a e2 f4 22 26 c4 33 f8 7b 72 0f dc c3 93 ~...."&.3.{r....
-0x000050: de 21 26 23 86 0e ba 30 f8 82 4e 60 32 23 47 ec .!&#...0..N`2#G.
-0x000060: a2 18 86 b2 cf 27 d7 ca ac c6 7e 1b 4f f6 96 0a .....'....~.O...
-0x000070: 24 00 97 33 f2 e8 2c 37 9a 65 25 6a 2c df be eb $..3..,7.e%j,...
-0x000080: 93 56 6f 90 09 f1 2b 3c 55 c1 aa eb e3 25 86 5e .Vo...+<U....%.^
-0x000090: 8a 5f 72 20 c5 09 41 a3 04 c8 67 26 10 8a df 38 ._r ..A...g&...8
-0x0000a0: 8d ec 2c d0 74 dd 5a dd 76 2b ca 77 31 39 52 91 ..,.t.Z.v+.w19R.
-0x0000b0: a6 25 3c d2 b9 3c 29 aa 1b 28 9a 6c 08 b6 c9 19 .%<..<)..(.l....
-0x0000c0: e6 46 27 e3 4d 59 83 3c 00 35 eb 4f 47 96 89 be .F'.MY.<.5.OG...
-0x0000d0: 88 e0 3b c0 5a 21 57 5d b5 3e ce 98 cc ee 75 7d ..;.Z!W].>....u}
-0x0000e0: 09 eb 9c 7c 4b 2d 49 61 d2 f2 d3 e2 51 ae fb a6 ...|K-Ia....Q...
-0x0000f0: c1 5d c0 d5 62 08 80 db 7c 2c d6 c8 57 73 2b 19 .]..b...|,..Ws+.
-0x000100: 06 c6 c4 8b 22 a2 26 30 df 05 30 df 4a ea 74 b4 ....".&0..0.J.t.
-0x000110: 31 8c 6c 62 2b 32 d5 fc 4b 6a 36 86 9d 43 23 77 1.lb+2..Kj6..C#w
-0x000120: 6a 0d 74 12 53 26 df ac 2b 82 29 f7 6f bf 7a 85 j.t.S&..+.).o.z.
-0x000130: 8a e1 00 54 eb 58 4a 77 30 2f c7 8c 8b ff bc d0 ...T.XJw0/......
-0x000140: eb 48 1e 9f 39 ce 8a d4 e6 3b cb 0a fc 59 b0 aa .H..9....;...Y..
-0x000150: 94 38 d4 3b a9 7c a0 f9 83 52 22 49 27 42 92 b6 .8.;.|...R"I'B..
-0x000160: 4a fa c0 46 99 64 3d 54 10 27 cb c9 c4 b9 7f 51 J..F.d=T.'.....Q
-0x000170: c2 c0 a3 72 d3 81 a1 df 69 63 bb 10 40 7a b1 48 ...r....ic..@z.H
+0x000000: a7 ae 47 d4 90 11 8f 22 61 1a 80 d4 2b 5c 4c f3 ..G...."a...+\L.
+0x000010: fe 34 52 9c 55 ca f6 97 b6 30 f9 d0 e6 03 3a 3e .4R.U....0....:>
+0x000020: 6b 6b a8 9c dd eb 94 89 5f 20 ac 60 1c a5 bd 96 kk......_ .`....
+0x000030: 45 b1 49 03 3c f9 55 a1 6c 62 ab e2 8c fb a8 44 E.I.<.U.lb.....D
+0x000040: c7 b2 37 77 9a 1d 0b 31 ef c6 af 57 77 46 83 cf ..7w...1...WwF..
+0x000050: a0 b1 11 89 2c 9a e6 aa 7c 6b 38 75 29 96 78 02 ....,...|k8u).x.
+0x000060: 9a d2 78 f4 dd f4 7c 47 d8 87 dc 85 67 a0 07 c9 ..x...|G....g...
+0x000070: 72 8c e0 a5 7b 2c 62 4e 95 10 e9 71 bf 12 88 f0 r...{,bN...q....
+0x000080: 5a 8f 19 fb 92 e6 59 02 f7 0a 65 71 b2 fe 6a 46 Z.....Y...eq..jF
+0x000090: dd f0 02 9f 0f 60 b9 11 52 d2 0b 19 fa 2f 10 e9 .....`..R..../..
+0x0000a0: b6 cf 51 34 cd 70 b4 5f 5b 28 88 8f 75 22 15 ab ..Q4.p._[(..u"..
+0x0000b0: 49 9d 90 11 4e 70 12 72 65 f6 62 ea 55 fa 2c c5 I...Np.re.b.U.,.
+0x0000c0: f1 98 3c 94 c4 e0 97 9e dc 76 22 a5 a7 df d7 51 ..<......v"....Q
+0x0000d0: 83 5e 3d 6c 80 80 45 5e 02 b3 93 7b 71 20 18 15 .^=l..E^...{q ..
+0x0000e0: 5c be e1 6f f1 a8 84 af 5d 37 1e 77 92 15 9a e1 \..o....]7.w....
+0x0000f0: 18 5e e3 3c 45 a8 ae a4 9c 89 43 4e 1b e7 85 b9 .^.<E.....CN....
+0x000100: 4f 22 67 52 49 8b f4 59 b5 a2 eb 19 ee ba 63 59 O"gRI..Y......cY
+0x000110: 0c 44 89 b6 fa 54 d3 a6 9e a9 55 b8 c4 77 4a 58 .D...T....U..wJX
+0x000120: 5f c2 59 63 1a b6 8e d1 71 d0 0b 4e 43 22 3d 9d _.Yc....q..NC"=.
+0x000130: d6 1b 1d f5 5f 03 ea 51 ce c5 b1 51 72 0f 62 88 ...._..Q...Qr.b.
+0x000140: 9e b5 9c 7a 04 f5 88 3c 60 00 fc d1 01 01 ff d3 ...z...<`.......
+0x000150: c0 b8 6a b2 6e ea bd 06 6e 8d a5 a2 02 45 0e d8 ..j.n...n....E..
+0x000160: 1c 44 66 f1 81 6e 87 17 ef e5 be ce 10 bb 03 45 .Df..n.........E
+0x000170: cf 74 cb fb 62 91 59 f3 67 73 a8 08 21 e2 0b 70 .t..b.Y.gs..!..p
 Type 4 value (64 bytes): 
-0x000000: 2e 47 80 4f e4 8e 75 17 16 dd 34 d8 93 2c f1 35 .G.O..u...4..,.5
-0x000010: c4 51 8e 81 62 09 67 87 d8 c9 20 2b a1 dd be 48 .Q..b.g... +...H
-0x000020: 32 2b 51 6e 12 25 f9 48 4a 8a 79 89 72 c9 c1 e0 2+Qn.%.HJ.y.r...
-0x000030: 40 64 3d 5b c2 1a c7 83 18 e1 de f5 25 57 74 58 @d=[........%WtX
+0x000000: 04 cb a4 7c c0 7c 16 a8 76 b0 b0 d9 29 70 4e 05 ...|.|..v...)pN.
+0x000010: 1a 7f 72 0d fe 79 27 d3 49 81 31 0d 1c 32 84 3c ..r..y'.I.1..2.<
+0x000020: 77 b3 65 1d 9e a6 ca 8d 32 ca 12 eb e5 3a dc c0 w.e.....2....:..
+0x000030: f6 7a b7 8d 23 f8 5c 87 2c 2c ae 21 65 04 67 e3 .z..#.\.,,.!e.g.
 HK state_get STATE 3
 pair_setup: state=3
-tlv_add_value_ type=6 len=1 -->
-0x000000: 03                                              .               
-tlv_add_value_ type=3 len=384 -->
-0x000000: 88 10 75 75 00 2b d9 68 67 0e 1f 2f 69 be 46 c9 ..uu.+.hg../i.F.
-0x000010: eb e6 6f 7b b7 a4 f7 9d ac 71 eb 3f ad 96 3d 4f ..o{.....q.?..=O
-0x000020: bf 13 4c 33 a3 a0 d5 d7 08 b9 d7 3f f8 ac 69 87 ..L3.......?..i.
-0x000030: d3 d5 dc c9 1e 02 94 9c 8a a2 a3 d4 78 bc e8 b9 ............x...
-0x000040: 7e 03 1a e2 f4 22 26 c4 33 f8 7b 72 0f dc c3 93 ~...."&.3.{r....
-0x000050: de 21 26 23 86 0e ba 30 f8 82 4e 60 32 23 47 ec .!&#...0..N`2#G.
-0x000060: a2 18 86 b2 cf 27 d7 ca ac c6 7e 1b 4f f6 96 0a .....'....~.O...
-0x000070: 24 00 97 33 f2 e8 2c 37 9a 65 25 6a 2c df be eb $..3..,7.e%j,...
-0x000080: 93 56 6f 90 09 f1 2b 3c 55 c1 aa eb e3 25 86 5e .Vo...+<U....%.^
-0x000090: 8a 5f 72 20 c5 09 41 a3 04 c8 67 26 10 8a df 38 ._r ..A...g&...8
-0x0000a0: 8d ec 2c d0 74 dd 5a dd 76 2b ca 77 31 39 52 91 ..,.t.Z.v+.w19R.
-0x0000b0: a6 25 3c d2 b9 3c 29 aa 1b 28 9a 6c 08 b6 c9 19 .%<..<)..(.l....
-0x0000c0: e6 46 27 e3 4d 59 83 3c 00 35 eb 4f 47 96 89 be .F'.MY.<.5.OG...
-0x0000d0: 88 e0 3b c0 5a 21 57 5d b5 3e ce 98 cc ee 75 7d ..;.Z!W].>....u}
-0x0000e0: 09 eb 9c 7c 4b 2d 49 61 d2 f2 d3 e2 51 ae fb a6 ...|K-Ia....Q...
-0x0000f0: c1 5d c0 d5 62 08 80 db 7c 2c d6 c8 57 73 2b 19 .]..b...|,..Ws+.
-0x000100: 06 c6 c4 8b 22 a2 26 30 df 05 30 df 4a ea 74 b4 ....".&0..0.J.t.
-0x000110: 31 8c 6c 62 2b 32 d5 fc 4b 6a 36 86 9d 43 23 77 1.lb+2..Kj6..C#w
-0x000120: 6a 0d 74 12 53 26 df ac 2b 82 29 f7 6f bf 7a 85 j.t.S&..+.).o.z.
-0x000130: 8a e1 00 54 eb 58 4a 77 30 2f c7 8c 8b ff bc d0 ...T.XJw0/......
-0x000140: eb 48 1e 9f 39 ce 8a d4 e6 3b cb 0a fc 59 b0 aa .H..9....;...Y..
-0x000150: 94 38 d4 3b a9 7c a0 f9 83 52 22 49 27 42 92 b6 .8.;.|...R"I'B..
-0x000160: 4a fa c0 46 99 64 3d 54 10 27 cb c9 c4 b9 7f 51 J..F.d=T.'.....Q
-0x000170: c2 c0 a3 72 d3 81 a1 df 69 63 bb 10 40 7a b1 48 ...r....ic..@z.H
-tlv_add_value_ type=4 len=64 -->
-0x000000: 2e 47 80 4f e4 8e 75 17 16 dd 34 d8 93 2c f1 35 .G.O..u...4..,.5
-0x000010: c4 51 8e 81 62 09 67 87 d8 c9 20 2b a1 dd be 48 .Q..b.g... +...H
-0x000020: 32 2b 51 6e 12 25 f9 48 4a 8a 79 89 72 c9 c1 e0 2+Qn.%.HJ.y.r...
-0x000030: 40 64 3d 5b c2 1a c7 83 18 e1 de f5 25 57 74 58 @d=[........%WtX
-Received TLV values
+message_process inbound
 Type 6 value (1 bytes): 
 0x000000: 03                                              .               
 Type 3 value (384 bytes): 
-0x000000: 88 10 75 75 00 2b d9 68 67 0e 1f 2f 69 be 46 c9 ..uu.+.hg../i.F.
-0x000010: eb e6 6f 7b b7 a4 f7 9d ac 71 eb 3f ad 96 3d 4f ..o{.....q.?..=O
-0x000020: bf 13 4c 33 a3 a0 d5 d7 08 b9 d7 3f f8 ac 69 87 ..L3.......?..i.
-0x000030: d3 d5 dc c9 1e 02 94 9c 8a a2 a3 d4 78 bc e8 b9 ............x...
-0x000040: 7e 03 1a e2 f4 22 26 c4 33 f8 7b 72 0f dc c3 93 ~...."&.3.{r....
-0x000050: de 21 26 23 86 0e ba 30 f8 82 4e 60 32 23 47 ec .!&#...0..N`2#G.
-0x000060: a2 18 86 b2 cf 27 d7 ca ac c6 7e 1b 4f f6 96 0a .....'....~.O...
-0x000070: 24 00 97 33 f2 e8 2c 37 9a 65 25 6a 2c df be eb $..3..,7.e%j,...
-0x000080: 93 56 6f 90 09 f1 2b 3c 55 c1 aa eb e3 25 86 5e .Vo...+<U....%.^
-0x000090: 8a 5f 72 20 c5 09 41 a3 04 c8 67 26 10 8a df 38 ._r ..A...g&...8
-0x0000a0: 8d ec 2c d0 74 dd 5a dd 76 2b ca 77 31 39 52 91 ..,.t.Z.v+.w19R.
-0x0000b0: a6 25 3c d2 b9 3c 29 aa 1b 28 9a 6c 08 b6 c9 19 .%<..<)..(.l....
-0x0000c0: e6 46 27 e3 4d 59 83 3c 00 35 eb 4f 47 96 89 be .F'.MY.<.5.OG...
-0x0000d0: 88 e0 3b c0 5a 21 57 5d b5 3e ce 98 cc ee 75 7d ..;.Z!W].>....u}
-0x0000e0: 09 eb 9c 7c 4b 2d 49 61 d2 f2 d3 e2 51 ae fb a6 ...|K-Ia....Q...
-0x0000f0: c1 5d c0 d5 62 08 80 db 7c 2c d6 c8 57 73 2b 19 .]..b...|,..Ws+.
-0x000100: 06 c6 c4 8b 22 a2 26 30 df 05 30 df 4a ea 74 b4 ....".&0..0.J.t.
-0x000110: 31 8c 6c 62 2b 32 d5 fc 4b 6a 36 86 9d 43 23 77 1.lb+2..Kj6..C#w
-0x000120: 6a 0d 74 12 53 26 df ac 2b 82 29 f7 6f bf 7a 85 j.t.S&..+.).o.z.
-0x000130: 8a e1 00 54 eb 58 4a 77 30 2f c7 8c 8b ff bc d0 ...T.XJw0/......
-0x000140: eb 48 1e 9f 39 ce 8a d4 e6 3b cb 0a fc 59 b0 aa .H..9....;...Y..
-0x000150: 94 38 d4 3b a9 7c a0 f9 83 52 22 49 27 42 92 b6 .8.;.|...R"I'B..
-0x000160: 4a fa c0 46 99 64 3d 54 10 27 cb c9 c4 b9 7f 51 J..F.d=T.'.....Q
-0x000170: c2 c0 a3 72 d3 81 a1 df 69 63 bb 10 40 7a b1 48 ...r....ic..@z.H
+0x000000: a7 ae 47 d4 90 11 8f 22 61 1a 80 d4 2b 5c 4c f3 ..G...."a...+\L.
+0x000010: fe 34 52 9c 55 ca f6 97 b6 30 f9 d0 e6 03 3a 3e .4R.U....0....:>
+0x000020: 6b 6b a8 9c dd eb 94 89 5f 20 ac 60 1c a5 bd 96 kk......_ .`....
+0x000030: 45 b1 49 03 3c f9 55 a1 6c 62 ab e2 8c fb a8 44 E.I.<.U.lb.....D
+0x000040: c7 b2 37 77 9a 1d 0b 31 ef c6 af 57 77 46 83 cf ..7w...1...WwF..
+0x000050: a0 b1 11 89 2c 9a e6 aa 7c 6b 38 75 29 96 78 02 ....,...|k8u).x.
+0x000060: 9a d2 78 f4 dd f4 7c 47 d8 87 dc 85 67 a0 07 c9 ..x...|G....g...
+0x000070: 72 8c e0 a5 7b 2c 62 4e 95 10 e9 71 bf 12 88 f0 r...{,bN...q....
+0x000080: 5a 8f 19 fb 92 e6 59 02 f7 0a 65 71 b2 fe 6a 46 Z.....Y...eq..jF
+0x000090: dd f0 02 9f 0f 60 b9 11 52 d2 0b 19 fa 2f 10 e9 .....`..R..../..
+0x0000a0: b6 cf 51 34 cd 70 b4 5f 5b 28 88 8f 75 22 15 ab ..Q4.p._[(..u"..
+0x0000b0: 49 9d 90 11 4e 70 12 72 65 f6 62 ea 55 fa 2c c5 I...Np.re.b.U.,.
+0x0000c0: f1 98 3c 94 c4 e0 97 9e dc 76 22 a5 a7 df d7 51 ..<......v"....Q
+0x0000d0: 83 5e 3d 6c 80 80 45 5e 02 b3 93 7b 71 20 18 15 .^=l..E^...{q ..
+0x0000e0: 5c be e1 6f f1 a8 84 af 5d 37 1e 77 92 15 9a e1 \..o....]7.w....
+0x0000f0: 18 5e e3 3c 45 a8 ae a4 9c 89 43 4e 1b e7 85 b9 .^.<E.....CN....
+0x000100: 4f 22 67 52 49 8b f4 59 b5 a2 eb 19 ee ba 63 59 O"gRI..Y......cY
+0x000110: 0c 44 89 b6 fa 54 d3 a6 9e a9 55 b8 c4 77 4a 58 .D...T....U..wJX
+0x000120: 5f c2 59 63 1a b6 8e d1 71 d0 0b 4e 43 22 3d 9d _.Yc....q..NC"=.
+0x000130: d6 1b 1d f5 5f 03 ea 51 ce c5 b1 51 72 0f 62 88 ...._..Q...Qr.b.
+0x000140: 9e b5 9c 7a 04 f5 88 3c 60 00 fc d1 01 01 ff d3 ...z...<`.......
+0x000150: c0 b8 6a b2 6e ea bd 06 6e 8d a5 a2 02 45 0e d8 ..j.n...n....E..
+0x000160: 1c 44 66 f1 81 6e 87 17 ef e5 be ce 10 bb 03 45 .Df..n.........E
+0x000170: cf 74 cb fb 62 91 59 f3 67 73 a8 08 21 e2 0b 70 .t..b.Y.gs..!..p
 Type 4 value (64 bytes): 
-0x000000: 2e 47 80 4f e4 8e 75 17 16 dd 34 d8 93 2c f1 35 .G.O..u...4..,.5
-0x000010: c4 51 8e 81 62 09 67 87 d8 c9 20 2b a1 dd be 48 .Q..b.g... +...H
-0x000020: 32 2b 51 6e 12 25 f9 48 4a 8a 79 89 72 c9 c1 e0 2+Qn.%.HJ.y.r...
-0x000030: 40 64 3d 5b c2 1a c7 83 18 e1 de f5 25 57 74 58 @d=[........%WtX
-tlv_add_value_ type=6 len=1 -->
+0x000000: 04 cb a4 7c c0 7c 16 a8 76 b0 b0 d9 29 70 4e 05 ...|.|..v...)pN.
+0x000010: 1a 7f 72 0d fe 79 27 d3 49 81 31 0d 1c 32 84 3c ..r..y'.I.1..2.<
+0x000020: 77 b3 65 1d 9e a6 ca 8d 32 ca 12 eb e5 3a dc c0 w.e.....2....:..
+0x000030: f6 7a b7 8d 23 f8 5c 87 2c 2c ae 21 65 04 67 e3 .z..#.\.,,.!e.g.
+pair_tlv_format formatting
+Type 6 value (1 bytes): 
 0x000000: 04                                              .               
-tlv_add_value_ type=4 len=64 -->
-0x000000: 54 58 ae e3 17 6b 16 5b 7d 43 2e 66 ae 27 52 66 TX...k.[}C.f.'Rf
-0x000010: 1e 89 43 7f cd 46 c6 9b a8 eb 22 80 56 8a 8e b2 ..C..F....".V...
-0x000020: d3 46 81 01 19 e3 d1 49 51 72 95 80 43 2f 12 20 .F.....IQr..C/. 
-0x000030: 66 32 49 37 1d 24 d8 3c 48 a4 9a a0 e3 eb 1e b1 f2I7.$.<H.......
+Type 4 value (64 bytes): 
+0x000000: 65 09 27 54 40 80 34 ee b8 f1 fc 04 67 d0 57 ce e.'T@.4.....g.W.
+0x000010: c6 c5 64 3c 7b 50 0b 77 cf 7a 88 6c 33 0d a7 e6 ..d<{P.w.z.l3...
+0x000020: d9 22 4a 7b a0 27 db 7e 88 72 b2 d9 16 91 f7 fe ."J{.'.~.r......
+0x000030: 55 92 25 0c 96 43 ed 5b d3 89 c4 7f eb 7b ec c9 U.%..C.[.....{..
 pair_cipher_new: type=3 channel=2
-hkdf_extract_expand pair_key=PAIR_CONTROL_READ <-- ENTER
-hkdf_extract_expand gcry_md_set_key salt:
+hkdf_extract_expand pair_key=PAIR_CONTROL_READ *** ENTER ***
+hkdf_extract_expand gcry_md_set_key salt len: 12
 0x000000: 43 6f 6e 74 72 6f 6c 2d 53 61 6c 74             Control-Salt    
-hkdf_extract_expand gcry_md_write ikm:
-0x000000: d9 c2 18 8a 89 ab 4c d5 a9 08 4a 9b 77 8b 23 a6 ......L...J.w.#.
-0x000010: b8 92 eb 97 62 0c 26 76 b9 dd 2c f1 14 08 d3 ae ....b.&v..,.....
-0x000020: 39 99 38 48 23 11 1a 7b 09 b2 80 f5 e5 88 19 89 9.8H#..{........
-0x000030: 0b 8b 14 50 98 98 83 16 59 5f ea 43 cc be b3 b2 ...P....Y_.C....
-hkdf_extract_expand calculated prk from salt:
-0x000000: 9d fb e4 32 fb 33 47 ea 7e 44 d3 5b 1b 65 f7 f1 ...2.3G.~D.[.e..
-0x000010: d8 4b 37 0e a0 13 75 34 30 7b 89 4d 5e c6 f5 b9 .K7...u40{.M^...
-0x000020: e9 91 f4 6b 9f c6 43 0b f4 9b 2e e3 46 6e 76 e1 ...k..C.....Fnv.
-0x000030: ab 88 8f 09 b2 18 ff ff a9 e6 32 60 5d bf 13 d5 ..........2`]...
-hkdf_extract_expand gcry_md_set_key prk:
-hkdf_extract_expand gcry_md_write info
+hkdf_extract_expand gcry_md_write ikm len: 64
+0x000000: e0 13 ac 65 e4 29 6f 68 e6 1f aa ee 5a 64 e2 e7 ...e.)oh....Zd..
+0x000010: 0d 2e f7 82 9c bc b1 9b 2a 3f 2d 38 f0 a7 e1 94 ........*?-8....
+0x000020: 49 32 2f 93 a7 a6 a4 66 5d f4 01 28 11 e6 06 80 I2/....f]..(....
+0x000030: ca 3e 53 5b 21 41 fb 27 e5 2a 6f db 8d 50 7a c7 .>S[!A.'.*o..Pz.
+hkdf_extract_expand calculated prk from salt len: 64
+0x000000: 96 c3 10 dc 33 d1 9b 33 62 0d 3d dc 9a 88 70 48 ....3..3b.=...pH
+0x000010: 19 3d 2c 12 d1 7e 16 9e 7f 72 b9 19 cd 13 56 49 .=,..~...r....VI
+0x000020: 54 78 e1 9f 43 9c 9b e4 1c 06 a6 8a b0 0b af 11 Tx..C...........
+0x000030: 37 fa 95 e9 41 5e bf ae c7 03 7c d0 e8 0b 6d 9a 7...A^....|...m.
+hkdf_extract_expand gcry_md_set_key len: 64
+0x000000: 96 c3 10 dc 33 d1 9b 33 62 0d 3d dc 9a 88 70 48 ....3..3b.=...pH
+0x000010: 19 3d 2c 12 d1 7e 16 9e 7f 72 b9 19 cd 13 56 49 .=,..~...r....VI
+0x000020: 54 78 e1 9f 43 9c 9b e4 1c 06 a6 8a b0 0b af 11 Tx..C...........
+0x000030: 37 fa 95 e9 41 5e bf ae c7 03 7c d0 e8 0b 6d 9a 7...A^....|...m.
+hkdf_extract_expand gcry_md_write info len: 27
 0x000000: 43 6f 6e 74 72 6f 6c 2d 52 65 61 64 2d 45 6e 63 Control-Read-Enc
 0x000010: 72 79 70 74 69 6f 6e 2d 4b 65 79                ryption-Key     
-hkdf_extract_expand gcry_md_putc(1) to written info:
-hkdf_extract_expand calculated okm from info:
-0x000000: fc 35 35 3f 99 53 8d 9d 93 20 7d 6e bb e8 2b aa .55?.S... }n..+.
-0x000010: d5 55 04 06 78 8a af bc 75 19 cd 72 fa ab a7 ff .U..x...u..r....
-hkdf_extract_expand: pair_key=13 <-- EXIT
-hkdf_extract_expand pair_key=PAIR_CONTROL_WRITE <-- ENTER
-hkdf_extract_expand gcry_md_set_key salt:
+hkdf_extract_expand okm AFTER gcry_putc(1) len: 32
+0x000000: 08 84 26 17 29 e4 6b c4 5a 35 57 0a 78 91 79 89 ..&.).k.Z5W.x.y.
+0x000010: ce 56 26 e7 bb f6 ca 2c 9a 19 1c f1 d2 cf 9e 23 .V&....,.......#
+hkdf_extract_expand: pair_key=13 *** EXIT ***
+hkdf_extract_expand pair_key=PAIR_CONTROL_WRITE *** ENTER ***
+hkdf_extract_expand gcry_md_set_key salt len: 12
 0x000000: 43 6f 6e 74 72 6f 6c 2d 53 61 6c 74             Control-Salt    
-hkdf_extract_expand gcry_md_write ikm:
-0x000000: d9 c2 18 8a 89 ab 4c d5 a9 08 4a 9b 77 8b 23 a6 ......L...J.w.#.
-0x000010: b8 92 eb 97 62 0c 26 76 b9 dd 2c f1 14 08 d3 ae ....b.&v..,.....
-0x000020: 39 99 38 48 23 11 1a 7b 09 b2 80 f5 e5 88 19 89 9.8H#..{........
-0x000030: 0b 8b 14 50 98 98 83 16 59 5f ea 43 cc be b3 b2 ...P....Y_.C....
-hkdf_extract_expand calculated prk from salt:
-0x000000: 9d fb e4 32 fb 33 47 ea 7e 44 d3 5b 1b 65 f7 f1 ...2.3G.~D.[.e..
-0x000010: d8 4b 37 0e a0 13 75 34 30 7b 89 4d 5e c6 f5 b9 .K7...u40{.M^...
-0x000020: e9 91 f4 6b 9f c6 43 0b f4 9b 2e e3 46 6e 76 e1 ...k..C.....Fnv.
-0x000030: ab 88 8f 09 b2 18 ff ff a9 e6 32 60 5d bf 13 d5 ..........2`]...
-hkdf_extract_expand gcry_md_set_key prk:
-hkdf_extract_expand gcry_md_write info
+hkdf_extract_expand gcry_md_write ikm len: 64
+0x000000: e0 13 ac 65 e4 29 6f 68 e6 1f aa ee 5a 64 e2 e7 ...e.)oh....Zd..
+0x000010: 0d 2e f7 82 9c bc b1 9b 2a 3f 2d 38 f0 a7 e1 94 ........*?-8....
+0x000020: 49 32 2f 93 a7 a6 a4 66 5d f4 01 28 11 e6 06 80 I2/....f]..(....
+0x000030: ca 3e 53 5b 21 41 fb 27 e5 2a 6f db 8d 50 7a c7 .>S[!A.'.*o..Pz.
+hkdf_extract_expand calculated prk from salt len: 64
+0x000000: 96 c3 10 dc 33 d1 9b 33 62 0d 3d dc 9a 88 70 48 ....3..3b.=...pH
+0x000010: 19 3d 2c 12 d1 7e 16 9e 7f 72 b9 19 cd 13 56 49 .=,..~...r....VI
+0x000020: 54 78 e1 9f 43 9c 9b e4 1c 06 a6 8a b0 0b af 11 Tx..C...........
+0x000030: 37 fa 95 e9 41 5e bf ae c7 03 7c d0 e8 0b 6d 9a 7...A^....|...m.
+hkdf_extract_expand gcry_md_set_key len: 64
+0x000000: 96 c3 10 dc 33 d1 9b 33 62 0d 3d dc 9a 88 70 48 ....3..3b.=...pH
+0x000010: 19 3d 2c 12 d1 7e 16 9e 7f 72 b9 19 cd 13 56 49 .=,..~...r....VI
+0x000020: 54 78 e1 9f 43 9c 9b e4 1c 06 a6 8a b0 0b af 11 Tx..C...........
+0x000030: 37 fa 95 e9 41 5e bf ae c7 03 7c d0 e8 0b 6d 9a 7...A^....|...m.
+hkdf_extract_expand gcry_md_write info len: 28
 0x000000: 43 6f 6e 74 72 6f 6c 2d 57 72 69 74 65 2d 45 6e Control-Write-En
 0x000010: 63 72 79 70 74 69 6f 6e 2d 4b 65 79             cryption-Key    
-hkdf_extract_expand gcry_md_putc(1) to written info:
-hkdf_extract_expand calculated okm from info:
-0x000000: 09 bb 67 f2 00 17 dd 4f 0d 4b f3 f1 49 71 55 20 ..g....O.K..IqU 
-0x000010: e4 44 2a 87 16 a1 75 d7 e3 ea bc cb 8e d7 1c 67 .D*...u........g
-hkdf_extract_expand: pair_key=12 <-- EXIT
+hkdf_extract_expand okm AFTER gcry_putc(1) len: 32
+0x000000: 93 ff 7b cc 93 bf 81 9b 4a 98 54 86 b0 b8 e7 c5 ..{.....J.T.....
+0x000010: 35 19 4e 28 b8 22 1f 87 09 db fc ce 95 51 0e 77 5.N(.".......Q.w
+hkdf_extract_expand: pair_key=12 *** EXIT ***
 Decrypted:
 0x000000: 50 4f 53 54 20 2f 66 70 2d 73 65 74 75 70 20 52 POST /fp-setup R
 0x000010: 54 53 50 2f 31 2e 30 0d 0a 58 2d 41 70 70 6c 65 TSP/1.0..X-Apple
@@ -411,32 +388,32 @@ Decrypted:
 0x000040: 74 65 6e 74 2d 54 79 70 65 3a 20 61 70 70 6c 69 tent-Type: appli
 0x000050: 63 61 74 69 6f 6e 2f 6f 63 74 65 74 2d 73 74 72 cation/octet-str
 0x000060: 65 61 6d 0d 0a 43 53 65 71 3a 20 34 0d 0a 44 41 eam..CSeq: 4..DA
-0x000070: 43 50 2d 49 44 3a 20 42 41 41 37 44 42 32 34 33 CP-ID: BAA7DB243
-0x000080: 43 33 44 43 31 39 0d 0a 41 63 74 69 76 65 2d 52 C3DC19..Active-R
-0x000090: 65 6d 6f 74 65 3a 20 39 30 34 31 35 34 34 31 36 emote: 904154416
-0x0000a0: 0d 0a 55 73 65 72 2d 41 67 65 6e 74 3a 20 41 69 ..User-Agent: Ai
-0x0000b0: 72 50 6c 61 79 2f 36 39 35 2e 35 2e 31 0d 0a 0d rPlay/695.5.1...
-0x0000c0: 0a 46 50 4c 59 03 01 01 00 00 00 00 04 02 00 01 .FPLY...........
-0x0000d0: bb                                              .               
+0x000070: 43 50 2d 49 44 3a 20 35 34 30 32 43 46 44 38 33 CP-ID: 5402CFD83
+0x000080: 39 32 35 35 31 45 37 0d 0a 41 63 74 69 76 65 2d 92551E7..Active-
+0x000090: 52 65 6d 6f 74 65 3a 20 34 32 31 39 34 30 35 30 Remote: 42194050
+0x0000a0: 36 36 0d 0a 55 73 65 72 2d 41 67 65 6e 74 3a 20 66..User-Agent: 
+0x0000b0: 41 69 72 50 6c 61 79 2f 36 39 35 2e 35 2e 31 0d AirPlay/695.5.1.
+0x0000c0: 0a 0d 0a 46 50 4c 59 03 01 01 00 00 00 00 04 02 ...FPLY.........
+0x0000d0: 00 03 bb                                        ...             
 Encrypted:
-0x000000: 00 01 c3 e9 13 78 83 4c e5 35 af bc 43 ae 7a 66 .....x.L.5..C.zf
-0x000010: ed 90 84 cd 3f 5f 9e 38 5c ef 3d 9b 8f 4b 05 46 ....?_.8\.=..K.F
-0x000020: bb a8 3c 00 2f f8 4c d2 69 4b 99 5a 93 80 47 b8 ..<./.L.iK.Z..G.
-0x000030: be 40 e8 aa 0c 27 8e d0 7a 49 c1 04 b4 46 89 51 .@...'..zI...F.Q
-0x000040: 1d 16 cb e5 15 78 32 26 76 c4 38 12 a9 22 65 07 .....x2&v.8.."e.
-0x000050: 2e 20 72 35 db e9 b7 f3 5d 8e 5f d6 18 a5 22 fd . r5....]._...".
-0x000060: 5c de 21 2d 8f 24 8b b0 bd 4b 7e d8 07 b4 96 a9 \.!-.$...K~.....
-0x000070: 0e 4f b9 07 7a 5d f2 ed 13 ca a4 b1 09 a3 3b fd .O..z]........;.
-0x000080: 7d 50 bd 69 b6 84 9e 41 22 44 9c aa aa b3 7b a5 }P.i...A"D....{.
-0x000090: 0c 25 97 0a 6a db b9 9c 8b 44 21 c4 52 35 e5 1f .%..j....D!.R5..
-0x0000a0: 4c a5 6c e9 b2 56 b0 27 b7 35 a2 db d6 f1 bb c9 L.l..V.'.5......
-0x0000b0: 6e ae 66 74 1d 37 ed 98 44 4f f5 1e 31 d9 5c 7f n.ft.7..DO..1.\.
-0x0000c0: 7a ca b6 c2 a4 14 55 68 9f ce 3d 72 b5 4b 78 c8 z.....Uh..=r.Kx.
-0x0000d0: fe ba 47 b8 3d ab 7c 1d dd ad 46 17 77 35 97 b9 ..G.=.|...F.w5..
-0x0000e0: 0b 88 4d 4a 8f a7 28 18 43 35 1a b6 38 54 12 56 ..MJ..(.C5..8T.V
-0x0000f0: d7 b9 0a 60 82 db d2 82 51 ed ef bb 85 8f 23 76 ...`....Q.....#v
-0x000100: 2f e0 22 ec 89 27 68 8e ee 9a 12 88 2e 90 a1 51 /."..'h........Q
-0x000110: b9 ab                                           ..              
+0x000000: 00 01 88 84 29 14 ca ba 8f 3e bd cc 14 72 13 90 ....)....>...r..
+0x000010: 0e fc 22 7a e6 11 4b d3 75 44 d4 73 93 b1 e3 92 .."z..K.uD.s....
+0x000020: b4 d2 16 27 5b 81 34 84 38 bf 9c c1 a1 fd 5c 65 ...'[.4.8.....\e
+0x000030: 0a bb 7d e8 4f 4e 2b 97 49 ae 3a 57 17 91 ce e8 ..}.ON+.I.:W....
+0x000040: 94 9c 69 2f f2 b0 43 e7 37 5c 35 39 96 ae e3 f3 ..i/..C.7\59....
+0x000050: f4 10 29 09 66 a0 6d f4 32 56 df 48 17 d7 a7 52 ..).f.m.2V.H...R
+0x000060: 33 e3 5d f8 ff c1 5c 70 b9 ca eb 0d f7 ce 65 88 3.]...\p......e.
+0x000070: 9c 5a ce 91 86 34 9f 97 88 c4 8b 90 07 5a a3 91 .Z...4.......Z..
+0x000080: 27 92 67 56 ca c7 50 1d 28 56 f2 33 46 90 c8 4a '.gV..P.(V.3F..J
+0x000090: 5b 34 2e e8 ab 83 4c 40 44 3d 96 0d 70 c4 23 23 [4....L@D=..p.##
+0x0000a0: f8 84 2f 4a e8 50 9d b0 b3 3e f8 71 6e c8 cc 59 ../J.P...>.qn..Y
+0x0000b0: 4f 99 54 f2 78 d9 68 b4 e0 e0 d5 46 5d ae ab 3d O.T.x.h....F]..=
+0x0000c0: 5d 75 81 04 cf ac b5 94 b0 4b 61 b7 61 17 b3 ad ]u.......Ka.a...
+0x0000d0: 97 2f db 2f 1b 36 52 f1 e2 9a e7 e9 d4 68 9a b7 ././.6R......h..
+0x0000e0: 5b fc 61 26 39 80 f8 8c 65 ed bc e5 5d fc b3 1b [.a&9...e...]...
+0x0000f0: 77 0e cf b0 27 99 74 8e 93 f6 fb c3 ac f0 b1 e5 w...'.t.........
+0x000100: 6d 56 d5 65 bf 52 79 a3 4a f4 fe 1f fb 7c 1e 1d mV.e.Ry.J....|..
+0x000110: 8c 6e                                           .n              
 Decrypted:
 0x000000: 50 4f 53 54 20 2f 66 70 2d 73 65 74 75 70 20 52 POST /fp-setup R
 0x000010: 54 53 50 2f 31 2e 30 0d 0a 58 2d 41 70 70 6c 65 TSP/1.0..X-Apple
@@ -445,283 +422,261 @@ Decrypted:
 0x000040: 6e 74 65 6e 74 2d 54 79 70 65 3a 20 61 70 70 6c ntent-Type: appl
 0x000050: 69 63 61 74 69 6f 6e 2f 6f 63 74 65 74 2d 73 74 ication/octet-st
 0x000060: 72 65 61 6d 0d 0a 43 53 65 71 3a 20 35 0d 0a 44 ream..CSeq: 5..D
-0x000070: 41 43 50 2d 49 44 3a 20 42 41 41 37 44 42 32 34 ACP-ID: BAA7DB24
-0x000080: 33 43 33 44 43 31 39 0d 0a 41 63 74 69 76 65 2d 3C3DC19..Active-
-0x000090: 52 65 6d 6f 74 65 3a 20 39 30 34 31 35 34 34 31 Remote: 90415441
-0x0000a0: 36 0d 0a 55 73 65 72 2d 41 67 65 6e 74 3a 20 41 6..User-Agent: A
-0x0000b0: 69 72 50 6c 61 79 2f 36 39 35 2e 35 2e 31 0d 0a irPlay/695.5.1..
-0x0000c0: 0d 0a 46 50 4c 59 03 01 03 00 00 00 00 98 01 8f ..FPLY..........
-0x0000d0: 1a 9c f7 2e 96 ef 88 d2 76 75 9a 1a 24 58 62 ba ........vu..$Xb.
-0x0000e0: 71 9a 53 b4 ec c4 c3 0c 37 7f e7 78 8d 6c 1e da q.S.....7..x.l..
-0x0000f0: a6 dc 53 10 13 34 dd 4e 7d 9c db 29 19 8f c6 5c ..S..4.N}..)...\
-0x000100: 37 0a 41 80 9f 5d 52 84 58 6f 57 e9 56 2f 7f c5 7.A..]R.XoW.V/..
-0x000110: 52 64 97 1a a0 ac 25 98 88 38 fb 7f 9d 9a 0d 97 Rd....%..8......
-0x000120: 72 2f 91 c7 b3 3f 74 40 3c 9b 12 d5 08 bf a2 08 r/...?t@<.......
-0x000130: 9b 46 e2 77 39 f5 f5 d9 00 ad b9 64 1e 5d e1 ca .F.w9......d.]..
-0x000140: 35 44 64 57 6c fa 21 df 12 e2 cd 87 4d a5 fa 52 5DdWl.!.....M..R
-0x000150: d3 97 00 cc 26 af 4a 62 56 52 02 65 d3 35 cd 19 ....&.JbVR.e.5..
-0x000160: 2c bb 72 ef 3e 0e                               ,.r.>.          
+0x000070: 41 43 50 2d 49 44 3a 20 35 34 30 32 43 46 44 38 ACP-ID: 5402CFD8
+0x000080: 33 39 32 35 35 31 45 37 0d 0a 41 63 74 69 76 65 392551E7..Active
+0x000090: 2d 52 65 6d 6f 74 65 3a 20 34 32 31 39 34 30 35 -Remote: 4219405
+0x0000a0: 30 36 36 0d 0a 55 73 65 72 2d 41 67 65 6e 74 3a 066..User-Agent:
+0x0000b0: 20 41 69 72 50 6c 61 79 2f 36 39 35 2e 35 2e 31  AirPlay/695.5.1
+0x0000c0: 0d 0a 0d 0a 46 50 4c 59 03 01 03 00 00 00 00 98 ....FPLY........
+0x0000d0: 01 8f 1a 9c 56 80 e6 a0 81 8b 08 ff 11 16 5c 78 ....V.........\x
+0x0000e0: 46 ab bf 20 e2 d3 a8 fa 5c a7 fb 29 03 26 80 1c F.. ....\..).&..
+0x0000f0: 49 91 bf 4e 13 b1 3e 8b c4 3e 06 09 14 28 fa 02 I..N..>..>...(..
+0x000100: 87 c7 bb 21 62 5f a2 23 14 3f f8 c3 50 4a 04 02 ...!b_.#.?..PJ..
+0x000110: 13 7f 1f ac a4 22 58 78 14 b6 c1 e0 ec 2a f9 08 ....."Xx.....*..
+0x000120: 4b f3 9e e4 68 d4 6f ab bf 8e be c1 57 10 a2 20 K...h.o.....W.. 
+0x000130: f6 6b 49 05 21 74 c5 ae 2a b7 1d a1 ba ce 4f c5 .kI.!t..*.....O.
+0x000140: ba 60 d8 69 6f 92 0b b8 e3 1f ba 67 c3 32 69 80 .`.io......g.2i.
+0x000150: 40 80 49 5e 94 a6 3d 1e 13 cc 67 fe c4 c3 d2 f6 @.I^..=...g.....
+0x000160: 07 b4 60 db 74 17 e5 b1                         ..`.t...        
 Encrypted:
-0x000000: 91 00 47 1c e1 7f e9 a4 38 5a 53 d6 66 ba 6c aa ..G.....8ZS.f.l.
-0x000010: e5 6f 70 1b f0 8a 93 07 c0 2e a9 1f db 38 1e 54 .op..........8.T
-0x000020: ab 2c 44 10 b6 84 df 1e d6 33 a2 d9 4b b2 5b 2f .,D......3..K.[/
-0x000030: 28 fc 1e 21 e2 3b 45 cc f1 10 47 ab 79 8b 89 ff (..!.;E...G.y...
-0x000040: e5 fe 43 af 70 c4 8b a9 6b 94 ae 51 32 26 57 99 ..C.p...k..Q2&W.
-0x000050: 20 35 a1 8f 3c e2 c5 57 79 b1 75 e3 da 56 31 65  5..<..Wy.u..V1e
-0x000060: 6b 7d 8f df e7 6b d3 fa 6f ac b2 7e 68 3b f3 cf k}...k..o..~h;..
-0x000070: df f5 66 00 e6 39 f9 3b 55 f5 29 68 3e 76 ba 0c ..f..9.;U.)h>v..
-0x000080: 60 c9 64 f2 52 a6 d4 71 6d 73 92 82 eb 92 3a eb `.d.R..qms....:.
-0x000090: e5 1e 7a b8 f9 88 81 d8 74 63 e9 3b 91 c1 7e 5a ..z.....tc.;..~Z
-0x0000a0: ad 61 ed                                        .a.             
+0x000000: 91 00 7f 55 91 fc e8 80 4e ab 19 8c 84 92 5e 8a ...U....N.....^.
+0x000010: b6 39 b8 77 e3 4e 21 67 ea 80 e1 03 95 20 9d 4b .9.w.N!g..... .K
+0x000020: b4 24 b2 2a 71 0e 2a c0 5a 35 50 ba 93 97 94 cb .$.*q.*.Z5P.....
+0x000030: e1 11 83 55 84 95 4d 2e fe 3d aa 7e c7 16 00 b5 ...U..M..=.~....
+0x000040: 17 92 cf d1 37 64 0c fb 6d c5 07 fd a0 2c 75 d6 ....7d..m....,u.
+0x000050: 1b b8 e0 d9 85 c7 11 69 72 31 bf e2 5b 3d 76 3a .......ir1..[=v:
+0x000060: da b0 b0 62 72 d2 0a 95 ef 9e b4 86 c4 cb 6d ab ...br.........m.
+0x000070: cf cd 6e e8 c5 c9 a9 50 82 19 03 d3 44 44 40 da ..n....P....DD@.
+0x000080: bd 3e 58 b9 3e 83 25 34 aa e0 f4 29 30 84 45 30 .>X.>.%4...)0.E0
+0x000090: 25 83 36 45 1d 63 29 dc da c2 03 4f c9 60 e9 4a %.6E.c)....O.`.J
+0x0000a0: 40 05 82                                        @..             
 Decrypted:
 0x000000: 53 45 54 55 50 20 72 74 73 70 3a 2f 2f 31 39 32 SETUP rtsp://192
-0x000010: 2e 31 36 38 2e 32 2e 34 2f 31 31 36 33 35 32 35 .168.2.4/1163525
-0x000020: 31 32 38 33 38 31 33 33 35 34 35 34 39 20 52 54 1283813354549 RT
+0x000010: 2e 31 36 38 2e 32 2e 34 2f 31 37 31 35 32 36 36 .168.2.4/1715266
+0x000020: 39 38 36 37 30 38 33 38 34 34 36 32 31 20 52 54 9867083844621 RT
 0x000030: 53 50 2f 31 2e 30 0d 0a 43 6f 6e 74 65 6e 74 2d SP/1.0..Content-
 0x000040: 4c 65 6e 67 74 68 3a 20 38 37 31 0d 0a 43 6f 6e Length: 871..Con
 0x000050: 74 65 6e 74 2d 54 79 70 65 3a 20 61 70 70 6c 69 tent-Type: appli
 0x000060: 63 61 74 69 6f 6e 2f 78 2d 61 70 70 6c 65 2d 62 cation/x-apple-b
 0x000070: 69 6e 61 72 79 2d 70 6c 69 73 74 0d 0a 43 53 65 inary-plist..CSe
-0x000080: 71 3a 20 36 0d 0a 44 41 43 50 2d 49 44 3a 20 42 q: 6..DACP-ID: B
-0x000090: 41 41 37 44 42 32 34 33 43 33 44 43 31 39 0d 0a AA7DB243C3DC19..
-0x0000a0: 41 63 74 69 76 65 2d 52 65 6d 6f 74 65 3a 20 39 Active-Remote: 9
-0x0000b0: 30 34 31 35 34 34 31 36 0d 0a 55 73 65 72 2d 41 04154416..User-A
-0x0000c0: 67 65 6e 74 3a 20 41 69 72 50 6c 61 79 2f 36 39 gent: AirPlay/69
-0x0000d0: 35 2e 35 2e 31 0d 0a 0d 0a 62 70 6c 69 73 74 30 5.5.1....bplist0
-0x0000e0: 30 df 10 12 01 02 03 04 05 06 07 08 09 0a 0b 0c 0...............
-0x0000f0: 0d 0e 0f 10 11 12 13 14 15 16 17 18 19 1a 1b 19 ................
-0x000100: 27 2d 14 2f 30 31 32 33 5e 74 69 6d 69 6e 67 50 '-./0123^timingP
-0x000110: 72 6f 74 6f 63 6f 6c 5f 10 16 73 74 61 74 73 43 rotocol_..statsC
-0x000120: 6f 6c 6c 65 63 74 69 6f 6e 45 6e 61 62 6c 65 64 ollectionEnabled
-0x000130: 5b 73 65 73 73 69 6f 6e 55 55 49 44 56 6f 73 4e [sessionUUIDVosN
-0x000140: 61 6d 65 5e 6f 73 42 75 69 6c 64 56 65 72 73 69 ame^osBuildVersi
-0x000150: 6f 6e 5d 73 6f 75 72 63 65 56 65 72 73 69 6f 6e on]sourceVersion
-0x000160: 5f 10 13 73 65 6e 64 65 72 53 75 70 70 6f 72 74 _..senderSupport
-0x000170: 73 52 65 6c 61 79 59 6f 73 56 65 72 73 69 6f 6e sRelayYosVersion
-0x000180: 5e 74 69 6d 69 6e 67 50 65 65 72 49 6e 66 6f 5f ^timingPeerInfo_
-0x000190: 10 14 69 73 4d 75 6c 74 69 53 65 6c 65 63 74 41 ..isMultiSelectA
-0x0001a0: 69 72 50 6c 61 79 5e 74 69 6d 69 6e 67 50 65 65 irPlay^timingPee
-0x0001b0: 72 4c 69 73 74 5f 10 16 73 65 73 73 69 6f 6e 43 rList_..sessionC
-0x0001c0: 6f 72 72 65 6c 61 74 69 6f 6e 55 55 49 44 5f 10 orrelationUUID_.
-0x0001d0: 18 67 72 6f 75 70 43 6f 6e 74 61 69 6e 73 47 72 .groupContainsGr
-0x0001e0: 6f 75 70 4c 65 61 64 65 72 59 67 72 6f 75 70 55 oupLeaderYgroupU
-0x0001f0: 55 49 44 58 64 65 76 69 63 65 49 44 55 6d 6f 64 UIDXdeviceIDUmod
-0x000200: 65 6c 54 6e 61 6d 65 5a 6d 61 63 41 64 64 72 65 elTnameZmacAddre
-0x000210: 73 73 53 50 54 50 08 5f 10 24 41 31 37 38 42 37 ssSPTP._.$A178B7
-0x000220: 36 35 2d 37 43 31 41 2d 34 43 33 35 2d 41 31 32 65-7C1A-4C35-A12
-0x000230: 42 2d 45 34 36 46 44 36 46 31 33 44 32 35 55 6d B-E46FD6F13D25Um
-0x000240: 61 63 4f 53 56 32 32 47 31 32 30 57 36 39 35 2e acOSV22G120W695.
-0x000250: 35 2e 31 09 54 31 33 2e 36 d4 1c 1d 1e 1f 20 21 5.1.T13.6..... !
-0x000260: 24 19 52 49 44 59 41 64 64 72 65 73 73 65 73 5a $.RIDYAddressesZ
-0x000270: 44 65 76 69 63 65 54 79 70 65 5f 10 21 53 75 70 DeviceType_.!Sup
-0x000280: 70 6f 72 74 73 43 6c 6f 63 6b 50 6f 72 74 4d 61 portsClockPortMa
-0x000290: 74 63 68 69 6e 67 4f 76 65 72 72 69 64 65 5f 10 tchingOverride_.
-0x0002a0: 24 37 46 37 34 39 37 36 43 2d 45 42 33 34 2d 34 $7F74976C-EB34-4
-0x0002b0: 32 36 32 2d 41 44 31 37 2d 32 43 31 36 41 45 43 262-AD17-2C16AEC
-0x0002c0: 32 35 38 36 38 a2 22 23 5c 31 39 32 2e 31 36 38 25868."#\192.168
-0x0002d0: 2e 32 2e 37 32 5f 10 18 66 65 38 30 3a 3a 38 34 .2.72_..fe80::84
-0x0002e0: 31 3a 35 62 64 38 3a 64 33 30 64 3a 37 38 64 64 1:5bd8:d30d:78dd
-0x0002f0: 10 00 09 09 a1 28 d4 1c 1d 1e 1f 20 29 24 19 a2 .....(..... )$..
-0x000300: 2a 2b 5c 31 39 32 2e 31 36 38 2e 32 2e 37 32 5f *+\192.168.2.72_
-0x000310: 10 18 66 65 38 30 3a 3a 38 34 31 3a 35 62 64 38 ..fe80::841:5bd8
-0x000320: 3a 64 33 30 64 3a 37 38 64 64 09 5f 10 24 37 46 :d30d:78dd._.$7F
-0x000330: 37 34 39 37 36 43 2d 45 42 33 34 2d 34 32 36 32 74976C-EB34-4262
-0x000340: 2d 41 44 31 37 2d 32 43 31 36 41 45 43 32 35 38 -AD17-2C16AEC258
-0x000350: 36 38 08 5f 10 24 43 41 37 35 31 32 42 36 2d 32 68._.$CA7512B6-2
-0x000360: 36 42 38 2d 34 34 35 42 2d 39 43 38 45 2d 36 31 6B8-445B-9C8E-61
-0x000370: 42 37 38 46 35 45 46 41 33 37 5f 10 11 42 43 3a B78F5EFA37_..BC:
-0x000380: 44 30 3a 37 34 3a 37 33 3a 30 31 3a 31 46 5e 4d D0:74:73:01:1F^M
-0x000390: 61 63 42 6f 6f 6b 50 72 6f 31 38 2c 32 56 78 61 acBookPro18,2Vxa
-0x0003a0: 70 68 61 6d 5f 10 11 42 43 3a 44 30 3a 37 34 3a pham_..BC:D0:74:
-0x0003b0: 37 33 3a 30 31 3a 31 46 00 08 00 2f 00 3e 00 57 73:01:1F.../.>.W
-0x0003c0: 00 63 00 6a 00 79 00 87 00 9d 00 a7 00 b6 00 cd .c.j.y..........
-0x0003d0: 00 dc 00 f5 01 10 01 1a 01 23 01 29 01 2e 01 39 .........#.)...9
-0x0003e0: 01 3d 01 3e 01 65 01 6b 01 72 01 7a 01 7b 01 80 .=.>.e.k.r.z.{..
-0x0003f0: 01 89 01 8c 01 96 01 a1 01 c5 01 ec 01 ef 01 fc ................
-Decrypted:
-0x000000: 02 17 02 19 02 1a 02 1b 02 1d 02 26 02 29 02 36 ...........&.).6
-0x000010: 02 51 02 52 02 79 02 7a 02 a1 02 b5 02 c4 02 cb .Q.R.y.z........
-0x000020: 00 00 00 00 00 00 02 01 00 00 00 00 00 00 00 34 ...............4
-0x000030: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 02 df ................
+0x000080: 71 3a 20 36 0d 0a 44 41 43 50 2d 49 44 3a 20 35 q: 6..DACP-ID: 5
+0x000090: 34 30 32 43 46 44 38 33 39 32 35 35 31 45 37 0d 402CFD8392551E7.
+0x0000a0: 0a 41 63 74 69 76 65 2d 52 65 6d 6f 74 65 3a 20 .Active-Remote: 
+0x0000b0: 34 32 31 39 34 30 35 30 36 36 0d 0a 55 73 65 72 4219405066..User
+0x0000c0: 2d 41 67 65 6e 74 3a 20 41 69 72 50 6c 61 79 2f -Agent: AirPlay/
+0x0000d0: 36 39 35 2e 35 2e 31 0d 0a 0d 0a 62 70 6c 69 73 695.5.1....bplis
+0x0000e0: 74 30 30 df 10 12 01 02 03 04 05 06 07 08 09 0a t00.............
+0x0000f0: 0b 0c 0d 0e 0f 10 11 12 13 14 15 16 17 18 19 1a ................
+0x000100: 1b 19 27 2d 14 2f 30 31 32 33 5e 74 69 6d 69 6e ..'-./0123^timin
+0x000110: 67 50 72 6f 74 6f 63 6f 6c 5f 10 16 73 74 61 74 gProtocol_..stat
+0x000120: 73 43 6f 6c 6c 65 63 74 69 6f 6e 45 6e 61 62 6c sCollectionEnabl
+0x000130: 65 64 5b 73 65 73 73 69 6f 6e 55 55 49 44 56 6f ed[sessionUUIDVo
+0x000140: 73 4e 61 6d 65 5e 6f 73 42 75 69 6c 64 56 65 72 sName^osBuildVer
+0x000150: 73 69 6f 6e 5d 73 6f 75 72 63 65 56 65 72 73 69 sion]sourceVersi
+0x000160: 6f 6e 5f 10 13 73 65 6e 64 65 72 53 75 70 70 6f on_..senderSuppo
+0x000170: 72 74 73 52 65 6c 61 79 59 6f 73 56 65 72 73 69 rtsRelayYosVersi
+0x000180: 6f 6e 5e 74 69 6d 69 6e 67 50 65 65 72 49 6e 66 on^timingPeerInf
+0x000190: 6f 5f 10 14 69 73 4d 75 6c 74 69 53 65 6c 65 63 o_..isMultiSelec
+0x0001a0: 74 41 69 72 50 6c 61 79 5e 74 69 6d 69 6e 67 50 tAirPlay^timingP
+0x0001b0: 65 65 72 4c 69 73 74 5f 10 16 73 65 73 73 69 6f eerList_..sessio
+0x0001c0: 6e 43 6f 72 72 65 6c 61 74 69 6f 6e 55 55 49 44 nCorrelationUUID
+0x0001d0: 5f 10 18 67 72 6f 75 70 43 6f 6e 74 61 69 6e 73 _..groupContains
+0x0001e0: 47 72 6f 75 70 4c 65 61 64 65 72 59 67 72 6f 75 GroupLeaderYgrou
+0x0001f0: 70 55 55 49 44 58 64 65 76 69 63 65 49 44 55 6d pUUIDXdeviceIDUm
+0x000200: 6f 64 65 6c 54 6e 61 6d 65 5a 6d 61 63 41 64 64 odelTnameZmacAdd
+0x000210: 72 65 73 73 53 50 54 50 08 5f 10 24 45 45 30 41 ressSPTP._.$EE0A
+0x000220: 38 36 35 44 2d 38 39 31 34 2d 34 43 30 44 2d 39 865D-8914-4C0D-9
+0x000230: 31 46 32 2d 43 35 33 41 37 34 30 31 38 37 36 33 1F2-C53A74018763
+0x000240: 55 6d 61 63 4f 53 56 32 32 47 31 32 30 57 36 39 UmacOSV22G120W69
+0x000250: 35 2e 35 2e 31 09 54 31 33 2e 36 d4 1c 1d 1e 1f 5.5.1.T13.6.....
+0x000260: 20 21 24 19 52 49 44 59 41 64 64 72 65 73 73 65  !$.RIDYAddresse
+0x000270: 73 5a 44 65 76 69 63 65 54 79 70 65 5f 10 21 53 sZDeviceType_.!S
+0x000280: 75 70 70 6f 72 74 73 43 6c 6f 63 6b 50 6f 72 74 upportsClockPort
+0x000290: 4d 61 74 63 68 69 6e 67 4f 76 65 72 72 69 64 65 MatchingOverride
+0x0002a0: 5f 10 24 37 46 37 34 39 37 36 43 2d 45 42 33 34 _.$7F74976C-EB34
+0x0002b0: 2d 34 32 36 32 2d 41 44 31 37 2d 32 43 31 36 41 -4262-AD17-2C16A
+0x0002c0: 45 43 32 35 38 36 38 a2 22 23 5c 31 39 32 2e 31 EC25868."#\192.1
+0x0002d0: 36 38 2e 32 2e 37 32 5f 10 18 66 65 38 30 3a 3a 68.2.72_..fe80::
+0x0002e0: 38 34 31 3a 35 62 64 38 3a 64 33 30 64 3a 37 38 841:5bd8:d30d:78
+0x0002f0: 64 64 10 00 09 09 a1 28 d4 1c 1d 1e 1f 20 29 24 dd.....(..... )$
+0x000300: 19 a2 2a 2b 5c 31 39 32 2e 31 36 38 2e 32 2e 37 ..*+\192.168.2.7
+0x000310: 32 5f 10 18 66 65 38 30 3a 3a 38 34 31 3a 35 62 2_..fe80::841:5b
+0x000320: 64 38 3a 64 33 30 64 3a 37 38 64 64 09 5f 10 24 d8:d30d:78dd._.$
+0x000330: 37 46 37 34 39 37 36 43 2d 45 42 33 34 2d 34 32 7F74976C-EB34-42
+0x000340: 36 32 2d 41 44 31 37 2d 32 43 31 36 41 45 43 32 62-AD17-2C16AEC2
+0x000350: 35 38 36 38 08 5f 10 24 36 35 44 39 38 45 44 35 5868._.$65D98ED5
+0x000360: 2d 41 42 31 43 2d 34 46 43 38 2d 38 32 42 46 2d -AB1C-4FC8-82BF-
+0x000370: 41 43 41 34 34 46 44 33 34 38 30 38 5f 10 11 42 ACA44FD34808_..B
+0x000380: 43 3a 44 30 3a 37 34 3a 37 33 3a 30 31 3a 31 46 C:D0:74:73:01:1F
+0x000390: 5e 4d 61 63 42 6f 6f 6b 50 72 6f 31 38 2c 32 56 ^MacBookPro18,2V
+0x0003a0: 78 61 70 68 61 6d 5f 10 11 42 43 3a 44 30 3a 37 xapham_..BC:D0:7
+0x0003b0: 34 3a 37 33 3a 30 31 3a 31 46 00 08 00 2f 00 3e 4:73:01:1F.../.>
+0x0003c0: 00 57 00 63 00 6a 00 79 00 87 00 9d 00 a7 00 b6 .W.c.j.y........
+0x0003d0: 00 cd 00 dc 00 f5 01 10 01 1a 01 23 01 29 01 2e ...........#.)..
+0x0003e0: 01 39 01 3d 01 3e 01 65 01 6b 01 72 01 7a 01 7b .9.=.>.e.k.r.z.{
+0x0003f0: 01 80 01 89 01 8c 01 96 01 a1 01 c5 01 ec 01 ef ................
+0x000400: 01 fc 02 17 02 19 02 1a 02 1b 02 1d 02 26 02 29 .............&.)
+0x000410: 02 36 02 51 02 52 02 79 02 7a 02 a1 02 b5 02 c4 .6.Q.R.y.z......
+0x000420: 02 cb 00 00 00 00 00 00 02 01 00 00 00 00 00 00 ................
+0x000430: 00 34 00 00 00 00 00 00 00 00 00 00 00 00 00 00 .4..............
+0x000440: 02 df                                           ..              
 Encrypted:
-0x000000: 00 01 53 42 e9 51 b0 28 89 b3 28 23 91 0f 06 6d ..SB.Q.(..(#...m
-0x000010: 11 d1 b9 7f 34 7f c6 14 d0 95 f5 b2 8b 3b f6 a1 ....4........;..
-0x000020: 9f 0a 6f b4 c9 47 53 f7 df b9 50 c2 a7 3c 56 df ..o..GS...P..<V.
-0x000030: e6 60 8c cf 8f 8e 49 0e 9b a0 c7 6e dd 40 9b 1e .`....I....n.@..
-0x000040: ae 0b 52 43 db 99 d7 37 3c 96 e1 73 56 57 ed a9 ..RC...7<..sVW..
-0x000050: f0 f6 62 fa 88 62 69 58 91 f8 82 b0 13 37 26 9c ..b..biX.....7&.
-0x000060: cb 31 ea c6 2d fb 77 c0 2c 36 47 7a 67 14 a8 dc .1..-.w.,6Gzg...
-0x000070: 22 77 24 22 8a 98 9d b3 46 2e ba 4e 27 fe 2b 50 "w$"....F..N'.+P
-0x000080: 92 59 89 2f e4 f7 77 1a 68 a8 e9 b4 ec 72 90 6a .Y./..w.h....r.j
-0x000090: 56 a9 2d 47 e7 ee e4 fc 6e 8b c5 50 c5 c4 96 30 V.-G....n..P...0
-0x0000a0: 93 04 a0 1d 5c a3 92 ab be 1a fd 58 df 1f 74 07 ....\......X..t.
-0x0000b0: c0 1d dd b7 62 2d f8 b2 49 c7 10 5c 57 d6 90 24 ....b-..I..\W..$
-0x0000c0: 02 ee 37 d9 f2 3d 06 b2 92 6b 30 97 36 82 2c d6 ..7..=...k0.6.,.
-0x0000d0: 86 9f 8f d3 9e eb af e0 6f f9 01 0b ac 56 ab 4c ........o....V.L
-0x0000e0: 5d cd 42 44 92 1f 2a 3a 79 f3 fe cf 7b 8b 71 5c ].BD..*:y...{.q\
-0x0000f0: 39 57 d7 15 4a 2f 7a 33 7b 43 ca 3f 1f 13 6e 9c 9W..J/z3{C.?..n.
-0x000100: 99 b3 c0 fe 58 e2 53 86 5b 52 6e 4c fe bb 3a b0 ....X.S.[RnL..:.
-0x000110: 02 2c                                           .,              
+0x000000: 00 01 8d 1e 62 44 76 77 b8 c8 74 44 40 ca c5 50 ....bDvw..tD@..P
+0x000010: 9f c6 88 f5 e0 44 fe 94 04 48 c5 b0 6d 4d ee be .....D...H..mM..
+0x000020: d5 6a 85 ed 41 95 f2 d8 81 ad 28 31 78 c2 75 9e .j..A.....(1x.u.
+0x000030: fb 51 14 1a 38 00 ea ae fe cc 51 d4 44 f0 34 60 .Q..8.....Q.D.4`
+0x000040: 98 0d 2d 64 d0 38 13 7d ed 52 43 0d ea b2 16 45 ..-d.8.}.RC....E
+0x000050: 49 44 5d 4c b9 52 00 35 1a 11 d1 fd 77 08 59 cf ID]L.R.5....w.Y.
+0x000060: 4d 28 5b e8 ec a2 88 84 7b ef 96 1a f4 f2 b7 5c M([.....{......\
+0x000070: b3 fb a0 79 a5 02 38 44 de 57 f6 fc c8 cd 5d 7f ...y..8D.W....].
+0x000080: e1 5f 40 70 04 e1 20 58 94 7d 3e ea 59 01 c2 93 ._@p.. X.}>.Y...
+0x000090: ad 6e 14 a9 bd f8 c5 07 3c 84 23 d4 62 4f 99 b2 .n......<.#.bO..
+0x0000a0: 12 37 6d 66 12 53 68 a6 1e 31 5d 5b 14 ae 03 c5 .7mf.Sh..1][....
+0x0000b0: de 29 b1 f6 77 b8 ab 3e 72 63 ae 5e 74 42 65 25 .)..w..>rc.^tBe%
+0x0000c0: 09 b7 89 79 40 d3 31 e7 31 dd db 85 be ae 17 ad ...y@.1.1.......
+0x0000d0: f5 fb 47 cc 60 12 26 35 14 e5 60 f2 af a5 59 81 ..G.`.&5..`...Y.
+0x0000e0: af c2 4a 9b 32 8c 98 e2 df c1 7a 61 02 ad 14 bf ..J.2.....za....
+0x0000f0: 88 aa 40 9b bc 23 5d b9 aa 5f e3 0a fc af 10 16 ..@..#].._......
+0x000100: c3 6d 98 33 b5 af 20 02 f7 83 18 b5 bd 0e 1a f1 .m.3.. .........
+0x000110: 38 ce                                           8.              
 Decrypted:
 0x000000: 47 45 54 20 2f 69 6e 66 6f 20 52 54 53 50 2f 31 GET /info RTSP/1
 0x000010: 2e 30 0d 0a 58 2d 41 70 70 6c 65 2d 50 72 6f 74 .0..X-Apple-Prot
 0x000020: 6f 63 6f 6c 56 65 72 73 69 6f 6e 3a 20 31 0d 0a ocolVersion: 1..
 0x000030: 43 53 65 71 3a 20 37 0d 0a 44 41 43 50 2d 49 44 CSeq: 7..DACP-ID
-0x000040: 3a 20 42 41 41 37 44 42 32 34 33 43 33 44 43 31 : BAA7DB243C3DC1
-0x000050: 39 0d 0a 41 63 74 69 76 65 2d 52 65 6d 6f 74 65 9..Active-Remote
-0x000060: 3a 20 39 30 34 31 35 34 34 31 36 0d 0a 55 73 65 : 904154416..Use
-0x000070: 72 2d 41 67 65 6e 74 3a 20 41 69 72 50 6c 61 79 r-Agent: AirPlay
-0x000080: 2f 36 39 35 2e 35 2e 31 0d 0a 0d 0a             /695.5.1....    
+0x000040: 3a 20 35 34 30 32 43 46 44 38 33 39 32 35 35 31 : 5402CFD8392551
+0x000050: 45 37 0d 0a 41 63 74 69 76 65 2d 52 65 6d 6f 74 E7..Active-Remot
+0x000060: 65 3a 20 34 32 31 39 34 30 35 30 36 36 0d 0a 55 e: 4219405066..U
+0x000070: 73 65 72 2d 41 67 65 6e 74 3a 20 41 69 72 50 6c ser-Agent: AirPl
+0x000080: 61 79 2f 36 39 35 2e 35 2e 31 0d 0a 0d 0a       ay/695.5.1....  
 Encrypted:
-0x000000: eb 02 2c 0f 34 65 0f c2 b2 bc e6 83 ee ea 0d 9e ..,.4e..........
-0x000010: ad 48 4f 78 80 49 b5 c1 c5 a9 8c 14 84 bb 34 ab .HOx.I........4.
-0x000020: 0b b0 c8 3c 56 56 74 36 87 bc 56 e9 bf 20 c8 95 ...<VVt6..V.. ..
-0x000030: 90 83 43 5c e2 ac eb a3 79 a7 ab d6 72 e8 83 df ..C\....y...r...
-0x000040: b5 13 61 59 ef c3 6f c5 2b 68 30 f7 d9 2a d5 24 ..aY..o.+h0..*.$
-0x000050: 7c 7e 00 fe f5 de a7 fe d5 b8 ba 65 39 69 68 eb |~.........e9ih.
-0x000060: 7e 34 74 9c 33 e5 06 53 06 81 3c 48 5d 01 1d 0d ~4t.3..S..<H]...
-0x000070: d9 e6 36 6f 48 15 99 36 a9 f8 54 4c cb 55 e8 01 ..6oH..6..TL.U..
-0x000080: 0c 46 70 5d 07 cd df ab 67 f6 df 35 ce df 63 8c .Fp]....g..5..c.
-0x000090: 19 0e d3 2d 4c c5 94 c4 c0 77 4b 82 60 89 6d 03 ...-L....wK.`.m.
-0x0000a0: 75 ff a2 27 a7 d7 91 f2 23 9f d2 d8 7f ba 10 26 u..'....#......&
-0x0000b0: 90 de d4 8d 56 fc 12 1f 60 ff 83 6c c6 11 a2 96 ....V...`..l....
-0x0000c0: 9c 50 98 ca 10 42 fc 06 b4 3b 32 74 57 89 00 7d .P...B...;2tW..}
-0x0000d0: 42 83 f9 eb 48 09 4b 96 db 69 8d fd d5 93 5c 73 B...H.K..i....\s
-0x0000e0: a2 65 4e f1 db 40 ca 90 1e ef 13 00 cb de 26 b0 .eN..@........&.
-0x0000f0: 91 de f7 85 44 03 23 61 fb de d7 26 df 67 53 3d ....D.#a...&.gS=
-0x000100: 5f e1 58 bf a6 7c cf a1 5a de c8 3e 91 7a 3a aa _.X..|..Z..>.z:.
-0x000110: 11 04 31 58 d9 57 4e a5 56 18 ca 3b 77 95 ad 08 ..1X.WN.V..;w...
-0x000120: 53 ef 7a 10 c1 03 1c 72 4f 8a 6b 97 83 4b b6 2d S.z....rO.k..K.-
-0x000130: ad 0d c0 73 24 73 3a 01 a8 4b f2 12 cc bc af 12 ...s$s:..K......
-0x000140: 0c f6 2a 86 02 aa 0d 88 48 b2 e5 54 c3 e3 c9 11 ..*.....H..T....
-0x000150: 26 d7 b3 da 02 d4 fd a6 d2 03 05 d6 4a f9 f7 81 &...........J...
-0x000160: e5 62 cb 16 15 d2 d9 45 0d bc c6 62 d5 c4 f2 8c .b.....E...b....
-0x000170: 88 96 25 bb 15 25 72 86 aa a5 02 7f 0f a8 e1 0a ..%..%r.........
-0x000180: a0 53 8b d0 eb 3e d9 14 5d 63 03 ea 84 f0 11 7b .S...>..]c.....{
-0x000190: b5 67 a8 3d f4 38 6b d8 5c 0f 22 fb c4 f8 f6 d7 .g.=.8k.\.".....
-0x0001a0: 67 fa 80 b4 17 79 ba 89 40 94 6f 28 93 71 d1 97 g....y..@.o(.q..
-0x0001b0: ff 35 07 d5 f8 27 6f b3 63 f0 31 ee c2 f0 1b 50 .5...'o.c.1....P
-0x0001c0: 0a 74 5c 98 9d 44 d2 b0 e4 a1 82 bb c4 ba 74 27 .t\..D........t'
-0x0001d0: 2c b6 ba d3 6b b2 3f aa 0c 20 35 eb 3e 4d ea 70 ,...k.?.. 5.>M.p
-0x0001e0: af a4 7d bf ae 10 08 27 32 5c 8f 1e c0 2f 33 06 ..}....'2\.../3.
-0x0001f0: 96 f4 5b 21 dd 51 c9 78 33 7e fe b9 64 52 c8 d3 ..[!.Q.x3~..dR..
-0x000200: 91 49 54 69 83 16 69 8e e3 04 86 a9 d2 ee 9a 79 .ITi..i........y
-0x000210: 82 43 7d bf 82 3e 22 98 d7 f8 12 dd 6c 14 75 d8 .C}..>".....l.u.
-0x000220: 49 4f 78 a5 24 4c 6c 37 77 48 9a 89 d2 7f 23 83 IOx.$Ll7wH....#.
-0x000230: 56 d0 47 48 0e 80 19 e3 74 4a 84 82 27 ba 45 80 V.GH....tJ..'.E.
-0x000240: 62 c0 d2 0f 1e c6 fc b6 cb 28 bd 54 2a 04 88 ae b........(.T*...
-0x000250: 5a 6d dd db 40 99 14 45 fe 9d f0 f6 0b af ed 45 Zm..@..E.......E
-0x000260: 28 a9 d5 00 f8 76 20 32 55 ca 9f 9e 54 b8 e5 f5 (....v 2U...T...
-0x000270: 6e d6 3c 42 4c 5e f1 9e 0d 20 3e c2 84 32 4a a3 n.<BL^... >..2J.
-0x000280: a0 fb 5a e0 97 78 0b 29 7e 96 d3 8a b3 03 cf fd ..Z..x.)~.......
-0x000290: fd 0c c7 e0 d5 65 07 c3 80 72 2b 19 8d 2b 62 83 .....e...r+..+b.
-0x0002a0: 10 8d d8 8e 1c 9f e7 ff 48 b0 a6 d3 b8 8a 48 52 ........H.....HR
-0x0002b0: e5 e4 37 5a b0 dc 79 2a 4b 30 e4 6b 3e f1 70 57 ..7Z..y*K0.k>.pW
-0x0002c0: 32 8d db 20 8a 33 c4 5c 55 4b 45 5a 55 d3 96 98 2.. .3.\UKEZU...
-0x0002d0: a9 bc 76 07 9b 3a 42 10 6d 53 43 ab 42 74 fe 91 ..v..:B.mSC.Bt..
-0x0002e0: 60 ff bc c7 70 ce 7a 40 b7 98 9a e0 75 fe 7c 9d `...p.z@....u.|.
-0x0002f0: 8b 11 b6 dc 99 f5 3c b9 d3 9e ed dd 54          ......<.....T   
+0x000000: eb 02 6c 01 2f af 24 6e 7c e0 c2 11 09 20 a4 1d ..l./.$n|.... ..
+0x000010: 80 46 ea 9e 23 af 88 6d 3c 36 cc 33 40 00 e2 bd .F..#..m<6.3@...
+0x000020: 98 e0 d4 d6 f0 64 69 9e 01 5d 31 d8 7e a6 e9 5f .....di..]1.~.._
+0x000030: d5 5e 22 8d 78 74 ee 0a 8d 97 93 9f 40 4e 2d 1b .^".xt......@N-.
+0x000040: 94 12 85 88 71 78 36 82 c6 ab 14 ee e4 68 a3 9c ....qx6......h..
+0x000050: 6d dd cf 5d 9d d6 66 2d f3 11 b3 21 ad f6 4e c4 m..]..f-...!..N.
+0x000060: 22 e4 fa 44 0b a9 a5 86 8a 53 8f 16 cb 77 21 f7 "..D.....S...w!.
+0x000070: 32 68 2a 5c fd d4 3c 1f 8b 03 71 74 fd 8e 7b 49 2h*\..<...qt..{I
+0x000080: c2 a3 6a 27 74 51 e4 bb 1b ee 64 96 52 4c af 9f ..j'tQ....d.RL..
+0x000090: 4b 52 6f 71 88 2a 13 18 2d 51 37 46 1d 31 5e 51 KRoq.*..-Q7F.1^Q
+0x0000a0: b5 75 d4 af b9 84 55 ad 20 9d f8 b0 73 98 88 4a .u....U. ...s..J
+0x0000b0: 45 de b4 98 de ba 0c d7 41 7e dc a0 2c 25 be 7e E.......A~..,%.~
+0x0000c0: 92 18 8e 2c be a8 1d f9 a5 b8 bd 1d 5d 1f f2 72 ...,........]..r
+0x0000d0: a4 26 8d b9 1f a4 69 2b e7 7c 26 f8 e4 00 52 39 .&....i+.|&...R9
+0x0000e0: 6b 30 40 85 15 e6 86 9c 3e 3c 15 28 1c 74 fe 91 k0@.....><.(.t..
+0x0000f0: 77 a9 6e e8 7b 2d 70 b9 d0 ac 39 32 57 ed 6f e0 w.n.{-p...92W.o.
+0x000100: 2d 21 df 01 29 63 53 26 36 40 25 6b ca fe d3 af -!..)cS&6@%k....
+0x000110: 9a 29 ae ba 52 5f aa eb 55 17 be c7 43 87 87 a1 .)..R_..U...C...
+0x000120: 53 1c 56 5e a6 cf 18 d3 4b ca 74 9c e3 71 fe ae S.V^....K.t..q..
+0x000130: 8c 9e f7 a7 b5 58 68 b2 ae 09 66 44 9a 55 5d 3d .....Xh...fD.U]=
+0x000140: 8f 97 0e ca 4a b0 1a 72 6d 99 c4 6a f3 64 65 60 ....J..rm..j.de`
+0x000150: e2 01 44 08 01 09 a2 88 61 81 6d 26 2b bc 7e 63 ..D.....a.m&+.~c
+0x000160: 72 60 c5 d6 70 ef 76 f1 90 fb 8f 5c f6 34 7f ee r`..p.v....\.4..
+0x000170: f5 ec 99 cf df 01 8a 84 a7 37 ad 80 e6 f9 ce bc .........7......
+0x000180: 68 38 45 74 08 91 d7 d0 cd 4d 6d 1a ae 62 49 5b h8Et.....Mm..bI[
+0x000190: 5e 42 79 da a1 f7 e1 88 6e 47 b8 72 1a d5 d5 9b ^By.....nG.r....
+0x0001a0: 28 63 41 9d 9f 64 da 97 25 c3 e0 fe 99 6b d3 99 (cA..d..%....k..
+0x0001b0: bd 93 99 20 7f 0c c4 c8 08 5e 44 b4 f4 63 27 55 ... .....^D..c'U
+0x0001c0: 19 38 43 76 94 48 28 e3 6d fe dd bc ad 47 ce e6 .8Cv.H(.m....G..
+0x0001d0: d4 7c 3f c6 b3 2d d1 2e 65 20 09 5f b6 98 97 08 .|?..-..e ._....
+0x0001e0: 8d 9e 4b 91 07 31 0e ae f7 dc bd a3 ee 35 92 a9 ..K..1.......5..
+0x0001f0: 8b 69 0d 46 cf c3 f2 90 51 d7 5c a1 30 ac e7 84 .i.F....Q.\.0...
+0x000200: 25 36 62 75 c3 bb 0e 88 32 8e 23 7a 05 ce 51 f1 %6bu....2.#z..Q.
+0x000210: e7 70 43 be fa 35 ce a9 43 44 5d 28 b9 6d 1c 91 .pC..5..CD](.m..
+0x000220: eb a0 fb 71 43 91 e8 45 c1 72 dc 6e 49 a4 9c 28 ...qC..E.r.nI..(
+0x000230: 9b 58 16 7b 78 64 2a b2 e1 bd f4 92 58 41 5f fd .X.{xd*.....XA_.
+0x000240: 22 fe 6a ad da bc 58 61 99 14 7f 71 80 81 24 5c ".j...Xa...q..$\
+0x000250: 7f 82 7c 93 1f 63 42 df 59 71 9e a5 4e 7b a1 73 ..|..cB.Yq..N{.s
+0x000260: 6c 84 2c 40 28 03 6b f4 8f 5d d1 b6 d5 79 4b b5 l.,@(.k..]...yK.
+0x000270: 1d d0 5f be 57 77 3d 02 ad 87 48 fe 3c e9 d0 30 .._.Ww=...H.<..0
+0x000280: b8 8a 38 35 79 80 71 0c 9e 18 07 1d f3 fe 55 74 ..85y.q.......Ut
+0x000290: 46 3a 06 b8 92 f3 31 ad d9 de 6a bb 9e c7 fe 27 F:....1...j....'
+0x0002a0: 50 68 1d ac 8c 3f 62 a8 e3 35 cf c0 67 2d cc e6 Ph...?b..5..g-..
+0x0002b0: 96 ba 66 18 56 ba 56 7e fb 78 e2 79 d4 73 ad 29 ..f.V.V~.x.y.s.)
+0x0002c0: 15 d9 54 54 6d c4 e2 8b e6 85 49 57 5c 7d 1f 4f ..TTm.....IW\}.O
+0x0002d0: de 13 07 5c 87 b6 17 79 55 b5 13 f1 da e5 97 7a ...\...yU......z
+0x0002e0: 9e 8b 0e 04 ec 51 0a 8a 02 04 69 f9 a3 8b d6 32 .....Q....i....2
+0x0002f0: 5f d1 3e 0a a7 2a 5c 69 ca 94 f2 41 46          _.>..*\i...AF   
 Decrypted:
 0x000000: 47 45 54 5f 50 41 52 41 4d 45 54 45 52 20 72 74 GET_PARAMETER rt
 0x000010: 73 70 3a 2f 2f 31 39 32 2e 31 36 38 2e 32 2e 34 sp://192.168.2.4
-0x000020: 2f 31 31 36 33 35 32 35 31 32 38 33 38 31 33 33 /116352512838133
-0x000030: 35 34 35 34 39 20 52 54 53 50 2f 31 2e 30 0d 0a 54549 RTSP/1.0..
+0x000020: 2f 31 37 31 35 32 36 36 39 38 36 37 30 38 33 38 /171526698670838
+0x000030: 34 34 36 32 31 20 52 54 53 50 2f 31 2e 30 0d 0a 44621 RTSP/1.0..
 0x000040: 43 6f 6e 74 65 6e 74 2d 4c 65 6e 67 74 68 3a 20 Content-Length: 
 0x000050: 38 0d 0a 43 6f 6e 74 65 6e 74 2d 54 79 70 65 3a 8..Content-Type:
 0x000060: 20 74 65 78 74 2f 70 61 72 61 6d 65 74 65 72 73  text/parameters
 0x000070: 0d 0a 43 53 65 71 3a 20 38 0d 0a 44 41 43 50 2d ..CSeq: 8..DACP-
-0x000080: 49 44 3a 20 42 41 41 37 44 42 32 34 33 43 33 44 ID: BAA7DB243C3D
-0x000090: 43 31 39 0d 0a 41 63 74 69 76 65 2d 52 65 6d 6f C19..Active-Remo
-0x0000a0: 74 65 3a 20 39 30 34 31 35 34 34 31 36 0d 0a 55 te: 904154416..U
-0x0000b0: 73 65 72 2d 41 67 65 6e 74 3a 20 41 69 72 50 6c ser-Agent: AirPl
-0x0000c0: 61 79 2f 36 39 35 2e 35 2e 31 0d 0a 0d 0a 76 6f ay/695.5.1....vo
-0x0000d0: 6c 75 6d 65 0d 0a                               lume..          
+0x000080: 49 44 3a 20 35 34 30 32 43 46 44 38 33 39 32 35 ID: 5402CFD83925
+0x000090: 35 31 45 37 0d 0a 41 63 74 69 76 65 2d 52 65 6d 51E7..Active-Rem
+0x0000a0: 6f 74 65 3a 20 34 32 31 39 34 30 35 30 36 36 0d ote: 4219405066.
+0x0000b0: 0a 55 73 65 72 2d 41 67 65 6e 74 3a 20 41 69 72 .User-Agent: Air
+0x0000c0: 50 6c 61 79 2f 36 39 35 2e 35 2e 31 0d 0a 0d 0a Play/695.5.1....
+0x0000d0: 76 6f 6c 75 6d 65 0d 0a                         volume..        
 Encrypted:
-0x000000: 77 00 6d b8 c9 e0 be c0 68 2f dc 84 30 dc 58 75 w.m.....h/..0.Xu
-0x000010: 28 03 f4 d3 c5 34 d4 2e 42 bd 48 67 c2 ba 0a 78 (....4..B.Hg...x
-0x000020: b1 e2 81 09 33 cd 82 5d 74 d7 53 e1 7d 1f 32 dc ....3..]t.S.}.2.
-0x000030: aa 76 25 30 84 44 c5 68 39 e8 93 44 b6 ea e7 07 .v%0.D.h9..D....
-0x000040: 80 b1 cc 8f 36 25 57 fc 20 03 97 d6 a6 b8 7a 02 ....6%W. .....z.
-0x000050: 4b 43 19 0a b4 92 53 3f 74 cd 9e 7f 0f 92 f2 ee KC....S?t.......
-0x000060: bf 76 6b dc 42 3d 1b 24 bd 27 68 72 29 5c 79 55 .vk.B=.$.'hr)\yU
-0x000070: 3c 54 26 23 1b 59 8d 11 73 7d 3b 77 e4 dc e5 7a <T&#.Y..s};w...z
-0x000080: 5b 19 50 81 b5 62 58 53 87                      [.P..bXS.       
+0x000000: 77 00 e1 44 21 b9 87 1c 3d 61 18 62 f8 49 d3 be w..D!...=a.b.I..
+0x000010: 7a f0 60 89 51 3f 5b 9d 7d 2a 6f de e3 d2 f7 82 z.`.Q?[.}*o.....
+0x000020: 70 20 81 74 6a 92 42 65 d6 b6 42 6a 83 1f 52 d3 p .tj.Be..Bj..R.
+0x000030: 51 8d 97 a4 c6 2d 31 0d 0c 9e d5 ba 0f 8b e1 92 Q....-1.........
+0x000040: 68 85 e6 f7 a3 44 c2 7b fa 9d 72 9c 6f 8e 8d 08 h....D.{..r.o...
+0x000050: 19 16 76 e0 2b 71 d5 50 71 ba 27 f9 72 dd 86 14 ..v.+q.Pq.'.r...
+0x000060: f6 1a e1 81 26 45 62 b9 c7 94 c8 6c 9c 3c e5 cd ....&Eb....l.<..
+0x000070: c8 55 63 8d 7c 55 84 cf 0b 71 e6 ec 86 ac 46 54 .Uc.|U...q....FT
+0x000080: 94 5b 23 1b 69 2c ea 97 d6                      .[#.i,...       
 Decrypted:
 0x000000: 52 45 43 4f 52 44 20 72 74 73 70 3a 2f 2f 31 39 RECORD rtsp://19
-0x000010: 32 2e 31 36 38 2e 32 2e 34 2f 31 31 36 33 35 32 2.168.2.4/116352
-0x000020: 35 31 32 38 33 38 31 33 33 35 34 35 34 39 20 52 51283813354549 R
+0x000010: 32 2e 31 36 38 2e 32 2e 34 2f 31 37 31 35 32 36 2.168.2.4/171526
+0x000020: 36 39 38 36 37 30 38 33 38 34 34 36 32 31 20 52 69867083844621 R
 0x000030: 54 53 50 2f 31 2e 30 0d 0a 43 53 65 71 3a 20 39 TSP/1.0..CSeq: 9
-0x000040: 0d 0a 44 41 43 50 2d 49 44 3a 20 42 41 41 37 44 ..DACP-ID: BAA7D
-0x000050: 42 32 34 33 43 33 44 43 31 39 0d 0a 41 63 74 69 B243C3DC19..Acti
-0x000060: 76 65 2d 52 65 6d 6f 74 65 3a 20 39 30 34 31 35 ve-Remote: 90415
-0x000070: 34 34 31 36 0d 0a 55 73 65 72 2d 41 67 65 6e 74 4416..User-Agent
-0x000080: 3a 20 41 69 72 50 6c 61 79 2f 36 39 35 2e 35 2e : AirPlay/695.5.
-0x000090: 31 0d 0a 0d 0a                                  1....           
+0x000040: 0d 0a 44 41 43 50 2d 49 44 3a 20 35 34 30 32 43 ..DACP-ID: 5402C
+0x000050: 46 44 38 33 39 32 35 35 31 45 37 0d 0a 41 63 74 FD8392551E7..Act
+0x000060: 69 76 65 2d 52 65 6d 6f 74 65 3a 20 34 32 31 39 ive-Remote: 4219
+0x000070: 34 30 35 30 36 36 0d 0a 55 73 65 72 2d 41 67 65 405066..User-Age
+0x000080: 6e 74 3a 20 41 69 72 50 6c 61 79 2f 36 39 35 2e nt: AirPlay/695.
+0x000090: 35 2e 31 0d 0a 0d 0a                            5.1....         
 Encrypted:
-0x000000: 35 00 c3 82 c4 92 3e a6 5c 9d bd 0d 73 b9 51 bb 5.....>.\...s.Q.
-0x000010: b9 8b 2f ec 8d 17 bc f8 5e f6 cd 5b df fa 50 b1 ../.....^..[..P.
-0x000020: 59 10 45 33 39 ac 65 74 36 57 5a 06 69 d9 c3 ba Y.E39.et6WZ.i...
-0x000030: 2a fd ee a7 08 ea 53 61 20 df e2 11 41 0a 43 f4 *.....Sa ...A.C.
-0x000040: 3b ac 15 1b d8 66 91                            ;....f.         
+0x000000: 35 00 20 a0 4b 89 57 3f f4 76 2b b5 67 6c 1d ae 5. .K.W?.v+.gl..
+0x000010: 52 d5 15 15 7e ee 80 a4 28 55 3b e8 ee 51 c3 fd R...~...(U;..Q..
+0x000020: e6 e1 59 2b 45 da 0d 54 16 83 00 b2 10 96 83 63 ..Y+E..T.......c
+0x000030: 9f 68 14 c7 f8 97 cc 4e 42 76 62 90 d6 78 90 5c .h.....NBvb..x.\
+0x000040: 05 76 bc 73 db 31 95                            .v.s.1.         
 Decrypted:
 0x000000: 53 45 54 50 45 45 52 53 58 20 72 74 73 70 3a 2f SETPEERSX rtsp:/
-0x000010: 2f 31 39 32 2e 31 36 38 2e 32 2e 34 2f 31 31 36 /192.168.2.4/116
-0x000020: 33 35 32 35 31 32 38 33 38 31 33 33 35 34 35 34 3525128381335454
-0x000030: 39 20 52 54 53 50 2f 31 2e 30 0d 0a 43 6f 6e 74 9 RTSP/1.0..Cont
+0x000010: 2f 31 39 32 2e 31 36 38 2e 32 2e 34 2f 31 37 31 /192.168.2.4/171
+0x000020: 35 32 36 36 39 38 36 37 30 38 33 38 34 34 36 32 5266986708384462
+0x000030: 31 20 52 54 53 50 2f 31 2e 30 0d 0a 43 6f 6e 74 1 RTSP/1.0..Cont
 0x000040: 65 6e 74 2d 4c 65 6e 67 74 68 3a 20 32 36 34 0d ent-Length: 264.
 0x000050: 0a 43 6f 6e 74 65 6e 74 2d 54 79 70 65 3a 20 2f .Content-Type: /
 0x000060: 70 65 65 72 2d 6c 69 73 74 2d 63 68 61 6e 67 65 peer-list-change
 0x000070: 64 2d 78 0d 0a 43 53 65 71 3a 20 31 30 0d 0a 44 d-x..CSeq: 10..D
-0x000080: 41 43 50 2d 49 44 3a 20 42 41 41 37 44 42 32 34 ACP-ID: BAA7DB24
-0x000090: 33 43 33 44 43 31 39 0d 0a 41 63 74 69 76 65 2d 3C3DC19..Active-
-0x0000a0: 52 65 6d 6f 74 65 3a 20 39 30 34 31 35 34 34 31 Remote: 90415441
-0x0000b0: 36 0d 0a 55 73 65 72 2d 41 67 65 6e 74 3a 20 41 6..User-Agent: A
-0x0000c0: 69 72 50 6c 61 79 2f 36 39 35 2e 35 2e 31 0d 0a irPlay/695.5.1..
-0x0000d0: 0d 0a 62 70 6c 69 73 74 30 30 a1 01 d6 02 03 04 ..bplist00......
-0x0000e0: 05 06 07 08 09 0c 0d 10 11 5f 10 21 53 75 70 70 ........._.!Supp
-0x0000f0: 6f 72 74 73 43 6c 6f 63 6b 50 6f 72 74 4d 61 74 ortsClockPortMat
-0x000100: 63 68 69 6e 67 4f 76 65 72 72 69 64 65 5a 43 6c chingOverrideZCl
-0x000110: 6f 63 6b 50 6f 72 74 73 5a 44 65 76 69 63 65 54 ockPortsZDeviceT
-0x000120: 79 70 65 59 41 64 64 72 65 73 73 65 73 52 49 44 ypeYAddressesRID
-0x000130: 57 43 6c 6f 63 6b 49 44 09 d1 0a 0b 5b 31 39 32 WClockID....[192
-0x000140: 2e 31 36 38 2e 32 2e 34 11 80 07 10 00 a2 0e 0f .168.2.4........
-0x000150: 5c 31 39 32 2e 31 36 38 2e 32 2e 37 32 5f 10 18 \192.168.2.72_..
-0x000160: 66 65 38 30 3a 3a 38 34 31 3a 35 62 64 38 3a 64 fe80::841:5bd8:d
-0x000170: 33 30 64 3a 37 38 64 64 5f 10 24 37 46 37 34 39 30d:78dd_.$7F749
-0x000180: 37 36 43 2d 45 42 33 34 2d 34 32 36 32 2d 41 44 76C-EB34-4262-AD
-0x000190: 31 37 2d 32 43 31 36 41 45 43 32 35 38 36 38 13 17-2C16AEC25868.
-0x0001a0: bc d0 74 73 01 1f 00 08 08 0a 17 3b 46 51 5b 5e ..ts.......;FQ[^
-0x0001b0: 66 67 6a 76 79 7b 7e 8b a6 cd 00 00 00 00 00 00 fgjvy{~.........
-0x0001c0: 01 01 00 00 00 00 00 00 00 12 00 00 00 00 00 00 ................
-0x0001d0: 00 00 00 00 00 00 00 00 00 d6                   ..........      
+0x000080: 41 43 50 2d 49 44 3a 20 35 34 30 32 43 46 44 38 ACP-ID: 5402CFD8
+0x000090: 33 39 32 35 35 31 45 37 0d 0a 41 63 74 69 76 65 392551E7..Active
+0x0000a0: 2d 52 65 6d 6f 74 65 3a 20 34 32 31 39 34 30 35 -Remote: 4219405
+0x0000b0: 30 36 36 0d 0a 55 73 65 72 2d 41 67 65 6e 74 3a 066..User-Agent:
+0x0000c0: 20 41 69 72 50 6c 61 79 2f 36 39 35 2e 35 2e 31  AirPlay/695.5.1
+0x0000d0: 0d 0a 0d 0a 62 70 6c 69 73 74 30 30 a1 01 d6 02 ....bplist00....
+0x0000e0: 03 04 05 06 07 08 09 0c 0d 10 11 5f 10 21 53 75 ..........._.!Su
+0x0000f0: 70 70 6f 72 74 73 43 6c 6f 63 6b 50 6f 72 74 4d pportsClockPortM
+0x000100: 61 74 63 68 69 6e 67 4f 76 65 72 72 69 64 65 5a atchingOverrideZ
+0x000110: 43 6c 6f 63 6b 50 6f 72 74 73 5a 44 65 76 69 63 ClockPortsZDevic
+0x000120: 65 54 79 70 65 59 41 64 64 72 65 73 73 65 73 52 eTypeYAddressesR
+0x000130: 49 44 57 43 6c 6f 63 6b 49 44 09 d1 0a 0b 5b 31 IDWClockID....[1
+0x000140: 39 32 2e 31 36 38 2e 32 2e 34 11 80 0e 10 00 a2 92.168.2.4......
+0x000150: 0e 0f 5c 31 39 32 2e 31 36 38 2e 32 2e 37 32 5f ..\192.168.2.72_
+0x000160: 10 18 66 65 38 30 3a 3a 38 34 31 3a 35 62 64 38 ..fe80::841:5bd8
+0x000170: 3a 64 33 30 64 3a 37 38 64 64 5f 10 24 37 46 37 :d30d:78dd_.$7F7
+0x000180: 34 39 37 36 43 2d 45 42 33 34 2d 34 32 36 32 2d 4976C-EB34-4262-
+0x000190: 41 44 31 37 2d 32 43 31 36 41 45 43 32 35 38 36 AD17-2C16AEC2586
+0x0001a0: 38 13 bc d0 74 73 01 1f 00 08 08 0a 17 3b 46 51 8...ts.......;FQ
+0x0001b0: 5b 5e 66 67 6a 76 79 7b 7e 8b a6 cd 00 00 00 00 [^fgjvy{~.......
+0x0001c0: 00 00 01 01 00 00 00 00 00 00 00 12 00 00 00 00 ................
+0x0001d0: 00 00 00 00 00 00 00 00 00 00 00 d6             ............    
 Encrypted:
-0x000000: 36 00 fb 71 65 d6 01 14 3d d3 66 d5 b1 c9 f8 11 6..qe...=.f.....
-0x000010: e8 23 a1 6a cf e4 b3 3b 78 c9 88 82 dc 40 08 e4 .#.j...;x....@..
-0x000020: 4e 81 b2 e1 9f 76 7d 63 49 d6 f5 8f 7f 33 5a 65 N....v}cI....3Ze
-0x000030: 25 2d 23 64 d8 8c 3f f1 fa 20 ad e1 e1 f9 42 4c %-#d..?.. ....BL
-0x000040: 5e 16 0a 0a 09 25 41 2f                         ^....%A/        
-Decrypted:
-0x000000: 53 45 54 5f 50 41 52 41 4d 45 54 45 52 20 72 74 SET_PARAMETER rt
-0x000010: 73 70 3a 2f 2f 31 39 32 2e 31 36 38 2e 32 2e 34 sp://192.168.2.4
-0x000020: 2f 31 31 36 33 35 32 35 31 32 38 33 38 31 33 33 /116352512838133
-0x000030: 35 34 35 34 39 20 52 54 53 50 2f 31 2e 30 0d 0a 54549 RTSP/1.0..
-0x000040: 43 6f 6e 74 65 6e 74 2d 4c 65 6e 67 74 68 3a 20 Content-Length: 
-0x000050: 32 30 0d 0a 43 6f 6e 74 65 6e 74 2d 54 79 70 65 20..Content-Type
-0x000060: 3a 20 74 65 78 74 2f 70 61 72 61 6d 65 74 65 72 : text/parameter
-0x000070: 73 0d 0a 43 53 65 71 3a 20 31 31 0d 0a 44 41 43 s..CSeq: 11..DAC
-0x000080: 50 2d 49 44 3a 20 42 41 41 37 44 42 32 34 33 43 P-ID: BAA7DB243C
-0x000090: 33 44 43 31 39 0d 0a 41 63 74 69 76 65 2d 52 65 3DC19..Active-Re
-0x0000a0: 6d 6f 74 65 3a 20 39 30 34 31 35 34 34 31 36 0d mote: 904154416.
-0x0000b0: 0a 55 73 65 72 2d 41 67 65 6e 74 3a 20 41 69 72 .User-Agent: Air
-0x0000c0: 50 6c 61 79 2f 36 39 35 2e 35 2e 31 0d 0a 0d 0a Play/695.5.1....
-0x0000d0: 76 6f 6c 75 6d 65 3a 20 2d 32 30 2e 30 30 30 30 volume: -20.0000
-0x0000e0: 30 30 0d 0a                                     00..            
-Encrypted:
-0x000000: 36 00 82 a1 45 b6 cc 8c 3f 91 cf df b8 78 0b 95 6...E...?....x..
-0x000010: 12 e0 da b8 45 09 91 37 6e ce 3c c6 a2 a3 9c 60 ....E..7n.<....`
-0x000020: f2 0d db 45 d8 bc f2 ba 88 63 6a 6e ef 68 42 0a ...E.....cjn.hB.
-0x000030: 16 dc 50 32 3c 98 93 8c 9a 25 cb 11 46 98 c1 ec ..P2<....%..F...
-0x000040: e4 99 71 40 ae 7a a3 85                         ..q@.z..        
+0x000000: 36 00 fd 8e ef 31 91 0c 21 14 09 f8 3d ff 3e 34 6....1..!...=.>4
+0x000010: 30 c0 27 2d db 89 e9 c5 20 0b 04 e9 6f 1d be 69 0.'-.... ...o..i
+0x000020: 71 3b 61 f9 2a f4 21 f2 b9 7a 3f 9e cb 1b d7 a0 q;a.*.!..z?.....
+0x000030: 56 1f dc 0e 97 1b e4 2e b0 70 5b f0 6f f4 c3 87 V........p[.o...
+0x000040: 56 53 ed ca 54 26 56 05                         VS..T&V.        
 Decrypted:
 0x000000: 50 4f 53 54 20 2f 63 6f 6d 6d 61 6e 64 20 52 54 POST /command RT
 0x000010: 53 50 2f 31 2e 30 0d 0a 43 6f 6e 74 65 6e 74 2d SP/1.0..Content-
@@ -729,27 +684,49 @@ Decrypted:
 0x000030: 74 65 6e 74 2d 54 79 70 65 3a 20 61 70 70 6c 69 tent-Type: appli
 0x000040: 63 61 74 69 6f 6e 2f 78 2d 61 70 70 6c 65 2d 62 cation/x-apple-b
 0x000050: 69 6e 61 72 79 2d 70 6c 69 73 74 0d 0a 43 53 65 inary-plist..CSe
-0x000060: 71 3a 20 31 32 0d 0a 44 41 43 50 2d 49 44 3a 20 q: 12..DACP-ID: 
-0x000070: 42 41 41 37 44 42 32 34 33 43 33 44 43 31 39 0d BAA7DB243C3DC19.
-0x000080: 0a 41 63 74 69 76 65 2d 52 65 6d 6f 74 65 3a 20 .Active-Remote: 
-0x000090: 39 30 34 31 35 34 34 31 36 0d 0a 55 73 65 72 2d 904154416..User-
-0x0000a0: 41 67 65 6e 74 3a 20 41 69 72 50 6c 61 79 2f 36 Agent: AirPlay/6
-0x0000b0: 39 35 2e 35 2e 31 0d 0a 0d 0a 62 70 6c 69 73 74 95.5.1....bplist
-0x0000c0: 30 30 d2 01 02 03 04 54 74 79 70 65 56 70 61 72 00.....TtypeVpar
-0x0000d0: 61 6d 73 5f 10 19 75 70 64 61 74 65 4d 52 53 75 ams_..updateMRSu
-0x0000e0: 70 70 6f 72 74 65 64 43 6f 6d 6d 61 6e 64 73 d1 pportedCommands.
-0x0000f0: 05 06 5f 10 1d 6d 72 53 75 70 70 6f 72 74 65 64 .._..mrSupported
-0x000100: 43 6f 6d 6d 61 6e 64 73 46 72 6f 6d 53 65 6e 64 CommandsFromSend
-0x000110: 65 72 a0 08 0d 12 19 35 38 58 00 00 00 00 00 00 er.....58X......
-0x000120: 01 01 00 00 00 00 00 00 00 07 00 00 00 00 00 00 ................
-0x000130: 00 00 00 00 00 00 00 00 00 59                   .........Y      
+0x000060: 71 3a 20 31 31 0d 0a 44 41 43 50 2d 49 44 3a 20 q: 11..DACP-ID: 
+0x000070: 35 34 30 32 43 46 44 38 33 39 32 35 35 31 45 37 5402CFD8392551E7
+0x000080: 0d 0a 41 63 74 69 76 65 2d 52 65 6d 6f 74 65 3a ..Active-Remote:
+0x000090: 20 34 32 31 39 34 30 35 30 36 36 0d 0a 55 73 65  4219405066..Use
+0x0000a0: 72 2d 41 67 65 6e 74 3a 20 41 69 72 50 6c 61 79 r-Agent: AirPlay
+0x0000b0: 2f 36 39 35 2e 35 2e 31 0d 0a 0d 0a 62 70 6c 69 /695.5.1....bpli
+0x0000c0: 73 74 30 30 d2 01 02 03 04 54 74 79 70 65 56 70 st00.....TtypeVp
+0x0000d0: 61 72 61 6d 73 5f 10 19 75 70 64 61 74 65 4d 52 arams_..updateMR
+0x0000e0: 53 75 70 70 6f 72 74 65 64 43 6f 6d 6d 61 6e 64 SupportedCommand
+0x0000f0: 73 d1 05 06 5f 10 1d 6d 72 53 75 70 70 6f 72 74 s..._..mrSupport
+0x000100: 65 64 43 6f 6d 6d 61 6e 64 73 46 72 6f 6d 53 65 edCommandsFromSe
+0x000110: 6e 64 65 72 a0 08 0d 12 19 35 38 58 00 00 00 00 nder.....58X....
+0x000120: 00 00 01 01 00 00 00 00 00 00 00 07 00 00 00 00 ................
+0x000130: 00 00 00 00 00 00 00 00 00 00 00 59             ...........Y    
 Encrypted:
-0x000000: 3f 00 98 de 26 af 9d c7 90 de f2 29 18 d3 1d 10 ?...&......)....
-0x000010: b0 c5 23 9c dc 70 0e 00 7c 52 4d db 89 a9 cd 40 ..#..p..|RM....@
-0x000020: 5e 3b 63 07 6b 59 33 3d 63 e4 95 e8 82 0a 8d 38 ^;c.kY3=c......8
-0x000030: 58 b5 7f cb 95 a0 1d df ce a9 de 93 d2 eb 14 68 X..............h
-0x000040: 82 da 44 3a 30 c4 21 fe 39 e8 b5 79 61 3e 58 ce ..D:0.!.9..ya>X.
-0x000050: 00                                              .               
+0x000000: 3f 00 a4 0a b5 0c 67 66 ba 56 55 07 bf 0b 26 1f ?.....gf.VU...&.
+0x000010: ff 98 4b 3c 74 75 ea 8c a5 23 d0 b6 7c f8 2e 92 ..K<tu...#..|...
+0x000020: dc aa 89 8d 7b 36 f8 83 20 83 4b 17 70 52 8b 3d ....{6.. .K.pR.=
+0x000030: dd e7 87 e7 2f 20 f3 91 ad 26 1e c3 1b 19 a8 16 ..../ ...&......
+0x000040: 5c c4 4e 8b 27 23 c1 01 8d cf 44 5b ea e4 f2 ac \.N.'#....D[....
+0x000050: 5d                                              ]               
+Decrypted:
+0x000000: 53 45 54 5f 50 41 52 41 4d 45 54 45 52 20 72 74 SET_PARAMETER rt
+0x000010: 73 70 3a 2f 2f 31 39 32 2e 31 36 38 2e 32 2e 34 sp://192.168.2.4
+0x000020: 2f 31 37 31 35 32 36 36 39 38 36 37 30 38 33 38 /171526698670838
+0x000030: 34 34 36 32 31 20 52 54 53 50 2f 31 2e 30 0d 0a 44621 RTSP/1.0..
+0x000040: 43 6f 6e 74 65 6e 74 2d 4c 65 6e 67 74 68 3a 20 Content-Length: 
+0x000050: 32 30 0d 0a 43 6f 6e 74 65 6e 74 2d 54 79 70 65 20..Content-Type
+0x000060: 3a 20 74 65 78 74 2f 70 61 72 61 6d 65 74 65 72 : text/parameter
+0x000070: 73 0d 0a 43 53 65 71 3a 20 31 32 0d 0a 44 41 43 s..CSeq: 12..DAC
+0x000080: 50 2d 49 44 3a 20 35 34 30 32 43 46 44 38 33 39 P-ID: 5402CFD839
+0x000090: 32 35 35 31 45 37 0d 0a 41 63 74 69 76 65 2d 52 2551E7..Active-R
+0x0000a0: 65 6d 6f 74 65 3a 20 34 32 31 39 34 30 35 30 36 emote: 421940506
+0x0000b0: 36 0d 0a 55 73 65 72 2d 41 67 65 6e 74 3a 20 41 6..User-Agent: A
+0x0000c0: 69 72 50 6c 61 79 2f 36 39 35 2e 35 2e 31 0d 0a irPlay/695.5.1..
+0x0000d0: 0d 0a 76 6f 6c 75 6d 65 3a 20 2d 32 30 2e 30 30 ..volume: -20.00
+0x0000e0: 30 30 30 30 0d 0a                               0000..          
+Encrypted:
+0x000000: 36 00 7f 56 bb 58 d5 e4 a3 dd fe 1a b2 a6 06 e8 6..V.X..........
+0x000010: 18 5c 94 53 65 5c 63 a8 35 c0 e3 bd ab f3 d8 85 .\.Se\c.5.......
+0x000020: db 4e 08 bb 62 37 29 c1 a9 7f e4 79 fd 91 c7 9e .N..b7)....y....
+0x000030: 50 56 04 96 7e 93 0f 95 c6 16 12 f8 14 2a a2 41 PV..~........*.A
+0x000040: 58 4e b7 ee 02 d6 fe ef                         XN......        
 Decrypted:
 0x000000: 50 4f 53 54 20 2f 63 6f 6d 6d 61 6e 64 20 52 54 POST /command RT
 0x000010: 53 50 2f 31 2e 30 0d 0a 43 6f 6e 74 65 6e 74 2d SP/1.0..Content-
@@ -758,273 +735,237 @@ Decrypted:
 0x000040: 69 63 61 74 69 6f 6e 2f 78 2d 61 70 70 6c 65 2d ication/x-apple-
 0x000050: 62 69 6e 61 72 79 2d 70 6c 69 73 74 0d 0a 43 53 binary-plist..CS
 0x000060: 65 71 3a 20 31 33 0d 0a 44 41 43 50 2d 49 44 3a eq: 13..DACP-ID:
-0x000070: 20 42 41 41 37 44 42 32 34 33 43 33 44 43 31 39  BAA7DB243C3DC19
-0x000080: 0d 0a 41 63 74 69 76 65 2d 52 65 6d 6f 74 65 3a ..Active-Remote:
-0x000090: 20 39 30 34 31 35 34 34 31 36 0d 0a 55 73 65 72  904154416..User
-0x0000a0: 2d 41 67 65 6e 74 3a 20 41 69 72 50 6c 61 79 2f -Agent: AirPlay/
-0x0000b0: 36 39 35 2e 35 2e 31 0d 0a 0d 0a 62 70 6c 69 73 695.5.1....bplis
-0x0000c0: 74 30 30 d2 01 02 03 04 54 74 79 70 65 56 70 61 t00.....TtypeVpa
-0x0000d0: 72 61 6d 73 5f 10 19 75 70 64 61 74 65 4d 52 53 rams_..updateMRS
-0x0000e0: 75 70 70 6f 72 74 65 64 43 6f 6d 6d 61 6e 64 73 upportedCommands
-0x0000f0: d1 05 06 5f 10 1d 6d 72 53 75 70 70 6f 72 74 65 ..._..mrSupporte
-0x000100: 64 43 6f 6d 6d 61 6e 64 73 46 72 6f 6d 53 65 6e dCommandsFromSen
-0x000110: 64 65 72 af 10 17 07 08 09 0a 0b 0c 0d 0e 0f 10 der.............
-0x000120: 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 4f 10 67 .............O.g
-0x000130: 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 bplist00....._..
-0x000140: 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d kCommandInfoComm
-0x000150: 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e andKey_..kComman
-0x000160: 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 dInfoEnabledKey.
-0x000170: 00 09 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 ....&?A.........
-0x000180: 00 00 00 00 00 00 05 00 00 00 00 00 00 00 00 00 ................
-0x000190: 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 ......BO.gbplist
-0x0001a0: 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 00....._..kComma
-0x0001b0: 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 ndInfoCommandKey
-0x0001c0: 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 _..kCommandInfoE
-0x0001d0: 6e 61 62 6c 65 64 4b 65 79 10 01 09 08 0d 26 3f nabledKey.....&?
-0x0001e0: 41 00 00 00 00 00 00 01 01 00 00 00 00 00 00 00 A...............
-0x0001f0: 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
-0x000200: 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 BO.gbplist00....
-0x000210: 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f ._..kCommandInfo
-0x000220: 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f CommandKey_..kCo
-0x000230: 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 mmandInfoEnabled
-0x000240: 4b 65 79 10 02 09 08 0d 26 3f 41 00 00 00 00 00 Key.....&?A.....
-0x000250: 00 01 01 00 00 00 00 00 00 00 05 00 00 00 00 00 ................
-0x000260: 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 ..........BO.gbp
-0x000270: 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 list00....._..kC
-0x000280: 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e ommandInfoComman
-0x000290: 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 dKey_..kCommandI
-0x0002a0: 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 03 09 nfoEnabledKey...
-0x0002b0: 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 ..&?A...........
-0x0002c0: 00 00 00 00 05 00 00 00 00 00 00 00 00 00 00 00 ................
-0x0002d0: 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 ....BO.gbplist00
-0x0002e0: d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 ....._..kCommand
-0x0002f0: 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 InfoCommandKey_.
-0x000300: 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 .kCommandInfoEna
-0x000310: 62 6c 65 64 4b 65 79 10 04 08 08 0d 26 3f 41 00 bledKey.....&?A.
-0x000320: 00 00 00 00 00 01 01 00 00 00 00 00 00 00 05 00 ................
-0x000330: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 42 4f ..............BO
-0x000340: 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f .gbplist00....._
-0x000350: 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f ..kCommandInfoCo
-0x000360: 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d mmandKey_..kComm
-0x000370: 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 andInfoEnabledKe
-0x000380: 79 10 05 08 08 0d 26 3f 41 00 00 00 00 00 00 01 y.....&?A.......
-0x000390: 01 00 00 00 00 00 00 00 05 00 00 00 00 00 00 00 ................
-0x0003a0: 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 ........BO.gbpli
-0x0003b0: 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d st00....._..kCom
-0x0003c0: 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b mandInfoCommandK
-0x0003d0: 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 ey_..kCommandInf
-0x0003e0: 6f 45 6e 61 62 6c 65 64 4b 65 79 10 08 08 08 0d oEnabledKey.....
-0x0003f0: 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 00 00 &?A.............
-Decrypted:
-0x000000: 00 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
-0x000010: 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 ..BO.gbplist00..
-0x000020: 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e ..._..kCommandIn
-0x000030: 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b foCommandKey_..k
-0x000040: 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c CommandInfoEnabl
-0x000050: 65 64 4b 65 79 10 09 09 08 0d 26 3f 41 00 00 00 edKey.....&?A...
-0x000060: 00 00 00 01 01 00 00 00 00 00 00 00 05 00 00 00 ................
-0x000070: 00 00 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 ............BO.g
-0x000080: 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 bplist00....._..
-0x000090: 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d kCommandInfoComm
-0x0000a0: 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e andKey_..kComman
-0x0000b0: 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 dInfoEnabledKey.
-0x0000c0: 0a 08 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 ....&?A.........
-0x0000d0: 00 00 00 00 00 00 05 00 00 00 00 00 00 00 00 00 ................
-0x0000e0: 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 ......BO.gbplist
-0x0000f0: 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 00....._..kComma
-0x000100: 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 ndInfoCommandKey
-0x000110: 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 _..kCommandInfoE
-0x000120: 6e 61 62 6c 65 64 4b 65 79 10 0b 09 08 0d 26 3f nabledKey.....&?
-0x000130: 41 00 00 00 00 00 00 01 01 00 00 00 00 00 00 00 A...............
-0x000140: 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
-0x000150: 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 BO.gbplist00....
-0x000160: 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f ._..kCommandInfo
-0x000170: 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f CommandKey_..kCo
-0x000180: 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 mmandInfoEnabled
-0x000190: 4b 65 79 10 11 08 08 0d 26 3f 41 00 00 00 00 00 Key.....&?A.....
-0x0001a0: 00 01 01 00 00 00 00 00 00 00 05 00 00 00 00 00 ................
-0x0001b0: 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 ..........BO.gbp
-0x0001c0: 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 list00....._..kC
-0x0001d0: 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e ommandInfoComman
-0x0001e0: 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 dKey_..kCommandI
-0x0001f0: 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 12 08 nfoEnabledKey...
-0x000200: 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 ..&?A...........
-0x000210: 00 00 00 00 05 00 00 00 00 00 00 00 00 00 00 00 ................
-0x000220: 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 ....BO.gbplist00
-0x000230: d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 ....._..kCommand
-0x000240: 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 InfoCommandKey_.
-0x000250: 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 .kCommandInfoEna
-0x000260: 62 6c 65 64 4b 65 79 10 14 09 08 0d 26 3f 41 00 bledKey.....&?A.
-0x000270: 00 00 00 00 00 01 01 00 00 00 00 00 00 00 05 00 ................
-0x000280: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 42 4f ..............BO
-0x000290: 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f .gbplist00....._
-0x0002a0: 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f ..kCommandInfoCo
-0x0002b0: 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d mmandKey_..kComm
-0x0002c0: 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 andInfoEnabledKe
-0x0002d0: 79 10 15 09 08 0d 26 3f 41 00 00 00 00 00 00 01 y.....&?A.......
-0x0002e0: 01 00 00 00 00 00 00 00 05 00 00 00 00 00 00 00 ................
-0x0002f0: 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 ........BO.gbpli
-0x000300: 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d st00....._..kCom
-0x000310: 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b mandInfoCommandK
-0x000320: 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 ey_..kCommandInf
-0x000330: 6f 45 6e 61 62 6c 65 64 4b 65 79 10 16 09 08 0d oEnabledKey.....
-0x000340: 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 00 00 &?A.............
-0x000350: 00 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
-0x000360: 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 ..BO.gbplist00..
-0x000370: 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e ..._..kCommandIn
-0x000380: 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b foCommandKey_..k
-0x000390: 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c CommandInfoEnabl
-0x0003a0: 65 64 4b 65 79 10 17 09 08 0d 26 3f 41 00 00 00 edKey.....&?A...
-0x0003b0: 00 00 00 01 01 00 00 00 00 00 00 00 05 00 00 00 ................
-0x0003c0: 00 00 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 ............BO.g
-0x0003d0: 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 bplist00....._..
-0x0003e0: 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d kCommandInfoComm
-0x0003f0: 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e andKey_..kComman
-0x000400: 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 dInfoEnabledKey.
-0x000410: 18 08 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 ....&?A.........
-0x000420: 00 00 00 00 00 00 05 00 00 00 00 00 00 00 00 00 ................
-0x000430: 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 ......BO.gbplist
-0x000440: 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 00....._..kComma
-0x000450: 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 ndInfoCommandKey
-0x000460: 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 _..kCommandInfoE
-0x000470: 6e 61 62 6c 65 64 4b 65 79 10 19 09 08 0d 26 3f nabledKey.....&?
-0x000480: 41 00 00 00 00 00 00 01 01 00 00 00 00 00 00 00 A...............
-0x000490: 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
-0x0004a0: 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 BO.gbplist00....
-0x0004b0: 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f ._..kCommandInfo
-0x0004c0: 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f CommandKey_..kCo
-0x0004d0: 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 mmandInfoEnabled
-0x0004e0: 4b 65 79 10 1a 09 08 0d 26 3f 41 00 00 00 00 00 Key.....&?A.....
-0x0004f0: 00 01 01 00 00 00 00 00 00 00 05 00 00 00 00 00 ................
-0x000500: 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 ..........BO.gbp
-0x000510: 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 list00....._..kC
-0x000520: 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e ommandInfoComman
-0x000530: 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 dKey_..kCommandI
-0x000540: 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 79 09 nfoEnabledKey.y.
-0x000550: 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 ..&?A...........
-0x000560: 00 00 00 00 05 00 00 00 00 00 00 00 00 00 00 00 ................
-0x000570: 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 ....BO.gbplist00
-0x000580: d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 ....._..kCommand
-0x000590: 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 InfoCommandKey_.
-0x0005a0: 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 .kCommandInfoEna
-0x0005b0: 62 6c 65 64 4b 65 79 10 7a 09 08 0d 26 3f 41 00 bledKey.z...&?A.
-0x0005c0: 00 00 00 00 00 01 01 00 00 00 00 00 00 00 05 00 ................
-0x0005d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 42 4f ..............BO
-0x0005e0: 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f .gbplist00....._
-0x0005f0: 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f ..kCommandInfoCo
-0x000600: 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d mmandKey_..kComm
-0x000610: 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 andInfoEnabledKe
-0x000620: 79 10 7d 09 08 0d 26 3f 41 00 00 00 00 00 00 01 y.}...&?A.......
-0x000630: 01 00 00 00 00 00 00 00 05 00 00 00 00 00 00 00 ................
-0x000640: 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 ........BO.gbpli
-0x000650: 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d st00....._..kCom
-0x000660: 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b mandInfoCommandK
-0x000670: 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 ey_..kCommandInf
-0x000680: 6f 45 6e 61 62 6c 65 64 4b 65 79 10 80 09 08 0d oEnabledKey.....
-0x000690: 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 00 00 &?A.............
-0x0006a0: 00 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
-0x0006b0: 00 00 42 00 08 00 0d 00 12 00 19 00 35 00 38 00 ..B.........5.8.
-0x0006c0: 58 00 72 00 dc 01 46 01 b0 02 1a 02 84 02 ee 03 X.r...F.........
-0x0006d0: 58 03 c2 04 2c 04 96 05 00 05 6a 05 d4 06 3e 06 X...,.....j...>.
-0x0006e0: a8 07 12 07 7c 07 e6 08 50 08 ba 09 24 09 8e 00 ....|...P...$...
-0x0006f0: 00 00 00 00 00 02 01 00 00 00 00 00 00 00 1e 00 ................
-0x000700: 00 00 00 00 00 00 00 00 00 00 00 00 00 09 f8    ............... 
+0x000070: 20 35 34 30 32 43 46 44 38 33 39 32 35 35 31 45  5402CFD8392551E
+0x000080: 37 0d 0a 41 63 74 69 76 65 2d 52 65 6d 6f 74 65 7..Active-Remote
+0x000090: 3a 20 34 32 31 39 34 30 35 30 36 36 0d 0a 55 73 : 4219405066..Us
+0x0000a0: 65 72 2d 41 67 65 6e 74 3a 20 41 69 72 50 6c 61 er-Agent: AirPla
+0x0000b0: 79 2f 36 39 35 2e 35 2e 31 0d 0a 0d 0a 62 70 6c y/695.5.1....bpl
+0x0000c0: 69 73 74 30 30 d2 01 02 03 04 54 74 79 70 65 56 ist00.....TtypeV
+0x0000d0: 70 61 72 61 6d 73 5f 10 19 75 70 64 61 74 65 4d params_..updateM
+0x0000e0: 52 53 75 70 70 6f 72 74 65 64 43 6f 6d 6d 61 6e RSupportedComman
+0x0000f0: 64 73 d1 05 06 5f 10 1d 6d 72 53 75 70 70 6f 72 ds..._..mrSuppor
+0x000100: 74 65 64 43 6f 6d 6d 61 6e 64 73 46 72 6f 6d 53 tedCommandsFromS
+0x000110: 65 6e 64 65 72 af 10 17 07 08 09 0a 0b 0c 0d 0e ender...........
+0x000120: 0f 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 4f ...............O
+0x000130: 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f .gbplist00....._
+0x000140: 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f ..kCommandInfoCo
+0x000150: 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d mmandKey_..kComm
+0x000160: 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 andInfoEnabledKe
+0x000170: 79 10 00 09 08 0d 26 3f 41 00 00 00 00 00 00 01 y.....&?A.......
+0x000180: 01 00 00 00 00 00 00 00 05 00 00 00 00 00 00 00 ................
+0x000190: 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 ........BO.gbpli
+0x0001a0: 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d st00....._..kCom
+0x0001b0: 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b mandInfoCommandK
+0x0001c0: 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 ey_..kCommandInf
+0x0001d0: 6f 45 6e 61 62 6c 65 64 4b 65 79 10 01 09 08 0d oEnabledKey.....
+0x0001e0: 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 00 00 &?A.............
+0x0001f0: 00 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
+0x000200: 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 ..BO.gbplist00..
+0x000210: 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e ..._..kCommandIn
+0x000220: 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b foCommandKey_..k
+0x000230: 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c CommandInfoEnabl
+0x000240: 65 64 4b 65 79 10 02 09 08 0d 26 3f 41 00 00 00 edKey.....&?A...
+0x000250: 00 00 00 01 01 00 00 00 00 00 00 00 05 00 00 00 ................
+0x000260: 00 00 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 ............BO.g
+0x000270: 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 bplist00....._..
+0x000280: 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d kCommandInfoComm
+0x000290: 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e andKey_..kComman
+0x0002a0: 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 dInfoEnabledKey.
+0x0002b0: 03 09 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 ....&?A.........
+0x0002c0: 00 00 00 00 00 00 05 00 00 00 00 00 00 00 00 00 ................
+0x0002d0: 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 ......BO.gbplist
+0x0002e0: 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 00....._..kComma
+0x0002f0: 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 ndInfoCommandKey
+0x000300: 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 _..kCommandInfoE
+0x000310: 6e 61 62 6c 65 64 4b 65 79 10 04 08 08 0d 26 3f nabledKey.....&?
+0x000320: 41 00 00 00 00 00 00 01 01 00 00 00 00 00 00 00 A...............
+0x000330: 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
+0x000340: 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 BO.gbplist00....
+0x000350: 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f ._..kCommandInfo
+0x000360: 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f CommandKey_..kCo
+0x000370: 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 mmandInfoEnabled
+0x000380: 4b 65 79 10 05 08 08 0d 26 3f 41 00 00 00 00 00 Key.....&?A.....
+0x000390: 00 01 01 00 00 00 00 00 00 00 05 00 00 00 00 00 ................
+0x0003a0: 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 ..........BO.gbp
+0x0003b0: 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 list00....._..kC
+0x0003c0: 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e ommandInfoComman
+0x0003d0: 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 dKey_..kCommandI
+0x0003e0: 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 08 08 nfoEnabledKey...
+0x0003f0: 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 ..&?A...........
+0x000400: 00 00 00 00 05 00 00 00 00 00 00 00 00 00 00 00 ................
+0x000410: 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 ....BO.gbplist00
+0x000420: d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 ....._..kCommand
+0x000430: 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 InfoCommandKey_.
+0x000440: 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 .kCommandInfoEna
+0x000450: 62 6c 65 64 4b 65 79 10 09 09 08 0d 26 3f 41 00 bledKey.....&?A.
+0x000460: 00 00 00 00 00 01 01 00 00 00 00 00 00 00 05 00 ................
+0x000470: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 42 4f ..............BO
+0x000480: 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f .gbplist00....._
+0x000490: 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f ..kCommandInfoCo
+0x0004a0: 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d mmandKey_..kComm
+0x0004b0: 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 andInfoEnabledKe
+0x0004c0: 79 10 0a 08 08 0d 26 3f 41 00 00 00 00 00 00 01 y.....&?A.......
+0x0004d0: 01 00 00 00 00 00 00 00 05 00 00 00 00 00 00 00 ................
+0x0004e0: 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 ........BO.gbpli
+0x0004f0: 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d st00....._..kCom
+0x000500: 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b mandInfoCommandK
+0x000510: 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 ey_..kCommandInf
+0x000520: 6f 45 6e 61 62 6c 65 64 4b 65 79 10 0b 09 08 0d oEnabledKey.....
+0x000530: 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 00 00 &?A.............
+0x000540: 00 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
+0x000550: 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 ..BO.gbplist00..
+0x000560: 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e ..._..kCommandIn
+0x000570: 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b foCommandKey_..k
+0x000580: 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c CommandInfoEnabl
+0x000590: 65 64 4b 65 79 10 11 08 08 0d 26 3f 41 00 00 00 edKey.....&?A...
+0x0005a0: 00 00 00 01 01 00 00 00 00 00 00 00 05 00 00 00 ................
+0x0005b0: 00 00 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 ............BO.g
+0x0005c0: 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 bplist00....._..
+0x0005d0: 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d kCommandInfoComm
+0x0005e0: 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e andKey_..kComman
+0x0005f0: 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 dInfoEnabledKey.
+0x000600: 12 08 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 ....&?A.........
+0x000610: 00 00 00 00 00 00 05 00 00 00 00 00 00 00 00 00 ................
+0x000620: 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 ......BO.gbplist
+0x000630: 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 00....._..kComma
+0x000640: 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 ndInfoCommandKey
+0x000650: 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 _..kCommandInfoE
+0x000660: 6e 61 62 6c 65 64 4b 65 79 10 14 09 08 0d 26 3f nabledKey.....&?
+0x000670: 41 00 00 00 00 00 00 01 01 00 00 00 00 00 00 00 A...............
+0x000680: 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
+0x000690: 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 BO.gbplist00....
+0x0006a0: 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f ._..kCommandInfo
+0x0006b0: 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f CommandKey_..kCo
+0x0006c0: 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 mmandInfoEnabled
+0x0006d0: 4b 65 79 10 15 09 08 0d 26 3f 41 00 00 00 00 00 Key.....&?A.....
+0x0006e0: 00 01 01 00 00 00 00 00 00 00 05 00 00 00 00 00 ................
+0x0006f0: 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 ..........BO.gbp
+0x000700: 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 list00....._..kC
+0x000710: 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e ommandInfoComman
+0x000720: 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 dKey_..kCommandI
+0x000730: 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 16 09 nfoEnabledKey...
+0x000740: 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 ..&?A...........
+0x000750: 00 00 00 00 05 00 00 00 00 00 00 00 00 00 00 00 ................
+0x000760: 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 ....BO.gbplist00
+0x000770: d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 ....._..kCommand
+0x000780: 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 InfoCommandKey_.
+0x000790: 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 .kCommandInfoEna
+0x0007a0: 62 6c 65 64 4b 65 79 10 17 09 08 0d 26 3f 41 00 bledKey.....&?A.
+0x0007b0: 00 00 00 00 00 01 01 00 00 00 00 00 00 00 05 00 ................
+0x0007c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 42 4f ..............BO
+0x0007d0: 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f .gbplist00....._
+0x0007e0: 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f ..kCommandInfoCo
+0x0007f0: 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d mmandKey_..kComm
+0x000800: 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 andInfoEnabledKe
+0x000810: 79 10 18 08 08 0d 26 3f 41 00 00 00 00 00 00 01 y.....&?A.......
+0x000820: 01 00 00 00 00 00 00 00 05 00 00 00 00 00 00 00 ................
+0x000830: 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 ........BO.gbpli
+0x000840: 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d st00....._..kCom
+0x000850: 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b mandInfoCommandK
+0x000860: 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 ey_..kCommandInf
+0x000870: 6f 45 6e 61 62 6c 65 64 4b 65 79 10 19 09 08 0d oEnabledKey.....
+0x000880: 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 00 00 &?A.............
+0x000890: 00 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
+0x0008a0: 00 00 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 ..BO.gbplist00..
+0x0008b0: 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e ..._..kCommandIn
+0x0008c0: 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b foCommandKey_..k
+0x0008d0: 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c CommandInfoEnabl
+0x0008e0: 65 64 4b 65 79 10 1a 09 08 0d 26 3f 41 00 00 00 edKey.....&?A...
+0x0008f0: 00 00 00 01 01 00 00 00 00 00 00 00 05 00 00 00 ................
+0x000900: 00 00 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 ............BO.g
+0x000910: 62 70 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 bplist00....._..
+0x000920: 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d kCommandInfoComm
+0x000930: 61 6e 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e andKey_..kComman
+0x000940: 64 49 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 dInfoEnabledKey.
+0x000950: 79 09 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 y...&?A.........
+0x000960: 00 00 00 00 00 00 05 00 00 00 00 00 00 00 00 00 ................
+0x000970: 00 00 00 00 00 00 42 4f 10 67 62 70 6c 69 73 74 ......BO.gbplist
+0x000980: 30 30 d2 01 02 03 04 5f 10 16 6b 43 6f 6d 6d 61 00....._..kComma
+0x000990: 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e 64 4b 65 79 ndInfoCommandKey
+0x0009a0: 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f 45 _..kCommandInfoE
+0x0009b0: 6e 61 62 6c 65 64 4b 65 79 10 7a 09 08 0d 26 3f nabledKey.z...&?
+0x0009c0: 41 00 00 00 00 00 00 01 01 00 00 00 00 00 00 00 A...............
+0x0009d0: 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ................
+0x0009e0: 42 4f 10 67 62 70 6c 69 73 74 30 30 d2 01 02 03 BO.gbplist00....
+0x0009f0: 04 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 6e 66 6f ._..kCommandInfo
+0x000a00: 43 6f 6d 6d 61 6e 64 4b 65 79 5f 10 16 6b 43 6f CommandKey_..kCo
+0x000a10: 6d 6d 61 6e 64 49 6e 66 6f 45 6e 61 62 6c 65 64 mmandInfoEnabled
+0x000a20: 4b 65 79 10 7d 09 08 0d 26 3f 41 00 00 00 00 00 Key.}...&?A.....
+0x000a30: 00 01 01 00 00 00 00 00 00 00 05 00 00 00 00 00 ................
+0x000a40: 00 00 00 00 00 00 00 00 00 00 42 4f 10 67 62 70 ..........BO.gbp
+0x000a50: 6c 69 73 74 30 30 d2 01 02 03 04 5f 10 16 6b 43 list00....._..kC
+0x000a60: 6f 6d 6d 61 6e 64 49 6e 66 6f 43 6f 6d 6d 61 6e ommandInfoComman
+0x000a70: 64 4b 65 79 5f 10 16 6b 43 6f 6d 6d 61 6e 64 49 dKey_..kCommandI
+0x000a80: 6e 66 6f 45 6e 61 62 6c 65 64 4b 65 79 10 80 09 nfoEnabledKey...
+0x000a90: 08 0d 26 3f 41 00 00 00 00 00 00 01 01 00 00 00 ..&?A...........
+0x000aa0: 00 00 00 00 05 00 00 00 00 00 00 00 00 00 00 00 ................
+0x000ab0: 00 00 00 00 42 00 08 00 0d 00 12 00 19 00 35 00 ....B.........5.
+0x000ac0: 38 00 58 00 72 00 dc 01 46 01 b0 02 1a 02 84 02 8.X.r...F.......
+0x000ad0: ee 03 58 03 c2 04 2c 04 96 05 00 05 6a 05 d4 06 ..X...,.....j...
+0x000ae0: 3e 06 a8 07 12 07 7c 07 e6 08 50 08 ba 09 24 09 >.....|...P...$.
+0x000af0: 8e 00 00 00 00 00 00 02 01 00 00 00 00 00 00 00 ................
+0x000b00: 1e 00 00 00 00 00 00 00 00 00 00 00 00 00 00 09 ................
+0x000b10: f8                                              .               
 Encrypted:
-0x000000: 3f 00 3e a8 9d 7c be 73 c8 fc d0 a7 e4 b2 b1 dc ?.>..|.s........
-0x000010: a1 d1 00 85 f5 49 96 4b d9 0c 7b c8 e7 5b d7 5b .....I.K..{..[.[
-0x000020: 0a 8a 0c 22 6e 54 d0 27 f0 f1 57 0d 88 ee ba c0 ..."nT.'..W.....
-0x000030: 01 35 92 61 26 65 d8 fb d7 09 2b b6 84 a4 e9 14 .5.a&e....+.....
-0x000040: e7 b0 eb cb 82 bd f0 dc 69 57 37 28 ff fd b3 7b ........iW7(...{
-0x000050: 2a                                              *               
-Decrypted:
-0x000000: 50 4f 53 54 20 2f 66 65 65 64 62 61 63 6b 20 52 POST /feedback R
-0x000010: 54 53 50 2f 31 2e 30 0d 0a 43 53 65 71 3a 20 31 TSP/1.0..CSeq: 1
-0x000020: 34 0d 0a 44 41 43 50 2d 49 44 3a 20 42 41 41 37 4..DACP-ID: BAA7
-0x000030: 44 42 32 34 33 43 33 44 43 31 39 0d 0a 41 63 74 DB243C3DC19..Act
-0x000040: 69 76 65 2d 52 65 6d 6f 74 65 3a 20 39 30 34 31 ive-Remote: 9041
-0x000050: 35 34 34 31 36 0d 0a 55 73 65 72 2d 41 67 65 6e 54416..User-Agen
-0x000060: 74 3a 20 41 69 72 50 6c 61 79 2f 36 39 35 2e 35 t: AirPlay/695.5
-0x000070: 2e 31 0d 0a 0d 0a                               .1....          
-Encrypted:
-0x000000: 36 00 80 9a d2 06 c8 6a 04 0d 24 32 0e e4 30 40 6......j..$2..0@
-0x000010: 96 39 2b 97 cd d7 02 ac 54 13 34 3d 62 02 7c 68 .9+.....T.4=b.|h
-0x000020: 08 c7 94 54 a0 99 f7 08 e4 25 79 61 c4 86 2f 24 ...T.....%ya../$
-0x000030: b2 5c 0a 60 ed 03 67 eb 1c b7 cf 92 0a 54 83 c7 .\.`..g......T..
-0x000040: 24 4c d4 da cb e8 10 0e                         $L......        
+0x000000: 3f 00 bd 65 32 58 e6 61 ab ea 84 c1 18 6f f3 81 ?..e2X.a.....o..
+0x000010: d4 53 59 6f 9b 5f c1 40 c1 d4 a5 79 d6 bb fc d1 .SYo._.@...y....
+0x000020: 81 79 67 2b 28 6a 69 41 f8 3f d9 da d9 e5 94 4d .yg+(jiA.?.....M
+0x000030: 38 0f 07 14 08 94 81 4c 73 18 fe 73 4a b6 60 52 8......Ls..sJ.`R
+0x000040: a0 24 fd 33 f2 c6 ad 87 9a 52 5f 63 6d f5 05 cb .$.3.....R_cm...
+0x000050: 7a                                              z               
 Decrypted:
 0x000000: 50 4f 53 54 20 2f 66 65 65 64 62 61 63 6b 20 52 POST /feedback R
 0x000010: 54 53 50 2f 31 2e 30 0d 0a 43 53 65 71 3a 20 31 TSP/1.0..CSeq: 1
-0x000020: 35 0d 0a 44 41 43 50 2d 49 44 3a 20 42 41 41 37 5..DACP-ID: BAA7
-0x000030: 44 42 32 34 33 43 33 44 43 31 39 0d 0a 41 63 74 DB243C3DC19..Act
-0x000040: 69 76 65 2d 52 65 6d 6f 74 65 3a 20 39 30 34 31 ive-Remote: 9041
-0x000050: 35 34 34 31 36 0d 0a 55 73 65 72 2d 41 67 65 6e 54416..User-Agen
-0x000060: 74 3a 20 41 69 72 50 6c 61 79 2f 36 39 35 2e 35 t: AirPlay/695.5
-0x000070: 2e 31 0d 0a 0d 0a                               .1....          
+0x000020: 34 0d 0a 44 41 43 50 2d 49 44 3a 20 35 34 30 32 4..DACP-ID: 5402
+0x000030: 43 46 44 38 33 39 32 35 35 31 45 37 0d 0a 41 63 CFD8392551E7..Ac
+0x000040: 74 69 76 65 2d 52 65 6d 6f 74 65 3a 20 34 32 31 tive-Remote: 421
+0x000050: 39 34 30 35 30 36 36 0d 0a 55 73 65 72 2d 41 67 9405066..User-Ag
+0x000060: 65 6e 74 3a 20 41 69 72 50 6c 61 79 2f 36 39 35 ent: AirPlay/695
+0x000070: 2e 35 2e 31 0d 0a 0d 0a                         .5.1....        
 Encrypted:
-0x000000: 36 00 5a 74 e2 c5 5d b4 32 dc 69 7c eb f9 44 81 6.Zt..].2.i|..D.
-0x000010: 48 0b 48 14 4a ce 27 79 1b 08 ff 50 d2 e6 4b 8a H.H.J.'y...P..K.
-0x000020: 6a f7 9f d0 c5 5a 61 ae a1 0b 9a 35 67 a1 12 db j....Za....5g...
-0x000030: 9c 30 80 58 66 c7 ad 24 c8 fa 2b 68 77 1f a1 a9 .0.Xf..$..+hw...
-0x000040: 3a ac 51 21 cd 58 1c f4                         :.Q!.X..        
-Decrypted:
-0x000000: 50 4f 53 54 20 2f 66 65 65 64 62 61 63 6b 20 52 POST /feedback R
-0x000010: 54 53 50 2f 31 2e 30 0d 0a 43 53 65 71 3a 20 31 TSP/1.0..CSeq: 1
-0x000020: 36 0d 0a 44 41 43 50 2d 49 44 3a 20 42 41 41 37 6..DACP-ID: BAA7
-0x000030: 44 42 32 34 33 43 33 44 43 31 39 0d 0a 41 63 74 DB243C3DC19..Act
-0x000040: 69 76 65 2d 52 65 6d 6f 74 65 3a 20 39 30 34 31 ive-Remote: 9041
-0x000050: 35 34 34 31 36 0d 0a 55 73 65 72 2d 41 67 65 6e 54416..User-Agen
-0x000060: 74 3a 20 41 69 72 50 6c 61 79 2f 36 39 35 2e 35 t: AirPlay/695.5
-0x000070: 2e 31 0d 0a 0d 0a                               .1....          
-Encrypted:
-0x000000: 36 00 42 c4 ad 86 7a 64 ef 38 cf 38 62 c1 7b 0e 6.B...zd.8.8b.{.
-0x000010: 29 f1 14 6a 72 28 32 c2 e9 0a bd 3d 24 b3 dd 28 )..jr(2....=$..(
-0x000020: 3c 01 c2 38 e8 29 95 50 05 07 0e 61 b6 45 9a 4b <..8.).P...a.E.K
-0x000030: 35 cf b1 86 4a 11 ab 82 9a 7a 7f 6b 09 9d da d8 5...J....z.k....
-0x000040: 35 cb ad f7 09 19 92 f0                         5.......        
-Decrypted:
-0x000000: 50 4f 53 54 20 2f 66 65 65 64 62 61 63 6b 20 52 POST /feedback R
-0x000010: 54 53 50 2f 31 2e 30 0d 0a 43 53 65 71 3a 20 31 TSP/1.0..CSeq: 1
-0x000020: 37 0d 0a 44 41 43 50 2d 49 44 3a 20 42 41 41 37 7..DACP-ID: BAA7
-0x000030: 44 42 32 34 33 43 33 44 43 31 39 0d 0a 41 63 74 DB243C3DC19..Act
-0x000040: 69 76 65 2d 52 65 6d 6f 74 65 3a 20 39 30 34 31 ive-Remote: 9041
-0x000050: 35 34 34 31 36 0d 0a 55 73 65 72 2d 41 67 65 6e 54416..User-Agen
-0x000060: 74 3a 20 41 69 72 50 6c 61 79 2f 36 39 35 2e 35 t: AirPlay/695.5
-0x000070: 2e 31 0d 0a 0d 0a                               .1....          
-Encrypted:
-0x000000: 36 00 e8 f5 15 ca 6f 4b 01 69 8b 36 34 f4 bb c9 6.....oK.i.64...
-0x000010: 48 9e f1 0e 1b 3d 99 dc df b7 ef 43 b1 e9 87 05 H....=.....C....
-0x000020: b9 6a 5a 5a 88 20 b0 d9 a9 b9 2d ad 6d b1 cd 97 .jZZ. ....-.m...
-0x000030: d8 be 53 04 02 8b 55 b6 46 9b f0 6c ed eb a0 28 ..S...U.F..l...(
-0x000040: 5c 6a c5 b7 e9 3d 3e d0                         \j...=>.        
+0x000000: 36 00 bc 10 ef 31 13 be da c2 e0 4a 25 93 ac 5e 6....1.....J%..^
+0x000010: 46 28 4e 02 a9 71 b6 7c 14 72 02 12 22 a1 75 b6 F(N..q.|.r..".u.
+0x000020: 0d ff 9c 70 6e 71 36 9e d7 db 3f 52 28 20 8c be ...pnq6...?R( ..
+0x000030: 26 63 2d ae 19 08 20 75 40 c7 27 61 e2 36 a1 01 &c-... u@.'a.6..
+0x000040: 9b 94 68 97 81 3f fc 08                         ..h..?..        
 Decrypted:
 0x000000: 54 45 41 52 44 4f 57 4e 20 72 74 73 70 3a 2f 2f TEARDOWN rtsp://
-0x000010: 31 39 32 2e 31 36 38 2e 32 2e 34 2f 31 31 36 33 192.168.2.4/1163
-0x000020: 35 32 35 31 32 38 33 38 31 33 33 35 34 35 34 39 5251283813354549
+0x000010: 31 39 32 2e 31 36 38 2e 32 2e 34 2f 31 37 31 35 192.168.2.4/1715
+0x000020: 32 36 36 39 38 36 37 30 38 33 38 34 34 36 32 31 2669867083844621
 0x000030: 20 52 54 53 50 2f 31 2e 30 0d 0a 43 6f 6e 74 65  RTSP/1.0..Conte
 0x000040: 6e 74 2d 4c 65 6e 67 74 68 3a 20 34 32 0d 0a 43 nt-Length: 42..C
 0x000050: 6f 6e 74 65 6e 74 2d 54 79 70 65 3a 20 61 70 70 ontent-Type: app
 0x000060: 6c 69 63 61 74 69 6f 6e 2f 78 2d 61 70 70 6c 65 lication/x-apple
 0x000070: 2d 62 69 6e 61 72 79 2d 70 6c 69 73 74 0d 0a 43 -binary-plist..C
-0x000080: 53 65 71 3a 20 31 38 0d 0a 44 41 43 50 2d 49 44 Seq: 18..DACP-ID
-0x000090: 3a 20 42 41 41 37 44 42 32 34 33 43 33 44 43 31 : BAA7DB243C3DC1
-0x0000a0: 39 0d 0a 41 63 74 69 76 65 2d 52 65 6d 6f 74 65 9..Active-Remote
-0x0000b0: 3a 20 39 30 34 31 35 34 34 31 36 0d 0a 55 73 65 : 904154416..Use
-0x0000c0: 72 2d 41 67 65 6e 74 3a 20 41 69 72 50 6c 61 79 r-Agent: AirPlay
-0x0000d0: 2f 36 39 35 2e 35 2e 31 0d 0a 0d 0a 62 70 6c 69 /695.5.1....bpli
-0x0000e0: 73 74 30 30 d0 08 00 00 00 00 00 00 01 01 00 00 st00............
-0x0000f0: 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 ................
-0x000100: 00 00 00 00 00 09                               ......          
-    18424.6ms desk               rendering      flag=false prev=false enable=false
-    18425.1ms desk.flusher       accept         FLUSH_INFO All  
-    18425.1ms rtsp.ctx           teardowm       requested remote=904154416 dacp=BAA7DB243C3DC19 'xapham'
-    18425.1ms rtsp.ctx           teardowm       completed remote=904154416 dacp=BAA7DB243C3DC19 'xapham'
+0x000080: 53 65 71 3a 20 31 35 0d 0a 44 41 43 50 2d 49 44 Seq: 15..DACP-ID
+0x000090: 3a 20 35 34 30 32 43 46 44 38 33 39 32 35 35 31 : 5402CFD8392551
+0x0000a0: 45 37 0d 0a 41 63 74 69 76 65 2d 52 65 6d 6f 74 E7..Active-Remot
+0x0000b0: 65 3a 20 34 32 31 39 34 30 35 30 36 36 0d 0a 55 e: 4219405066..U
+0x0000c0: 73 65 72 2d 41 67 65 6e 74 3a 20 41 69 72 50 6c ser-Agent: AirPl
+0x0000d0: 61 79 2f 36 39 35 2e 35 2e 31 0d 0a 0d 0a 62 70 ay/695.5.1....bp
+0x0000e0: 6c 69 73 74 30 30 d0 08 00 00 00 00 00 00 01 01 list00..........
+0x0000f0: 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 ................
+0x000100: 00 00 00 00 00 00 00 09                         ........        
+    23551.2ms desk               rendering      flag=false prev=false enable=false
+    23551.6ms desk.flusher       accept         FLUSH_INFO All  
+    23551.6ms rtsp.ctx           teardowm       requested remote=4219405066 dacp=5402CFD8392551E7 'xapham'
+    23551.6ms rtsp.ctx           teardowm       completed remote=4219405066 dacp=5402CFD8392551E7 'xapham'
 Encrypted:
-0x000000: 46 00 08 be f9 02 31 bc 4a ca 99 34 93 6d f9 b6 F.....1.J..4.m..
-0x000010: f5 59 64 e3 ed f3 9b 8b a0 ba 4e 59 1e 50 25 de .Yd.......NY.P%.
-0x000020: 74 9c 2d b9 c2 e0 97 09 56 91 89 5e 13 f5 b9 d7 t.-.....V..^....
-0x000030: 8a 3e a2 03 7b 81 25 f8 ab b2 95 0f e3 b3 63 25 .>..{.%.......c%
-0x000040: 2b 13 89 f8 ae fd 45 ed cf 72 d9 55 6f 11 c0 4c +.....E..r.Uo..L
-0x000050: b3 76 0f d8 a8 96 4f bb                         .v....O.        
-    18425.1ms desk.flusher       done           FLUSH_INFO Inactive 
-    18434.4ms fx                 set_silence    fx=standby timeout=30m 30s 0.0ms frames=78814
-    18434.4ms fx                 select         FX none -> standby
+0x000000: 46 00 1e 14 85 de 7f c2 3f 6e da 1e c5 5d 78 91 F.......?n...]x.
+0x000010: 9b 4c 20 25 26 36 0d db 36 f3 19 6a 92 51 18 f5 .L %&6..6..j.Q..
+0x000020: e2 d4 5d 27 85 c7 84 74 bc 56 16 45 f0 54 3b 29 ..]'...t.V.E.T;)
+0x000030: 14 b4 cd e9 7f 5c ba b3 9f 29 78 cf d7 73 82 3b .....\...)x..s.;
+0x000040: 51 f0 f3 53 e4 9c 9c a1 a5 7c 31 48 8f aa 54 42 Q..S.....|1H..TB
+0x000050: 66 1c 25 9c d1 c1 4c da                         f.%...L.        
+    23551.7ms desk.flusher       done           FLUSH_INFO Inactive 
+    23564.5ms fx                 set_silence    fx=standby timeout=30m 30s 0.0ms frames=78814
+    23564.5ms fx                 select         FX none -> standby
+^C    30471.6ms app                ss_shutdown    caught SIGNT(2), requesting stop...
+    31086.0ms app                main           primary io_ctx has finished all work
+    31086.0ms rtsp.ctx           force_close    requested however wasn't live
+    31086.0ms rtsp               close_all      closed sessions=1
+    31086.0ms rtsp               shutdown       complete
+
+2023-09-30T09:12:25 STOP
+[1]    3581 segmentation fault  /home/thughey/devel/pierre/build/pierre
+jophiel devel/pierre/build [3-3969-139] % 

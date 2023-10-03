@@ -16,16 +16,23 @@
 
 use super::GenericState;
 use crate::{rtsp::Body, Result};
-use alkali::asymmetric::cipher;
 use anyhow::anyhow;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use indexmap::IndexMap;
 use pretty_hex::PrettyHex;
-use std::{fmt, mem};
-use tracing::{error, info, warn};
+use std::{
+    fmt::{self, Write},
+    mem,
+};
+use tracing::{debug, error, info, warn};
+use x25519_dalek::PublicKey as CipherPubKey;
+use Val::{
+    Certificate, EncryptedData, Error, Flags, FragmentData, FragmentLast, Identifier, Method,
+    Permissions, Proof, PublicKey, RetryDelay, Salt, Separator, Signature, State,
+};
 
 #[repr(u8)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Idx {
     Method = 0,        // (integer) Method to use for pairing. See PairMethod
     Identifier = 1,    // (UTF-8) Identifier for authentication
@@ -43,20 +50,20 @@ pub enum Idx {
     // None (0x00): Regular user
     // Bit 1 (0x01): Admin that is able to add and remove
     // pairings against the accessory
-    FragmentData = 13, // (bytes) Non-last fragment of data. If length is 0,
+    FragmentData = 12, // (bytes) Non-last fragment of data. If length is 0,
     // it's an ACK.
-    FragmentLast = 14, // (bytes) Last fragment of data
+    FragmentLast = 13, // (bytes) Last fragment of data
     Flags = 19,        // Added from airplay2_receiver
     Separator = 0xffu8,
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Val {
     Method(u8) = 0,
     Identifier(Vec<u8>) = 1,
     Salt(Vec<u8>) = 2,
-    PublicKey(cipher::PublicKey) = 3,
+    PublicKey(CipherPubKey) = 3,
     Proof(Vec<u8>) = 4,
     EncryptedData(Vec<u8>) = 5,
     State(GenericState) = 6,
@@ -65,25 +72,26 @@ pub enum Val {
     Certificate(Vec<u8>) = 9,
     Signature(Vec<u8>) = 10,
     Permissions(u32) = 11,
-    FragmentData(Vec<u8>) = 13,
-    FragmentLast(Vec<u8>) = 14,
-    Flags(u64) = 19,
+    FragmentData(Vec<u8>) = 12,
+    FragmentLast(Vec<u8>) = 13,
+    Flags(u8) = 19,
     Separator = 0xffu8,
 }
 
 impl Idx {
-    pub const PROOF: u8 = Self::Proof as u8;
-    pub const ENCRYPTED_DATA: u8 = Self::EncryptedData as u8;
-    pub const STATE: u8 = Self::State as u8;
-    pub const ERROR: u8 = Self::Error as u8;
-    pub const RETRY_DELAY: u8 = Self::RetryDelay as u8;
     pub const CERTIFICATE: u8 = Self::Certificate as u8;
-    pub const SIGNATURE: u8 = Self::Signature as u8;
-    pub const PERMISSIONS: u8 = Self::Permissions as u8;
-    pub const SEPERATOR: u8 = Self::Separator as u8;
+    pub const ENCRYPTED_DATA: u8 = Self::EncryptedData as u8;
+    pub const ERROR: u8 = Self::Error as u8;
+    pub const FLAGS: u8 = Self::Flags as u8;
     pub const FRAGMENT_DATA: u8 = Self::FragmentData as u8;
     pub const FRAGMENT_LAST: u8 = Self::FragmentLast as u8;
-    pub const FLAGS: u8 = Self::Flags as u8;
+    pub const METHOD: u8 = Self::Method as u8;
+    pub const PERMISSIONS: u8 = Self::Permissions as u8;
+    pub const PROOF: u8 = Self::Proof as u8;
+    pub const RETRY_DELAY: u8 = Self::RetryDelay as u8;
+    pub const SEPERATOR: u8 = Self::Separator as u8;
+    pub const SIGNATURE: u8 = Self::Signature as u8;
+    pub const STATE: u8 = Self::State as u8;
 }
 
 /// Encoding helpers
@@ -118,8 +126,17 @@ fn tvb(id: u8, data: Vec<u8>) -> Bytes {
     out.into()
 }
 
-fn tmb(_id: u8, data: &[u8; 32]) -> Bytes {
-    Bytes::copy_from_slice(data)
+fn tmb(id: u8, data: &[u8; 32]) -> Bytes {
+    let data_len = data.len();
+    let mut buf = BytesMut::with_capacity(data_len + 1);
+
+    if let Ok(len) = u8::try_from(data_len) {
+        buf.put_u8(id);
+        buf.put_u8(len);
+        buf.extend_from_slice(data.as_slice());
+    }
+
+    buf.into()
 }
 
 impl Val {
@@ -129,11 +146,6 @@ impl Val {
     pub const PUBLIC_KEY: u8 = Idx::PublicKey as u8;
 
     pub fn desc(&self) -> &'static str {
-        use Val::{
-            Certificate, EncryptedData, Error, Flags, FragmentData, FragmentLast, Identifier,
-            Method, Permissions, Proof, PublicKey, RetryDelay, Salt, Separator, Signature, State,
-        };
-
         match self {
             Method(_) => "Method",
             Identifier(_) => "Identifier",
@@ -165,14 +177,13 @@ impl Val {
     }
 
     pub fn encode(self) -> Bytes {
-        use Val::{EncryptedData, Identifier, Method, PublicKey, Signature, State};
         let tag_id = self.tag_id();
         let tag_len = self.len();
 
         match self {
             Method(n) | State(GenericState(n)) if tag_len == 1 => tsb(tag_id, n),
             EncryptedData(data) | Signature(data) | Identifier(data) => tvb(tag_id, data),
-            PublicKey(data) => tmb(tag_id, &data),
+            PublicKey(data) => tmb(tag_id, data.as_bytes()),
             val => {
                 error!("encode failure: {val:?}");
                 panic!("coding error");
@@ -181,15 +192,10 @@ impl Val {
     }
 
     pub fn extend(&mut self, more: Val) {
-        use Val::{
-            Certificate, EncryptedData, FragmentData, FragmentLast, Identifier, Proof, Salt,
-            Signature,
-        };
-
         let self_id = self.id();
 
         if self_id == more.id() {
-            info!("attempting extend {self:?}");
+            debug!("attempting extend {self:?}");
 
             if let (
                 Identifier(a) | Salt(a) | Proof(a) | Signature(a) | EncryptedData(a)
@@ -206,19 +212,13 @@ impl Val {
     }
 
     pub fn len(&self) -> usize {
-        use Val::{
-            Certificate, EncryptedData, Error, Flags, FragmentData, FragmentLast, Identifier,
-            Method, Permissions, Proof, PublicKey, RetryDelay, Salt, Separator, Signature, State,
-        };
-
         match self {
             Identifier(v) | Salt(v) | Proof(v) | EncryptedData(v) | FragmentData(v)
             | FragmentLast(v) | Certificate(v) | Signature(v) => v.len(),
-            PublicKey(v) => v.len(),
+            PublicKey(v) => v.as_bytes().len(),
             State(_) => 1,
-            Method(x) | Error(x) => mem::size_of_val(x),
+            Method(x) | Error(x) | Flags(x) => mem::size_of_val(x),
             RetryDelay(x) | Permissions(x) => mem::size_of_val(x),
-            Flags(x) => mem::size_of_val(x),
             Separator => 0,
         }
     }
@@ -232,42 +232,20 @@ impl Val {
 
 impl fmt::Debug for Val {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let desc = self.desc();
+
         match self {
-            val @ (Val::Method(x) | Val::Error(x)) => {
-                writeln!(f, "{} {x}", val.desc())?;
+            Identifier(x) | Signature(x) | Salt(x) | Proof(x) | EncryptedData(x)
+            | FragmentData(x) | FragmentLast(x) | Certificate(x) => {
+                f.write_fmt(format_args!("{desc} {:?}", x.hex_dump()))
             }
-
-            val @ (Val::Identifier(x)
-            | Val::Signature(x)
-            | Val::Salt(x)
-            | Val::Proof(x)
-            | Val::EncryptedData(x)
-            | Val::FragmentData(x)
-            | Val::FragmentLast(x)
-            | Val::Certificate(x)) => {
-                writeln!(f, "{} {:?}", val.desc(), x.hex_dump())?;
-            }
-
-            val @ Val::PublicKey(pk) => {
-                writeln!(f, "{} {:?}", val.desc(), pk.hex_dump())?;
-            }
-
-            val @ Val::State(s) => {
-                writeln!(f, "{} {:?}", val.desc(), s)?;
-            }
-
-            val @ Val::Separator => {
-                writeln!(f, "{}", val.desc())?;
-            }
-
-            val @ (Val::RetryDelay(x) | Val::Permissions(x)) => {
-                writeln!(f, "{}: {}", val.desc(), x)?;
-            }
-
-            val @ Val::Flags(x) => writeln!(f, "{}: {}", val.desc(), x)?,
+            RetryDelay(x) | Permissions(x) => f.write_fmt(format_args!("{desc}: {x}")),
+            Method(x) | Error(x) => f.write_fmt(format_args!("{desc} {x}")),
+            PublicKey(pk) => f.write_fmt(format_args!("{desc} {:?}", pk.hex_dump())),
+            State(s) => f.write_fmt(format_args!("{desc} {s:?}")),
+            Flags(x) => f.write_fmt(format_args!("{desc}: {x}")),
+            Separator => f.write_str(desc),
         }
-
-        Ok(())
     }
 }
 
@@ -275,14 +253,24 @@ impl fmt::Debug for Val {
 pub struct Map(IndexMap<u8, Val>);
 
 impl Map {
-    pub fn encode(self) -> Body {
-        Body::Bulk(
-            self.0
-                .into_values()
-                .map(Val::encode)
-                .collect::<Vec<Bytes>>()
-                .concat(),
-        )
+    // pub fn encode(self) -> Body {
+    //     Body::OctetStream(
+    //         self.0
+    //             .into_values()
+    //             .map(Val::encode)
+    //             .collect::<Vec<Bytes>>()
+    //             .concat(),
+    //     )
+    // }
+
+    pub fn encode(self) -> BytesMut {
+        self.0
+            .into_values()
+            .map(Val::encode)
+            .collect::<Vec<Bytes>>()
+            .concat()
+            .as_slice()
+            .into()
     }
 
     pub fn push(&mut self, val: Val) {
@@ -291,7 +279,7 @@ impl Map {
 
         match self.0.entry(idx) {
             Entry::Vacant(vacant) => {
-                info!("pushing {idx} {val:?}");
+                debug!("pushing {idx} {val:?}");
                 vacant.insert(val);
             }
             Entry::Occupied(mut occupied) => {
@@ -299,6 +287,22 @@ impl Map {
                 warn!("replaced {v:?}");
             }
         }
+    }
+
+    pub fn get_flags(&self) -> Result<u8> {
+        if let Some(Val::Flags(f)) = self.0.get(&Idx::FLAGS) {
+            return Ok(*f);
+        }
+
+        Err(anyhow!("state not present"))
+    }
+
+    pub fn get_method(&self) -> Result<u8> {
+        if let Some(Val::Method(m)) = self.0.get(&Idx::METHOD) {
+            return Ok(*m);
+        }
+
+        Err(anyhow!("method not present"))
     }
 
     pub fn get_state(&self) -> Result<GenericState> {
@@ -309,24 +313,20 @@ impl Map {
         Err(anyhow!("state not present"))
     }
 
-    pub fn get_public_key(&self) -> Result<cipher::PublicKey> {
+    pub fn get_public_key(&self) -> Result<CipherPubKey> {
         if let Some(Val::PublicKey(s)) = self.0.get(&Val::PUBLIC_KEY) {
             return Ok(*s);
         }
 
-        Err(anyhow!("state not present"))
+        Err(anyhow!("public key not present"))
     }
 }
 
-impl TryFrom<Map> for Bytes {
+impl TryFrom<Bytes> for Map {
     type Error = anyhow::Error;
 
-    fn try_from(map: Map) -> Result<Bytes> {
-        if let Body::Bulk(bulk) = map.encode() {
-            return Ok(bulk.into());
-        }
-
-        Err(anyhow!("failed"))
+    fn try_from(bytes: Bytes) -> Result<Self> {
+        Map::try_from(BytesMut::from(&bytes[..]))
     }
 }
 
@@ -355,8 +355,10 @@ impl TryFrom<BytesMut> for Map {
                 }
 
                 (Val::PUBLIC_KEY, len) if len < 255 => {
-                    let pk_bytes = &buf.copy_to_bytes(len)[..];
-                    Val::PublicKey(cipher::PublicKey::try_from(pk_bytes)?)
+                    let mut key_buf = [0u8; 32];
+                    buf.copy_to_slice(&mut key_buf);
+
+                    Val::PublicKey(CipherPubKey::from(key_buf))
                 }
 
                 (Idx::ENCRYPTED_DATA, len) => {
@@ -397,12 +399,12 @@ impl TryFrom<BytesMut> for Map {
                     Val::FragmentLast(bytes.to_vec())
                 }
 
-                (Idx::FLAGS, 8) => Val::Flags(buf.get_u64()),
+                (Idx::FLAGS, 1) => Val::Flags(buf.get_u8()),
 
                 (Idx::SEPERATOR, 0) => Val::Separator,
 
                 (tag, len) => {
-                    error!("unhandle tag {tag} len {len} {:?}", buf.hex_dump());
+                    error!("UNHANDLED {tag} len {len} {:?}", buf.hex_dump());
                     Err(anyhow!("unhandled tag"))?
                 }
             };
@@ -413,7 +415,7 @@ impl TryFrom<BytesMut> for Map {
                 warn!("found existing {existing:?}");
                 existing.extend(val);
             } else {
-                warn!("inserting new tag {idx} {val:?}");
+                debug!("inserting new tag {idx} {val:?}");
                 map.insert(idx, val);
             }
         }
@@ -440,40 +442,35 @@ impl fmt::Debug for Map {
         f.write_str("Tag List\n")?;
 
         for item in self.0.values() {
+            f.write_str(item.desc())?;
+            f.write_str(": ")?;
+
             match item {
-                val @ (Val::Method(x) | Val::Error(x)) => {
-                    writeln!(f, "{}: {x}", val.desc())?;
+                Method(x) | Error(x) => {
+                    f.write_fmt(format_args!("{x}"))?;
                 }
 
-                val @ (Val::Identifier(x)
-                | Val::Signature(x)
-                | Val::Salt(x)
-                | Val::Proof(x)
-                | Val::EncryptedData(x)
-                | Val::FragmentData(x)
-                | Val::FragmentLast(x)
-                | Val::Certificate(x)) => {
-                    writeln!(f, "{}: {:?}", val.desc(), x.hex_dump())?;
+                Identifier(x) | Signature(x) | Salt(x) | Proof(x) | EncryptedData(x)
+                | FragmentData(x) | FragmentLast(x) | Certificate(x) => {
+                    f.write_fmt(format_args!("{:?}", x.hex_dump()))?;
                 }
 
-                val @ Val::PublicKey(pk) => {
-                    writeln!(f, "{}: {:?}", val.desc(), pk.hex_dump())?;
+                PublicKey(pk) => {
+                    f.write_fmt(format_args!("{:?}", pk.hex_dump()))?;
                 }
 
-                val @ Val::State(s) => {
-                    writeln!(f, "{}: {:?}", val.desc(), s)?;
+                State(s) => f.write_fmt(format_args!("{s:?}"))?,
+
+                Separator => (),
+
+                RetryDelay(x) | Permissions(x) => {
+                    f.write_fmt(format_args!("{x}"))?;
                 }
 
-                val @ Val::Separator => {
-                    writeln!(f, "{}", val.desc())?;
-                }
-
-                val @ (Val::RetryDelay(x) | Val::Permissions(x)) => {
-                    writeln!(f, "{}: {}", val.desc(), x)?;
-                }
-
-                val @ Val::Flags(x) => writeln!(f, "{}: {}", val.desc(), x)?,
+                Flags(x) => f.write_fmt(format_args!("{x}"))?,
             }
+
+            f.write_char('\n')?;
         }
 
         Ok(())
@@ -524,12 +521,12 @@ mod tests {
 
         list.push(EncryptedData(data.into()));
 
-        let body = list.encode();
+        let bytes = list.encode();
 
-        assert!(!body.is_empty());
-        assert_eq!(body.len(), 1038);
+        assert!(!bytes.is_empty());
+        assert_eq!(bytes.len(), 1038);
 
-        let x = Map::try_from(body).ok().unwrap();
+        let x = Map::try_from(bytes).ok();
 
         println!("{x:?}");
     }

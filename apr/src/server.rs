@@ -20,9 +20,9 @@
 //! spawning a task per connection.
 
 use crate::{
-    rtsp::{codec, Frame, Response},
+    rtsp::{codec, Response},
     serdis::SerDis,
-    Result, Shutdown,
+    HomeKit, Result, Shutdown,
 };
 use anyhow::anyhow;
 use futures::SinkExt;
@@ -39,7 +39,7 @@ use tokio_util::{
 };
 
 #[allow(unused)]
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 /// Server listener state. Created in the `run` call. It includes a `run` method
 /// which performs the TCP listening and initialization of per-connection state.
@@ -115,37 +115,6 @@ struct Handler {
 }
 
 impl Handler {
-    ///
-    /// # Errors
-    ///
-    /// May return socket error
-    pub fn handle_frame(
-        maybe_frame: Option<Result<Frame>>,
-        active: &mut bool,
-    ) -> Result<Option<Response>> {
-        match maybe_frame {
-            Some(Ok(frame)) => {
-                info!("got frame: {}", frame);
-
-                let response = Response::respond_to(frame)?;
-
-                info!("response:\n{response}");
-
-                *active = true;
-
-                Ok(Some(response))
-            }
-
-            Some(Err(e)) => {
-                error!("socket closed: {e}");
-
-                Err(anyhow!(e))
-            }
-
-            None => Ok(None),
-        }
-    }
-
     /// Process a single connection.
     ///
     /// Request frames are read from the socket and processed. Responses are
@@ -160,26 +129,48 @@ impl Handler {
     /// it reaches a safe state, at which point it is terminated.
     async fn run(&mut self) -> Result<()> {
         let mut active = true;
+        let mut homekit = Some(HomeKit::build());
 
         while !self.shutdown.is_shutdown() && active {
-            active = false;
-
             tokio::select! {
-                maybe_frame = self.framed.next() => {
-                    match Self::handle_frame(maybe_frame, &mut active, ) {
-                        Ok(Some(response)) => {
-                            self.framed.send(response).await?;
-                            active = true;
-                        },
+                maybe_frame = self.framed.next(), if active => {
 
-                        Err(e) => {
+                    match maybe_frame {
+                        Some(Ok(mut frame)) => {
+                            info!("got frame:\n{}", frame);
+
+                            frame.homekit = homekit.take();
+
+                            match Response::respond_to(frame) {
+
+                                Ok(mut response) => {
+                                    info!("sending response:\n{response:?}");
+                                    homekit = response.take_homekit();
+
+                                    self.framed.send(response).await?;
+
+                                  //  active = true;
+                                }
+
+                                Err(e) => {
+                                    active = false;
+                                    error!(cause = ?e);
+                                    Err(anyhow!(e))?;
+                                }
+                            }
+
+
+                        }
+
+                        Some(Err(e)) => {
                             active = false;
-                            error!("handle_frame: {e:?}");
+                            error!(cause = ?e);
                             Err(anyhow!(e))?;
-                        },
+                        }
 
-                        res => {
-                            info!("handle frame: {res:?}");
+                        None => {
+                            warn!("stream finished");
+                            active = false;
                         }
                     }
                 },
@@ -427,10 +418,10 @@ use std::fmt::Debug;
 fn mdns_report<E: Debug>(event: anyhow::Result<DaemonEvent, E>) {
     match event {
         Ok(event) => {
-            info!("mdns event: {:?}", event);
+            info!("mdns event: {event:?}");
         }
         Err(e) => {
-            error!("mdns error: {:?}", e);
+            error!("mdns error: {e:?}");
         }
     }
 }
