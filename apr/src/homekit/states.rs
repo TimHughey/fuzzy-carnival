@@ -17,8 +17,14 @@
 use super::tags;
 use anyhow::anyhow;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Generic(pub u8);
+
+impl Generic {
+    pub const M1: u8 = 1;
+    pub const M2: u8 = 2;
+    pub const M3: u8 = 3;
+}
 
 impl From<u8> for Generic {
     fn from(val: u8) -> Self {
@@ -50,12 +56,14 @@ impl TryFrom<Generic> for Verify {
     type Error = anyhow::Error;
 
     fn try_from(val: Generic) -> crate::Result<Self> {
-        match val.0 {
-            1 => Ok(Self::Msg01),
-            2 => Ok(Self::Msg02),
-            3 => Ok(Self::Msg03),
-            4 => Ok(Self::Msg04),
-            n => Err(anyhow!("unknown verify state: {n}")),
-        }
+        use Verify::{Msg01, Msg02, Msg03, Msg04};
+
+        Ok(match val.0 {
+            1 => Msg01,
+            2 => Msg02,
+            3 => Msg03,
+            4 => Msg04,
+            n => Err(anyhow!("unknown verify state: {n}"))?,
+        })
     }
 }

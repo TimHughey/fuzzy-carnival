@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::GenericState;
+use super::{states, GenericState};
 use crate::{rtsp::Body, Result};
 use anyhow::anyhow;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -24,8 +24,8 @@ use std::{
     fmt::{self, Write},
     mem,
 };
-use tracing::{debug, error, info, warn};
-use x25519_dalek::PublicKey as CipherPubKey;
+use tracing::{debug, error, warn};
+pub use x25519_dalek::PublicKey as CipherPubKey;
 use Val::{
     Certificate, EncryptedData, Error, Flags, FragmentData, FragmentLast, Identifier, Method,
     Permissions, Proof, PublicKey, RetryDelay, Salt, Separator, Signature, State,
@@ -63,7 +63,7 @@ pub enum Val {
     Method(u8) = 0,
     Identifier(Vec<u8>) = 1,
     Salt(Vec<u8>) = 2,
-    PublicKey(CipherPubKey) = 3,
+    PublicKey(Vec<u8>) = 3,
     Proof(Vec<u8>) = 4,
     EncryptedData(Vec<u8>) = 5,
     State(GenericState) = 6,
@@ -92,6 +92,12 @@ impl Idx {
     pub const SEPERATOR: u8 = Self::Separator as u8;
     pub const SIGNATURE: u8 = Self::Signature as u8;
     pub const STATE: u8 = Self::State as u8;
+
+    fn discriminant(&self) -> u8 {
+        let ptr: *const Self = self;
+
+        unsafe { *ptr.cast::<u8>() }
+    }
 }
 
 /// Encoding helpers
@@ -126,7 +132,7 @@ fn tvb(id: u8, data: Vec<u8>) -> Bytes {
     out.into()
 }
 
-fn tmb(id: u8, data: &[u8; 32]) -> Bytes {
+/*fn tmb(id: u8, data: &[u8; 32]) -> Bytes {
     let data_len = data.len();
     let mut buf = BytesMut::with_capacity(data_len + 1);
 
@@ -137,7 +143,7 @@ fn tmb(id: u8, data: &[u8; 32]) -> Bytes {
     }
 
     buf.into()
-}
+}*/
 
 impl Val {
     pub const METHOD: u8 = Idx::Method as u8;
@@ -182,8 +188,9 @@ impl Val {
 
         match self {
             Method(n) | State(GenericState(n)) if tag_len == 1 => tsb(tag_id, n),
-            EncryptedData(data) | Signature(data) | Identifier(data) => tvb(tag_id, data),
-            PublicKey(data) => tmb(tag_id, data.as_bytes()),
+            EncryptedData(data) | Signature(data) | Identifier(data) | PublicKey(data)
+            | Salt(data) | Proof(data) => tvb(tag_id, data),
+
             val => {
                 error!("encode failure: {val:?}");
                 panic!("coding error");
@@ -199,14 +206,14 @@ impl Val {
 
             if let (
                 Identifier(a) | Salt(a) | Proof(a) | Signature(a) | EncryptedData(a)
-                | Certificate(a) | FragmentData(a) | FragmentLast(a),
+                | Certificate(a) | FragmentData(a) | FragmentLast(a) | PublicKey(a),
                 Identifier(b) | Salt(b) | Proof(b) | Signature(b) | EncryptedData(b)
-                | Certificate(b) | FragmentData(b) | FragmentLast(b),
+                | Certificate(b) | FragmentData(b) | FragmentLast(b) | PublicKey(b),
             ) = (self, more)
             {
-                info!("extending {self_id} with {b:?}");
-
                 a.extend_from_slice(&b);
+
+                debug!("\nextending {self_id}, new len {}", b.len());
             }
         }
     }
@@ -214,13 +221,16 @@ impl Val {
     pub fn len(&self) -> usize {
         match self {
             Identifier(v) | Salt(v) | Proof(v) | EncryptedData(v) | FragmentData(v)
-            | FragmentLast(v) | Certificate(v) | Signature(v) => v.len(),
-            PublicKey(v) => v.as_bytes().len(),
+            | FragmentLast(v) | Certificate(v) | Signature(v) | PublicKey(v) => v.len(),
             State(_) => 1,
             Method(x) | Error(x) | Flags(x) => mem::size_of_val(x),
             RetryDelay(x) | Permissions(x) => mem::size_of_val(x),
             Separator => 0,
         }
+    }
+
+    pub fn make_state(val: u8) -> Val {
+        Val::State(states::Generic(val))
     }
 
     /// Returns the tag id of this [`Val`].
@@ -253,16 +263,6 @@ impl fmt::Debug for Val {
 pub struct Map(IndexMap<u8, Val>);
 
 impl Map {
-    // pub fn encode(self) -> Body {
-    //     Body::OctetStream(
-    //         self.0
-    //             .into_values()
-    //             .map(Val::encode)
-    //             .collect::<Vec<Bytes>>()
-    //             .concat(),
-    //     )
-    // }
-
     pub fn encode(self) -> BytesMut {
         self.0
             .into_values()
@@ -289,33 +289,42 @@ impl Map {
         }
     }
 
-    pub fn get_flags(&self) -> Result<u8> {
-        if let Some(Val::Flags(f)) = self.0.get(&Idx::FLAGS) {
-            return Ok(*f);
-        }
-
-        Err(anyhow!("state not present"))
+    pub fn get(&self, idx: Idx) -> Option<&Val> {
+        self.0.get(&idx.discriminant())
     }
 
-    pub fn get_method(&self) -> Result<u8> {
-        if let Some(Val::Method(m)) = self.0.get(&Idx::METHOD) {
-            return Ok(*m);
-        }
+    pub fn get_cloned(&self, idx: Idx) -> Result<Val> {
+        let val = self
+            .0
+            .get(&idx.discriminant())
+            .ok_or(anyhow!("{idx:?} not available"));
 
-        Err(anyhow!("method not present"))
+        Ok(val?.clone())
+    }
+
+    pub fn get_flags(&self) -> Option<&Val> {
+        self.0.get(&Idx::FLAGS)
+    }
+
+    pub fn get_method(&self) -> Option<&Val> {
+        self.0.get(&Idx::METHOD)
     }
 
     pub fn get_state(&self) -> Result<GenericState> {
         if let Some(Val::State(s)) = self.0.get(&Idx::STATE) {
-            return Ok(s.clone());
+            return Ok(*s);
         }
 
         Err(anyhow!("state not present"))
     }
 
-    pub fn get_public_key(&self) -> Result<CipherPubKey> {
+    pub fn get_state2(&self) -> Option<&Val> {
+        self.0.get(&Idx::STATE)
+    }
+
+    pub fn get_public_key(&self) -> Result<&Vec<u8>> {
         if let Some(Val::PublicKey(s)) = self.0.get(&Val::PUBLIC_KEY) {
-            return Ok(*s);
+            return Ok(s);
         }
 
         Err(anyhow!("public key not present"))
@@ -354,12 +363,7 @@ impl TryFrom<BytesMut> for Map {
                     Val::Identifier(bytes.to_vec())
                 }
 
-                (Val::PUBLIC_KEY, len) if len < 255 => {
-                    let mut key_buf = [0u8; 32];
-                    buf.copy_to_slice(&mut key_buf);
-
-                    Val::PublicKey(CipherPubKey::from(key_buf))
-                }
+                (Val::PUBLIC_KEY, len) => Val::PublicKey(buf.copy_to_bytes(len).to_vec()),
 
                 (Idx::ENCRYPTED_DATA, len) => {
                     let bytes = &buf.copy_to_bytes(len);
@@ -412,7 +416,7 @@ impl TryFrom<BytesMut> for Map {
             let idx = val.idx();
 
             if let Some(existing) = map.get_mut(&idx) {
-                warn!("found existing {existing:?}");
+                debug!("found existing {existing:?}");
                 existing.extend(val);
             } else {
                 debug!("inserting new tag {idx} {val:?}");
@@ -429,7 +433,7 @@ impl TryFrom<Body> for Map {
 
     fn try_from(body: Body) -> Result<Self> {
         let buf: BytesMut = match body {
-            Body::Bulk(bulk) => bulk.as_slice().into(),
+            Body::Bulk(v) | Body::OctetStream(v) => v.as_slice().into(),
             _ => Err(anyhow!("can not convert to tag list"))?,
         };
 

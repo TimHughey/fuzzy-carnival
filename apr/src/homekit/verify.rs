@@ -15,7 +15,6 @@
 // limitations under the License.
 
 use crate::{homekit::Tags, HostInfo, Result};
-use chacha20poly1305::AeadInPlace;
 use once_cell::sync::OnceCell;
 use std::fmt;
 
@@ -26,7 +25,11 @@ pub struct AccessoryBuilder {
 }
 
 impl AccessoryBuilder {
-    pub fn build(accessory_client_pub: x25519_dalek::PublicKey) -> AccessoryBuilder {
+    pub fn build(accessory_client_pub: &[u8]) -> AccessoryBuilder {
+        let mut client_pub_buf = [0u8; 32];
+        client_pub_buf.copy_from_slice(&accessory_client_pub[0..32]);
+        let accessory_client_pub: x25519_dalek::PublicKey = client_pub_buf.into();
+
         let random = x25519_dalek::EphemeralSecret::random();
         let public = x25519_dalek::PublicKey::from(&random);
 
@@ -81,14 +84,15 @@ impl Context {
         }
     }
 
-    pub fn m1_m2(&self, accessory_client_pub: x25519_dalek::PublicKey) -> Result<Tags> {
+    pub fn m1_m2(&self, accessory_client_pub: &[u8]) -> Result<Tags> {
         use crate::homekit::TagVal;
         use bytes::BytesMut;
         #[allow(unused)]
         use chacha20poly1305::{
             aead::{Aead, AeadCore, KeyInit},
-            ChaCha20Poly1305, Nonce,
+            AeadInPlace, ChaCha20Poly1305, Nonce,
         };
+
         use ed25519_dalek::Signer;
         use hmac_sha256::HKDF;
 
@@ -131,7 +135,7 @@ impl Context {
         let mut tags = Tags::default();
 
         tags.push(TagVal::State(super::states::Generic(0x02)));
-        tags.push(TagVal::PublicKey(accessory.public));
+        tags.push(TagVal::PublicKey(accessory.public.as_bytes().to_vec()));
         tags.push(TagVal::EncryptedData(data.to_vec()));
 
         Ok(tags)

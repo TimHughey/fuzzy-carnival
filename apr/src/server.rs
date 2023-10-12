@@ -137,7 +137,7 @@ impl Handler {
 
                     match maybe_frame {
                         Some(Ok(mut frame)) => {
-                            info!("got frame:\n{}", frame);
+                            info!("\n{}", frame);
 
                             frame.homekit = homekit.take();
 

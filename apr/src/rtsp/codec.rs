@@ -103,7 +103,7 @@ impl Encoder<Response> for Rtsp {
             Empty => (),
         }
 
-        info!("\nENCODED: {:?}", dst.hex_dump());
+        debug!("\nENCODED: {:?}", dst.hex_dump());
 
         {
             use std::io::Write;

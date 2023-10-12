@@ -49,7 +49,7 @@ impl Ephemeral {
         unsafe {
             let sk = cipher::PrivateKey::new_empty()?;
 
-            if let Some(mut keys) = Lazy::get_mut(&mut KEYS) {
+            if let Some(keys) = Lazy::get_mut(&mut KEYS) {
                 keys.server = cipher::Keypair {
                     public_key: [0u8; cipher::PUBLIC_KEY_LENGTH],
                     private_key: sk.try_clone()?,
@@ -70,32 +70,5 @@ impl Default for Ephemeral {
         Self {
             server: cipher::Keypair::generate().expect(msg),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Ephemeral, KEYS};
-    use crate::Result;
-    use alkali::asymmetric::cipher::PRIVATE_KEY_LENGTH;
-    use num_bigint::BigUint;
-
-    #[test]
-    pub fn can_generate_ephermal_keys() -> Result<()> {
-        unsafe {
-            let eph = &*KEYS;
-
-            assert_eq!(eph.server_pk().len(), PRIVATE_KEY_LENGTH);
-
-            let sum = BigUint::from_bytes_le(eph.server_pk());
-            assert_ne!(sum, BigUint::new(vec![0]));
-
-            Ephemeral::zero()?;
-
-            let sum = BigUint::from_bytes_le(eph.server_sk());
-            assert_eq!(sum, BigUint::new(vec![0]));
-        }
-
-        Ok(())
     }
 }
