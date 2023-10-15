@@ -24,7 +24,7 @@ use bytes::{Buf, BytesMut};
 use pretty_hex::PrettyHex;
 use std::{fmt, fs::OpenOptions};
 use tokio_util::codec::{Decoder, Encoder};
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 /// A simple [`Decoder`] and [`Encoder`] implementation that splits up data into lines.
 ///
@@ -196,7 +196,21 @@ impl Decoder for Rtsp {
                         }
                     }
                 } else {
-                    error!("unable to find request end");
+                    use std::{env::var, path::PathBuf};
+
+                    const KEY: &str = "CARGO_MANIFEST_DIR";
+                    let path: PathBuf = var(KEY).unwrap().into();
+                    let mut path = path.parent().unwrap().to_path_buf();
+
+                    path.push("extra/ref/v2/error/frame.bin");
+
+                    OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .append(true)
+                        .open(path)?
+                        .write_all(&file_buf)?;
+
                     Err(anyhow!("unable to find request end"))
                 }
             }

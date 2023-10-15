@@ -21,7 +21,7 @@
 //! a generator modulo `N`. It's STRONGLY recommended to use SRP parameters
 //! provided by this crate in the [`groups`](groups/index.html) module.
 //!
-//! |       Client                 |   Data transfer   |      Server                     |
+//! |       Client                 |   Data transfer   |      Server2                     |
 //! |------------------------------|-------------------|---------------------------------|
 //! |`a_pub = g^a`                 | — `a_pub`, `I` —> | (lookup `s`, `v` for given `I`) |
 //! |`x = PH(P, s)`                | <— `b_pub`, `s` — | `b_pub = k*v + g^b`             |
@@ -51,89 +51,88 @@
 //! [2]: https://tools.ietf.org/html/rfc5054
 
 use super::TagVal::{self, Proof, PublicKey, Salt};
+use crate::Result;
+use alkali::hash::sha2;
+use anyhow::anyhow;
 use core::fmt;
-use digest::Digest;
 use groups::G_3072;
 use num_bigint::BigUint;
-use num_traits::{CheckedMul, FromBytes, Zero};
+use num_traits::{Euclid, Zero};
 use pretty_hex::PrettyHex;
-use std::marker::PhantomData;
+use tracing::{info, warn};
 
 const SALT_BITS: u64 = 128;
 const SERVER_PRIVATE_BITS: u64 = 256;
 
 #[allow(non_snake_case)]
-pub struct Server<D: Digest> {
-    pub username: String, // shared username
-    pub passwd: String,   // shared password
-    pub N: BigUint,       // modulo
-    pub g: BigUint,       // sufficiently large prime
-    pub s: BigUint,       // salt
-    pub k: BigUint,       // multiplier parameter (k = H(N || g) in SRP-6a)
-    pub x: BigUint,       // user private key (x = H(s || H(I || ":" || P)) from RFC 5054)
-    pub v: BigUint,       // passwd verifier (v = g ^ x)
-    pub b: BigUint,       // server ephemeral secret
-    pub B: BigUint,       // server ephemeral public
-    pub A: BigUint,       // client ephemeral public
-    pub u: BigUint,       // scrambling parameter
-    pub S: BigUint,       // session key
-    pub K: BigUint,       // shared secret key
-    pub M: BigUint,       // client
-    pub M_bytes: Vec<u8>, // hashed M1
-    pub M_AMK: BigUint,   // H(A | M | K)
-    pub M2: BigUint,      // (hashed) server
-
-    d: PhantomData<D>,
+pub struct Server {
+    pub username: Vec<u8>, // shared username
+    pub passwd: [u8; 4],   // shared password
+    pub N: BigUint,        // modulo
+    pub g: BigUint,        // sufficiently large prime
+    pub s: BigUint,        // salt
+    pub x: BigUint,        // user private key (x = H(s || H(I || ":" || P)) from RFC 5054)
+    pub v: BigUint,        // passwd verifier (v = g ^ x)
+    pub B: BigUint,        // server ephemeral public
+    pub b: BigUint,        // server ephemeral secret
+    pub A: BigUint,        // client ephemeral public
+    pub verifier: Verifier,
 }
 
 #[allow(non_snake_case)]
-impl<D: Digest> Default for Server<D> {
-    fn default() -> Self {
-        let N = &G_3072.n;
-        let g = &G_3072.g;
+#[allow(clippy::many_single_char_names)]
+impl Server {
+    pub fn authenticate(&mut self) -> Result<()> {
+        self.verifier.authenticate()
+    }
 
-        let pad_bits = usize::try_from(G_3072.n.bits()).expect(r#"whoa!"#);
+    pub fn new(user: &str, passwd: [u8; 4], salt: Option<BigUint>, b: Option<BigUint>) -> Self {
+        use helper::{bnum_bytes, multipart_to_num};
+
+        let seperator = b":";
+        let s = salt.unwrap_or_else(|| helper::random_uint(SALT_BITS));
+        let (N, g, k) = G_3072.get_params();
+        let b = b.unwrap_or_else(|| helper::random_uint(SERVER_PRIVATE_BITS));
+        let username: Vec<u8> = user.into();
+
+        // hash the user name and passwd
+        // x = H(s | H(I | ":" | P))
+        let mut hash_user = sha2::Multipart::new().unwrap();
+        hash_user.update(&username);
+        hash_user.update(seperator);
+        hash_user.update(&passwd);
+
+        let mut x = sha2::Multipart::new().unwrap();
+        x.update(&bnum_bytes(&s));
+        x.update(&hash_user.calculate().0);
+
+        let x = multipart_to_num(x);
+        let v = g.modpow(&x, &N);
 
         Self {
-            username: "Pair-Setup".into(),
-            passwd: "3939".into(),
-            N: G_3072.n.clone(),
-            g: G_3072.g.clone(),
-            s: helper::random_uint(SALT_BITS),
-            k: helper::H_nn_pad::<D>(N, g, pad_bits), // H(N | PAD(g))
-            x: BigUint::zero(),
-            v: BigUint::zero(),
-            b: helper::random_uint(SERVER_PRIVATE_BITS),
-            B: BigUint::zero(),
-            A: BigUint::zero(),
-            u: BigUint::zero(),
-            S: BigUint::zero(),
-            K: BigUint::zero(),
-            M: BigUint::zero(),
-            M_bytes: Vec::new(),
-            M_AMK: BigUint::zero(),
-            M2: BigUint::zero(),
+            username,
+            passwd,
+            N: N.clone(),
+            g: g.clone(),
+            s,
+            x: x.clone(),
+            v: v.clone(),
+            B: ((k * v) + g.modpow(&b, &N)).rem_euclid(&N),
+            b,
+            A: BigUint::default(),
 
-            d: PhantomData,
+            verifier: Verifier::default(),
         }
     }
-}
 
-#[allow(non_snake_case)]
-impl<D: Digest> Server<D> {
-    pub fn new(user: &str, passwd: &str) -> Self {
-        Self {
-            username: user.to_string(),
-            passwd: passwd.to_string(),
-            ..Self::default()
-        }
-        .make_x()
-        .make_v()
-        .make_B()
+    pub fn build_verifier(&mut self, A: &[u8], client_M1: &[u8]) -> Result<()> {
+        self.verifier = Verifier::new(self, A, client_M1)?;
+
+        Ok(())
     }
 
     pub fn get_pk(&self) -> TagVal {
-        PublicKey(self.B.to_bytes_be())
+        PublicKey(helper::bnum_bytes(&self.B))
     }
 
     pub fn get_salt(&self) -> TagVal {
@@ -141,302 +140,224 @@ impl<D: Digest> Server<D> {
     }
 
     pub fn proof(&self) -> TagVal {
-        Proof(self.M2.to_bytes_be())
-    }
-
-    pub fn set_client_pk(self, client_pk: &[u8]) -> Self {
-        // SRP-6a safety check
-        // bnum_mod(tmp1, A, ng->N);
-        // if (bnum_is_zero(tmp1)) goto error;
-        //
-        // // MODIFIED from H_nn(alg, ng->N, ng->g)
-        // k = H_nn_pad(alg, ng->N, ng->g, ng->N_len);
-        // // MODIFIED from H_nn(alg, A, B)
-        // u = H_nn_pad(alg, A, B, ng->N_len);
-        //
-        // // S = (A *(v^u)) ^ b
-        // bnum_modexp(tmp1, v, u, ng->N);
-        // bnum_mul(tmp2, A, tmp1);
-        // bnum_modexp(S, tmp2, b, ng->N);
-        //
-        // hash_num(alg, S, ver->session_key);
-        // ver->session_key_len = hash_length(ver->alg);
-        //
-        // calculate_M(alg, ng, ver->M, username, s, A, B, ver->session_key, ver->session_key_len);
-        // calculate_H_AMK(alg, ver->H_AMK, A, ver->M, ver->session_key, ver->session_key_len);
-
-        let N = &self.N;
-        let v = &self.v;
-        let b = &self.b;
-        let A = BigUint::from_be_bytes(client_pk);
-        let B = &self.B;
-
-        let u = helper::H_nn_pad::<D>(&A, B, 3072);
-
-        let tmp1 = v.modpow(&u, N);
-        let tmp2 = A.checked_mul(&tmp1).unwrap();
-
-        Self {
-            A,
-            u,
-            S: tmp2.modpow(b, N), // session key
-            ..self
-        }
-        .make_M()
-
-        // FROM RFC:
-        // The premaster secret is calculated by the server as follows:
-        //
-        // N, g, s, v = <read from password file>
-        // b = random()
-        // k = SHA1(N | PAD(g))
-        // B = k*v + g^b % N
-        // A = <read from client>
-        // u = SHA1(PAD(A) | PAD(B))
-        // <premaster secret> = (A * v^u) ^ b % N
-    }
-
-    pub fn verify(&mut self, client_M1: &[u8]) -> bool {
-        use helper::H;
-        //  The verifier (v) is computed based on the salt (s), user name (I),
-        //  password (P), and group parameters (N, g).
-        //   x = H(s | H(I | ":" | P))
-        //   v = g^x % N
-
-        let client_M1 = BigUint::from_bytes_be(client_M1);
-
-        self.M_AMK = BigUint::from_be_bytes(&H::<D>(vec![
-            self.A.clone(),
-            self.M.clone(),
-            self.K.clone(),
-        ]));
-
-        let M2_args = vec![self.A.clone(), self.B.clone(), self.K.clone()];
-
-        self.M2 = BigUint::from_bytes_be(&helper::H::<D>(M2_args)[..]);
-
-        if self.M == client_M1 {
-            return true;
-        }
-
-        false
-    }
-
-    // WORKING
-    fn make_x(self) -> Self {
-        // hash the user name and passwd
-        // x = H(s | H(I | ":" | P))
-        let hash_user = D::new()
-            .chain_update(&self.username[..])
-            .chain_update(b":")
-            .chain_update(&self.passwd[..]);
-
-        let x = D::new()
-            .chain_update(self.s.to_bytes_be())
-            .chain_update(hash_user.finalize());
-
-        let xh = x.finalize();
-
-        tracing::info!("\nSALTED x {:?}", xh.hex_dump());
-
-        Self {
-            x: BigUint::from_bytes_be(&xh[..]),
-            ..self
-        }
-    }
-
-    // WORKING
-    fn make_v(self) -> Self {
-        Self {
-            v: self.g.modpow(&self.x, &self.N),
-            ..self
-        }
-    }
-
-    // MAYBE WORKING
-    fn make_B(self) -> Self {
-        // B = kv + g^b  (shairport)
-        // bnum_mul(tmp1, k, v);
-        // bnum_modexp(tmp2, ng->g, b, ng->N);
-        // bnum_modadd(B, tmp1, tmp2, ng->N);
-
-        let tmp1 = self.k.checked_mul(&self.v).unwrap();
-        let tmp2 = self.g.modpow(&self.b, &self.N);
-
-        Self {
-            B: (tmp1 + tmp2) % &self.N,
-            ..self
-        }
-    }
-
-    // B = k*v + g^b % N (ap-receiver alternative)
-    // B: (k * v + g.modpow(b, N)) % N,
-
-    // M1 = H(A, B, K) this doesn't follow the spec but apparently no one does for M1
-    // M1 should equal =  H(H(N) XOR H(g) | H(U) | s | A | B | K) according to the spec
-    fn make_M(self) -> Self {
-        /*
-        static void calculate_M(enum hash_alg alg, NGConstant *ng, unsigned char *dest, const char *I,
-            const bnum s, const bnum A, const bnum B, const unsigned char *K,
-            int K_len) {
-                unsigned char H_N[SHA512_DIGEST_LENGTH];
-                unsigned char H_g[SHA512_DIGEST_LENGTH];
-                unsigned char H_I[SHA512_DIGEST_LENGTH];
-                unsigned char H_xor[SHA512_DIGEST_LENGTH];
-                HashCTX ctx;
-                int i = 0;
-                int hash_len = hash_length(alg);
-
-                hash_num(alg, ng->N, H_N);
-                hash_num(alg, ng->g, H_g);
-
-                hash(alg, (const unsigned char *)I, strlen(I), H_I);
-
-                for (i = 0; i < hash_len; i++)
-                H_xor[i] = H_N[i] ^ H_g[i];
-
-                hash_init(alg, &ctx);
-
-                hash_update(alg, &ctx, H_xor, hash_len);
-                hash_update(alg, &ctx, H_I, hash_len);
-                update_hash_n(alg, &ctx, s);
-                update_hash_n(alg, &ctx, A);
-                update_hash_n(alg, &ctx, B);
-                hash_update(alg, &ctx, K, K_len);
-
-                hash_final(alg, &ctx, dest);
-        }   */
-
-        use helper::{n_to_bytes, H_to_n, H_xor_nn};
-
-        let mut hasher = D::new();
-        for data in [
-            H_xor_nn::<D>(&self.N, &self.g),
-            D::digest(self.passwd.as_bytes()).to_vec(),
-            n_to_bytes(&self.s),
-            n_to_bytes(&self.A),
-            n_to_bytes(&self.B),
-            n_to_bytes(&self.K),
-        ] {
-            hasher.update(data);
-        }
-
-        let M_bytes: Vec<u8> = hasher.finalize().to_vec();
-
-        tracing::info!("\nSERVER M {:?}", M_bytes.hex_dump());
-
-        Self {
-            M: H_to_n(&M_bytes),
-            M_bytes,
-            ..self
-        }
+        Proof(self.verifier.H_AMK.clone())
     }
 }
 
-impl<D: Digest> fmt::Debug for Server<D> {
+impl fmt::Debug for Server {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("srp::Server\n")?;
-
         f.write_fmt(format_args!(
-            "SALT (s) {:?}\n\nMULTIPILER PARAMETER (k) {:?}",
+            "srp::Server2\nSALT (s) {:?}\n\nUSER PRIVATE KEY (x) {:?}",
             self.s.to_bytes_be().hex_dump(),
-            self.k.to_bytes_be().hex_dump()
-        ))?;
-
-        f.write_fmt(format_args!(
-            "\n\nSERVER USER PRIVATE KEY (x) {:?}",
             self.x.to_bytes_be().hex_dump()
         ))?;
 
         f.write_fmt(format_args!(
-            "\n\nPASSWORD VERIFIER (v) {:?}",
-            self.v.to_bytes_be().hex_dump()
-        ))?;
-
-        f.write_fmt(format_args!(
-            "\n\nSERVER EPHEREMAL PRIVATE (b) {:?}",
+            "\n\nPASSWORD VERIFIER (v) {:?}\n\nSERVER EPHEREMAL PRIVATE (b) {:?}",
+            self.v.to_bytes_be().hex_dump(),
             self.b.to_bytes_be().hex_dump()
         ))?;
 
         f.write_fmt(format_args!(
-            "\n\nSERVER EPHEREMAL PUBLIC (B) {:?}",
-            self.B.to_bytes_be().hex_dump()
-        ))?;
-
-        f.write_fmt(format_args!(
-            "\n\nSERVER M1 {:?}",
-            self.M.to_bytes_be().hex_dump()
+            "\n\nSERVER EPHEREMAL PUBLIC (B) {:?}\n\nCLIENT PUBLIC (A) {:?}",
+            self.B.to_bytes_be().hex_dump(),
+            self.A.to_bytes_be().hex_dump()
         ))
+    }
+}
+
+#[derive(Default)]
+#[allow(non_snake_case)]
+pub struct Verifier {
+    pub A: BigUint,
+    pub B: BigUint,
+    pub authenticated: bool,
+    pub u: BigUint,
+    pub username: Vec<u8>,
+    pub M_bytes: Vec<u8>,
+    pub H_AMK: Vec<u8>,
+    pub session_key: Vec<u8>,
+    pub client_M1: Vec<u8>,
+}
+
+#[allow(non_snake_case)]
+impl Verifier {
+    pub fn authenticate(&mut self) -> Result<()> {
+        use helper::calculate_H_AMK;
+
+        self.H_AMK = calculate_H_AMK(&self.A, &self.M_bytes, &self.session_key);
+
+        if self.M_bytes != self.client_M1 {
+            warn!("authentication failed");
+            return Err(anyhow!("authentication failed"));
+        }
+
+        info!("authenticated");
+
+        self.authenticated = true;
+
+        Ok(())
+    }
+
+    pub fn new(server: &Server, A_bytes: &[u8], client_M1: &[u8]) -> Result<Verifier> {
+        use helper::{calculate_M, hash_bnum, slice_to_bnum, H_nn_pad};
+
+        let A = slice_to_bnum(A_bytes);
+        let N = &server.N;
+        let B = &server.B;
+        let b = &server.b;
+        let v = &server.v;
+        let s = &server.s;
+
+        // appears we need to zero pad end of username
+        // let username = server.username.clone();
+        // username.push(0x00);
+
+        // SRP-6a safety check
+
+        let A_mod_N = &A % N;
+
+        if A_mod_N > BigUint::zero() {
+            let u = H_nn_pad(&A, B);
+
+            let tmp1 = v.modpow(&u, N);
+            let tmp2 = &A * tmp1;
+            let S = tmp2.modpow(b, N);
+            let session_key = hash_bnum(&S);
+            let M_bytes = calculate_M(&server.username, s, &A, B, &session_key);
+
+            return Ok(Self {
+                A,
+                B: B.clone(),
+                authenticated: false,
+                u,
+                M_bytes,
+                H_AMK: Vec::new(),
+                username: server.username.clone(),
+                session_key,
+                client_M1: client_M1.into(),
+            });
+        }
+
+        Err(anyhow!("A is zero"))
+    }
+
+    pub fn validate_session(self, user_M: &[u8]) -> Result<Self> {
+        if user_M == self.M_bytes {
+            return Ok(Self {
+                authenticated: true,
+                ..self
+            });
+        }
+
+        Err(anyhow!("invalid session"))
+    }
+}
+
+impl fmt::Debug for Verifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use helper::bnum_bytes;
+
+        f.write_str("TestData\n")?;
+        writeln!(f, "authenticated: {}", self.authenticated)?;
+        writeln!(f, "A {:?}\n", bnum_bytes(&self.A).hex_dump())?;
+        writeln!(f, "B {:?}\n", bnum_bytes(&self.B).hex_dump())?;
+        writeln!(f, "u {:?}\n", bnum_bytes(&self.u).hex_dump())?;
+        writeln!(f, "username {:?}\n", self.username.hex_dump())?;
+        writeln!(f, "M_bytes {:?}\n", self.M_bytes.hex_dump())?;
+        writeln!(f, "H_AMK {:?}\n", self.H_AMK.hex_dump())?;
+        writeln!(f, "session_key {:?}\n", self.session_key.hex_dump())?;
+        writeln!(f, "client M1 {:?}\n", self.client_M1.hex_dump())
     }
 }
 
 #[allow(non_snake_case)]
 mod helper {
-    use digest::{Digest, Output};
+    use crate::homekit::srp::groups::G;
+
+    use super::groups::G_3072;
+    use alkali::hash::sha2;
     use num_bigint::{BigUint, RandBigInt};
     use num_traits::{FromBytes, ToBytes};
 
-    pub fn digest_n<D: Digest>(n: &BigUint) -> Vec<u8> {
-        D::digest(n.to_be_bytes()).to_vec()
+    pub fn bnum_bytes(num: &BigUint) -> Vec<u8> {
+        num.to_be_bytes()
     }
 
-    #[must_use]
-    pub fn H<D: Digest>(bnums: Vec<BigUint>) -> Output<D> {
-        let mut hasher = D::new();
+    pub fn calculate_H_AMK(A: &BigUint, M: &[u8], K: &[u8]) -> Vec<u8> {
+        use sha2::sha512::Multipart;
 
-        for bnum in bnums {
-            hasher.update(bnum.to_bytes_be());
-        }
+        let mut hasher = Multipart::new().unwrap();
+        hasher.update(&n_to_bytes(A));
+        hasher.update(M);
+        hasher.update(K);
 
-        hasher.finalize()
+        hasher.calculate().0.to_vec()
     }
 
-    pub fn H_nn_pad<D: Digest>(n0: &BigUint, n1: &BigUint, pad_bits: usize) -> BigUint {
-        let pad_len = pad_bits / 8;
+    pub fn calculate_M(I: &[u8], s: &BigUint, A: &BigUint, B: &BigUint, K: &[u8]) -> Vec<u8> {
+        use sha2::sha512::Multipart;
+
+        let (N, g, _k) = G_3072.get_params();
+
+        let h_N = hash_bnum(&N);
+        let h_g = hash_bnum(&g);
+        let h_I = hash_slice(I);
+
+        let h_xor: Vec<u8> = h_N.iter().zip(h_g.iter()).map(|(n0, n1)| n0 ^ n1).collect();
+
+        let mut hasher = Multipart::new().unwrap();
+        hasher.update(&h_xor);
+        hasher.update(&h_I);
+        hasher.update(&n_to_bytes(s));
+        hasher.update(&n_to_bytes(A));
+        hasher.update(&n_to_bytes(B));
+        hasher.update(K);
+
+        hasher.calculate().0.to_vec()
+    }
+
+    pub fn slice_to_bnum<T: AsRef<[u8]>>(data: T) -> BigUint {
+        BigUint::from_be_bytes(data.as_ref())
+    }
+
+    pub fn multipart_to_num(mp: sha2::Multipart) -> BigUint {
+        BigUint::from_be_bytes(mp.calculate().0.as_ref())
+    }
+
+    pub fn hash_bnum(n: &BigUint) -> Vec<u8> {
+        sha2::sha512::hash(&n.to_be_bytes()).unwrap().0.into()
+    }
+
+    pub fn hash_slice(s: &[u8]) -> Vec<u8> {
+        sha2::sha512::hash(s).unwrap().0.into()
+    }
+
+    #[allow(unused)]
+    pub fn H_len() -> usize {
+        sha2::DIGEST_LENGTH
+    }
+
+    pub fn H_nn_pad(n0: &BigUint, n1: &BigUint) -> BigUint {
+        let pad_len = G::N_len();
         let capacity = pad_len * 2;
 
         let mut bin: Vec<u8> = Vec::with_capacity(capacity);
 
-        for n in [&n0, &n1] {
+        for n in [n0, n1] {
             let be_bytes = n.to_be_bytes();
 
             bin.extend_from_slice(&vec![0u8; pad_len - be_bytes.len()]); // padding
             bin.extend_from_slice(&be_bytes);
         }
 
-        H_to_n(D::digest(bin).as_ref())
-
-        /*
-        // See rfc5054 PAD()
-        bnum H_nn_pad(enum hash_alg alg, const bnum n1, const bnum n2, int padded_len) {
-        bnum bn;
-        unsigned char *bin;
-        unsigned char buff[SHA512_DIGEST_LENGTH];
-        int len_n1 = bnum_num_bytes(n1);
-        int len_n2 = bnum_num_bytes(n2);
-        int nbytes = 2 * padded_len;
-        int offset_n1 = padded_len - len_n1;
-        int offset_n2 = nbytes - len_n2;
-
-        assert(len_n1 <= padded_len);
-        assert(len_n2 <= padded_len);
-
-        bin = (unsigned char *)calloc(1, nbytes);
-
-        bnum_bn2bin(n1, bin + offset_n1, len_n1);
-        bnum_bn2bin(n2, bin + offset_n2, len_n2);
-        hash(alg, bin, nbytes, buff);
-        free(bin);
-        bnum_bin2bn(bn, buff, hash_length(alg));
-        return bn;
-        }
-        */
+        BigUint::from_be_bytes(&sha2::sha512::hash(&bin).unwrap().0)
     }
 
     #[must_use]
     #[allow(unused)]
-    pub fn H_pad_bnums<D: Digest>(bnums: Vec<&BigUint>, pad_len: usize) -> BigUint {
-        let mut hasher = D::new();
+    pub fn H_pad_bnums(bnums: Vec<&BigUint>, pad_len: usize) -> BigUint {
+        let mut hasher = sha2::Multipart::new().unwrap();
 
         for bnum in bnums {
             let bytes_be = bnum.to_bytes_be();
@@ -445,28 +366,13 @@ mod helper {
                 let mut buf = vec![0u8; pad_len];
                 buf[(pad_len - bytes_be.len())..].copy_from_slice(bytes_be.as_slice());
 
-                hasher.update(buf);
+                hasher.update(&buf);
             } else {
-                hasher.update(bytes_be);
+                hasher.update(&bytes_be);
             }
         }
 
-        BigUint::from_bytes_be(&hasher.finalize())
-    }
-
-    pub fn H_to_n(v: &[u8]) -> BigUint {
-        BigUint::from_be_bytes(v)
-    }
-
-    pub fn H_xor_nn<D: Digest>(n0: &BigUint, n1: &BigUint) -> Vec<u8> {
-        let n0_hash = digest_n::<D>(n0);
-        let n1_hash = digest_n::<D>(n1);
-
-        n0_hash
-            .into_iter()
-            .zip(n1_hash)
-            .map(|(i, j)| i ^ j)
-            .collect()
+        BigUint::from_bytes_be(&hasher.calculate().0)
     }
 
     pub fn n_to_bytes(n: &BigUint) -> Vec<u8> {
@@ -475,48 +381,29 @@ mod helper {
 
     pub fn random_uint(bits: u64) -> BigUint {
         let mut rng = rand::thread_rng();
+        //    rng.gen_biguint(bits).rem_euclid(&super::G_3072.n)
 
-        // rng.gen_biguint(bits) % &super::G_3072.n
         rng.gen_biguint(bits)
     }
 
     #[cfg(test)]
     mod tests {
         use num_bigint::BigUint;
-        use num_traits::{FromBytes, FromPrimitive};
+        use num_traits::FromPrimitive;
 
         #[test]
         fn can_hash_nn_with_padding() {
-            use super::H_nn_pad;
-
             let n0 = BigUint::from_u8(b'A').unwrap();
             let n1 = BigUint::from_u8(b'B').unwrap();
 
-            let h_n = H_nn_pad::<sha2::Sha512>(&n0, &n1, 64);
+            let h_n = super::H_nn_pad(&n0, &n1);
 
-            assert!(h_n.bits() >= 508);
-        }
-
-        #[test]
-        fn can_H_xor_nn() {
-            use pretty_hex::PrettyHex;
-
-            let n0 = BigUint::from_u16(0xDE).unwrap();
-            let n1 = BigUint::from_u16(0xAD).unwrap();
-
-            let xor = super::H_xor_nn::<sha2::Sha512>(&n0, &n1);
-
-            assert_eq!(xor.len(), 64);
-
-            let xor_n = BigUint::from_be_bytes(&xor);
-
-            assert!(xor_n.bits() >= 508);
-
-            println!("XOR {:?}", xor.hex_dump());
+            assert!(h_n.bits() == 511);
         }
     }
 }
 
+#[allow(non_snake_case)]
 mod groups {
     use num_bigint::BigUint;
     use once_cell::sync::Lazy;
@@ -527,33 +414,220 @@ mod groups {
 
     pub struct G {
         pub n: BigUint,
+        pub n_len: usize,
+        pub n_pad_bits: usize,
         pub g: BigUint,
+        pub k: BigUint,
     }
 
     impl G {
         pub fn build() -> Self {
+            use super::helper::H_nn_pad;
             use pretty_hex::PrettyHex;
 
             tracing::debug!("\nG_3072 BINARY {:?}", BINARY_3072.hex_dump());
+            let n = BigUint::from_bytes_be(BINARY_3072);
+            let n_len = BINARY_3072.len();
+            let n_pad_bits = n_len * 8;
+            let g = BigUint::from_bytes_be(&[5]);
 
             Self {
-                n: BigUint::from_bytes_be(BINARY_3072),
-                g: BigUint::from_bytes_be(&[5]),
+                k: H_nn_pad(&n, &g),
+                n,
+                n_len,
+                n_pad_bits,
+                g,
             }
+        }
+
+        pub fn get_params(&self) -> (BigUint, BigUint, BigUint) {
+            (self.n.clone(), self.g.clone(), self.k_bnum())
+        }
+
+        pub fn k_bnum(&self) -> BigUint {
+            self.k.clone()
+        }
+
+        pub fn N_len() -> usize {
+            BINARY_3072.len()
         }
     }
 }
 
 #[cfg(test)]
-#[allow(non_snake_case, unused)]
+#[allow(non_snake_case)]
 mod tests {
-    use super::{groups::G_3072, helper::random_uint, Server};
-    use bstr::ByteSlice;
-    use digest::OutputSizeUser;
+    use super::{groups::G_3072, helper, Server};
     use num_bigint::BigUint;
-    use num_traits::{FromBytes, ToBytes, Zero};
+    use num_traits::{FromBytes, Zero};
+    use once_cell::sync::Lazy;
     use pretty_hex::PrettyHex;
-    use ring::digest::digest;
+    use std::fmt;
+
+    pub static TEST_DATA: Lazy<Data> = Lazy::new(Data::default);
+
+    #[derive(Clone)]
+    pub struct Data {
+        pub A: Vec<u8>,
+        pub B: Vec<u8>,
+        pub b: Vec<u8>,
+        pub client_M1: Vec<u8>,
+        pub H_AMK: Vec<u8>,
+        pub s: Vec<u8>,
+        pub server_M: Vec<u8>,
+        pub server_M2: Vec<u8>,
+        pub session_key: Vec<u8>,
+        pub u: Vec<u8>,
+        pub user_M: Vec<u8>,
+        pub v: Vec<u8>,
+    }
+
+    impl Data {
+        pub fn get() -> Self {
+            TEST_DATA.clone()
+        }
+
+        pub fn make_server(&self) -> Server {
+            use helper::slice_to_bnum;
+
+            let user = "Pair-Setup";
+            let passwd = br#"3939"#;
+            let salt = Some(slice_to_bnum(&self.s));
+            let b = Some(slice_to_bnum(&self.b));
+            Server::new(user, *passwd, salt, b)
+        }
+    }
+
+    impl Default for Data {
+        fn default() -> Self {
+            use std::path::Path;
+
+            let base = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+            let dir = Path::new(&base)
+                .parent()
+                .unwrap()
+                .join("extra")
+                .join("test-data");
+
+            let read = |f: &str| {
+                let mut file = dir.clone().join(f);
+
+                file.set_extension("bin");
+
+                std::fs::read(&file).unwrap()
+            };
+
+            Self {
+                A: read("A"),
+                B: read("B"),
+                b: read("b"),
+                client_M1: read("client_M1"),
+                H_AMK: read("H_AMK"),
+                s: read("s"),
+                server_M: read("server_M"),
+                server_M2: read("server_M2"),
+                session_key: read("session_key"),
+                u: read("u"),
+                user_M: read("user_M"),
+                v: read("v"),
+            }
+        }
+    }
+
+    impl fmt::Debug for Data {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("TestData\n")?;
+            writeln!(f, "A {:?}\n", self.A.hex_dump())?;
+            writeln!(f, "B {:?}\n", self.B.hex_dump())?;
+            writeln!(f, "b {:?}\n", self.b.hex_dump())?;
+            writeln!(f, "client M1 {:?}\n", self.client_M1.hex_dump())?;
+            writeln!(f, "H_AMK {:?}\n", self.H_AMK.hex_dump())?;
+            writeln!(f, "s {:?}\n", self.s.hex_dump())?;
+            writeln!(f, "server M {:?}\n", self.server_M.hex_dump())?;
+            writeln!(f, "server M2 {:?}\n", self.server_M2.hex_dump())?;
+            writeln!(f, "sesion_key {:?}\n", self.session_key.hex_dump())?;
+            writeln!(f, "u {:?}\n", self.u.hex_dump())?;
+            writeln!(f, "user_bin {:?}\n", self.user_M.hex_dump())?;
+            writeln!(f, "v {:?}\n", self.v.hex_dump())
+        }
+    }
+
+    fn hash_cmp(desc: &str, z: &Vec<u8>, z_td: &Vec<u8>) -> bool {
+        let equal = z == z_td;
+
+        if !equal {
+            println!("\n\n*** {desc} comparison FAILED ***");
+
+            println!(
+                "\n<<< {desc} {:?}\n\n>>> {desc} {:?}",
+                z.hex_dump(),
+                z_td.hex_dump()
+            );
+        }
+
+        equal
+    }
+
+    #[test]
+    fn can_load_test_data() {
+        let td = Data::get();
+
+        println!("\n{td:?}\n");
+
+        assert_eq!(td.A.len(), 384);
+        assert_eq!(td.B.len(), 384);
+    }
+
+    #[test]
+    fn can_generate_same_proof() {
+        use super::helper::n_to_bytes;
+
+        let td = Data::get();
+        let mut server = td.make_server();
+
+        let build = server.build_verifier(&td.A, &td.client_M1);
+
+        assert!(build.is_ok());
+
+        assert_eq!(n_to_bytes(&server.v), td.v.as_slice());
+        assert_eq!(n_to_bytes(&server.verifier.A), td.A.as_slice());
+        assert_eq!(n_to_bytes(&server.B), td.B.as_slice());
+        assert_eq!(n_to_bytes(&server.verifier.u), td.u.as_slice());
+
+        hash_cmp("M (server", &server.verifier.M_bytes, &td.server_M);
+        hash_cmp("session_key", &server.verifier.session_key, &td.session_key);
+    }
+
+    #[test]
+    fn can_authenticate() {
+        let td = Data::get();
+        let mut server = td.make_server();
+
+        let build = server.build_verifier(&td.A, &td.client_M1);
+
+        assert!(build.is_ok());
+
+        let res = match server.authenticate() {
+            Ok(()) => true,
+            Err(e) => {
+                println!("{e:?}");
+
+                println!(
+                    "SERVER M {:?}\n\nCLIENT M {:?}",
+                    server.verifier.M_bytes.hex_dump(),
+                    server.verifier.client_M1.hex_dump()
+                );
+
+                println!("\nVERIFIER {:?}", server.verifier);
+
+                false
+            }
+        };
+
+        assert!(res);
+
+        assert!(hash_cmp("H_AMK", &server.verifier.H_AMK, &td.H_AMK));
+    }
 
     #[test]
     fn can_get_G3072() {
@@ -571,7 +645,7 @@ mod tests {
 
     #[test]
     fn can_create_srp_server() {
-        let server = Server::<sha2::Sha512>::new("Pair-Setup", "3939");
+        let server = Server::new("Pair-Setup", *b"3939", None, None);
 
         assert_eq!(server.N.to_bytes_be().len(), 384);
         assert_eq!(server.g.to_bytes_be().len(), 1);
@@ -585,49 +659,41 @@ mod tests {
     }
 
     #[test]
-    #[allow(non_snake_case)]
     fn can_compute_known_v() {
-        use super::G_3072;
-        use digest::Digest;
-        use sha2::Sha512;
+        use super::Server;
 
-        let G3072 = &G_3072;
-        let known_salt: [u8; 16] = [
-            0x81, 0x8e, 0xa6, 0x75, 0x2a, 0x19, 0x91, 0x41, 0x5e, 0x97, 0x54, 0x09, 0xc0, 0x36,
-            0x9e, 0x49,
-        ];
+        let td = Data::get();
 
-        let salt = BigUint::from_be_bytes(&known_salt[..]);
-        let data = b"Pair-Setup:3939";
+        let user = "Pair-Setup";
+        let passwd = b"3939";
+        let salt = Some(BigUint::from_be_bytes(&td.s));
+        let server = Server::new(user, *passwd, salt, None);
 
-        let hasher = Sha512::new()
-            .chain_update(salt.to_be_bytes())
-            .chain_update(Sha512::digest(data));
-
-        let x = BigUint::from_be_bytes(&hasher.finalize());
-        let v = G3072.g.modpow(&x, &G3072.n);
+        let v = &server.v;
         assert!(v.bits() >= 3071);
 
         let v_bytes = v.to_bytes_be();
-        assert_eq!(v_bytes.first(), Some(&0x71u8));
-        assert_eq!(v_bytes.last(), Some(&0x7eu8));
+        assert_eq!(v_bytes.as_slice(), td.v.as_slice());
     }
 
     #[test]
     fn can_hash_single_n() {
-        use pretty_hex::PrettyHex;
+        use super::helper;
+        // use pretty_hex::PrettyHex;
 
         let n = BigUint::from_be_bytes(b"A");
 
-        let hashed = super::helper::digest_n::<sha2::Sha512>(&n);
+        let hashed = helper::hash_bnum(&n);
+        assert_eq!(hashed.len(), helper::H_len());
 
-        println!("{:?}", hashed.hex_dump());
+        let hashed_num = helper::slice_to_bnum(&hashed);
+        assert_ne!(hashed_num, BigUint::zero());
     }
 
     #[test]
-    fn can_ensure_same_N() {
+    fn ensure_same_N() {
         let other_n = r#"
-        FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63  B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E4    85B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4
+        FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63  B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E4  85B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4
         B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F8365
         5D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA182
         17C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCB

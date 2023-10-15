@@ -40,7 +40,7 @@ pub use tags::Val as TagVal;
 pub use verify::Context as VerifyCtx;
 
 pub struct Context {
-    pub device_id: BytesMut,
+    pub device_id: Vec<u8>,
     pub setup: Option<SetupCtx>,
     pub verify: VerifyCtx,
     pub encrypted: bool,
@@ -65,11 +65,17 @@ impl HomeKit {
     /// generate security `Seed` or `KeyPair`.
     #[must_use]
     pub fn build() -> Self {
+        use pretty_hex::PrettyHex;
+
         let mut id_buf = BytesMut::with_capacity(64);
         id_buf.extend_from_slice(HostInfo::id_as_slice());
 
+        let device_id = id_buf.freeze();
+
+        info!("\nDEVICE ID {:?}", device_id.hex_dump());
+
         Self {
-            device_id: id_buf,
+            device_id: device_id.into(),
             setup: None,
             verify: VerifyCtx::build(),
             encrypted: false,
