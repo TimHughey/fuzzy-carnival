@@ -15,22 +15,21 @@
 // limitations under the License.
 
 use crate::{
-    rtsp::{Body, Frame, Response},
+    rtsp::{msgs::Pending, Body, Frame, Response},
     Result,
 };
 use anyhow::anyhow;
-use bstr::ByteSlice;
 use bytes::{Buf, BytesMut};
 use pretty_hex::PrettyHex;
 use std::{fmt, fs::OpenOptions};
 use tokio_util::codec::{Decoder, Encoder};
-use tracing::{debug, info};
+use tracing::debug;
 
 /// A simple [`Decoder`] and [`Encoder`] implementation that splits up data into lines.
 ///
 /// [`Decoder`]: crate::codec::Decoder
 /// [`Encoder`]: crate::codec::Encoder
-#[derive(Default, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Default, Clone, Debug)]
 pub struct Rtsp {
     // incomplete body tracking
     pending: Option<Pending>,
@@ -119,141 +118,29 @@ impl Decoder for Rtsp {
     type Error = anyhow::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>> {
-        use std::io::Write;
+        let cnt = buf.len();
 
-        // delimiter for end of RTSP message, content (if any) follows
-        const NEEDLE: &[u8; 4] = b"\r\n\r\n";
-
-        let file_buf = buf.clone();
-
-        match buf.len() {
+        if Frame::min_bytes(cnt) {
             // enough bytes in buffer for a potential frame
-            cnt if Frame::min_bytes(cnt) => {
-                debug!("\nDECODE BUFFER {:?}", buf.hex_dump());
 
-                // Division of Concerns:
-                //   Rtsp Codec:
-                //      - finds needle (delimiter) representing the RTSP message
-                //      - ensures content (if any) is in the buffer if frame creation
-                //        signals content is incomplete
-                //
-                //   Rtsp Frame:
-                //      - parses raw buffer based on codec needle
-                //      - determines content (if any) is in the buffer
-                //      - if content is available, creates Frame and returns bytes consumed
-                //      - it content is incomplete, returns bytes required
+            debug!("\nDECODE BUFFER {:?}", buf.hex_dump());
 
-                // locate the delim between head and body (aka needle)
-                if let Some(needle_pos) = buf.find(NEEDLE) {
-                    // grab the head and tail slice, noting tail contains the needle and
-                    // potentially the body (depending on content len header)
-                    let mid = needle_pos + NEEDLE.len();
-                    let (head, body) = buf.split_at(mid);
+            match Frame::try_from(buf.clone()) {
+                Ok(mut frame) => {
+                    if frame.pending.is_none() {
+                        buf.advance(frame.consumed);
 
-                    let mut frame = Frame::try_from(head)?;
-
-                    let path = frame.headers.debug_file_path("in")?;
-
-                    let mut file = OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .append(true)
-                        .open(path)?;
-
-                    match frame.content_len() {
-                        // has content length header and all content is in buffer
-                        Some(len) if body.len() >= len => {
-                            file.write_all(file_buf.as_ref())?;
-
-                            let body = &body[0..len];
-
-                            frame.include_body(body)?;
-
-                            buf.advance(head.len() + body.len());
-
-                            self.pending = None;
-
-                            Ok(Some(frame))
-                        }
-
-                        // content header exists but full content check failed
-                        // incomplete, need more bytes to proceed
-                        Some(len) => {
-                            Pending::new_or_update(&mut self.pending, head.len(), len);
-
-                            info!("{:?}", self.pending);
-
-                            Ok(None)
-                        }
-                        // no content header, frame is complete
-                        _ => {
-                            file.write_all(head)?;
-                            buf.advance(head.len());
-
-                            self.pending = None;
-
-                            Ok(Some(frame))
-                        }
+                        Ok(Some(frame))
+                    } else {
+                        self.pending = frame.pending.take();
+                        Ok(None)
                     }
-                } else {
-                    use std::{env::var, path::PathBuf};
-
-                    const KEY: &str = "CARGO_MANIFEST_DIR";
-                    let path: PathBuf = var(KEY).unwrap().into();
-                    let mut path = path.parent().unwrap().to_path_buf();
-
-                    path.push("extra/ref/v2/error/frame.bin");
-
-                    OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .append(true)
-                        .open(path)?
-                        .write_all(&file_buf)?;
-
-                    Err(anyhow!("unable to find request end"))
                 }
+                Err(e) => Err(e),
             }
-
+        } else {
             // not enough bytes in buffer for a minimal frame
-            _cnt => Ok(None),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-struct Pending {
-    head: usize,
-    body: usize,
-    attempts: usize,
-}
-
-impl Pending {
-    pub fn new(head: usize, body: usize) -> Pending {
-        Self {
-            head,
-            body,
-            attempts: 1,
-        }
-    }
-
-    pub fn new_or_update(src: &mut Option<Pending>, head: usize, body: usize) -> Pending {
-        match src.as_ref() {
-            Some(p) => Pending {
-                attempts: p.attempts.saturating_add_signed(1),
-                ..p.clone()
-            },
-            None => Pending::new(head, body),
-        }
-    }
-}
-
-impl Default for Pending {
-    fn default() -> Self {
-        Self {
-            head: 0,
-            body: 0,
-            attempts: 1,
+            Ok(None)
         }
     }
 }

@@ -20,7 +20,7 @@ use anyhow::anyhow;
 use bstr::ByteSlice;
 use bytes::BytesMut;
 use pretty_hex::PrettyHex;
-use std::{fmt, fmt::Write, str::FromStr};
+use std::{fmt, path::PathBuf, str::FromStr};
 
 #[derive(Debug, Default)]
 pub struct Frame {
@@ -29,6 +29,7 @@ pub struct Frame {
     pub headers: header::List,
     pub body: Body,
     pub consumed: usize,
+    pub pending: Option<Pending>,
 }
 
 impl Frame {
@@ -67,6 +68,86 @@ impl Frame {
         // must return actual objects to avoid borrow checker
         (self.method, self.path.clone())
     }
+}
+
+impl TryFrom<BytesMut> for Frame {
+    type Error = anyhow::Error;
+
+    fn try_from(buf: BytesMut) -> Result<Self> {
+        // delimiter for end of RTSP message, content (if any) follows
+        const NEEDLE: &[u8; 4] = b"\r\n\r\n";
+
+        let file_buf = buf.clone();
+        // locate the delim between head and body (aka needle)
+        if let Some(needle_pos) = buf.find(NEEDLE) {
+            // grab the head and tail slice, noting tail contains the needle and
+            // potentially the body (depending on content len header)
+            let mid = needle_pos + NEEDLE.len();
+            let (head, body) = buf.split_at(mid);
+
+            let mut frame = Frame::try_from(head)?;
+
+            let path = frame.headers.debug_file_path("in")?;
+
+            match frame.content_len() {
+                // has content length header and all content is in buffer
+                Some(len) if body.len() >= len => {
+                    let body = &body[0..len];
+
+                    frame.include_body(body)?;
+                    frame.consumed = head.len() + body.len();
+
+                    let mut file_buf = BytesMut::with_capacity(frame.consumed);
+                    file_buf.extend_from_slice(head);
+                    file_buf.extend_from_slice(body);
+
+                    persist_buf(&file_buf, Some(path))?;
+
+                    Ok(frame)
+                }
+
+                // content header exists but full content check failed
+                // incomplete, need more bytes to proceed
+                Some(len) => Ok(Self {
+                    pending: Some(Pending::new(head.len(), len)),
+                    ..frame
+                }),
+                // no content header, frame is complete
+                _ => {
+                    frame.consumed = head.len();
+
+                    persist_buf(head, Some(path))?;
+
+                    Ok(frame)
+                }
+            }
+        } else {
+            persist_buf(&file_buf, None)?;
+
+            Err(anyhow!("unable to find request end"))
+        }
+    }
+}
+
+fn persist_buf(buf: &[u8], path: Option<PathBuf>) -> Result<()> {
+    use std::{env::var, fs::OpenOptions, io::Write};
+
+    let path = path.unwrap_or_else(|| {
+        const KEY: &str = "CARGO_MANIFEST_DIR";
+        let path: PathBuf = var(KEY).unwrap().into();
+        let mut path = path.parent().unwrap().to_path_buf();
+
+        path.push("extra/ref/v2/error/frame.bin");
+
+        path
+    });
+
+    Ok(OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(path)?
+        .write_all(buf)?)
 }
 
 impl<'a> TryFrom<&'a [u8]> for Frame {
@@ -235,6 +316,8 @@ impl Response {
     ///
     #[inline]
     pub fn extend_with_content_info(&self, dst: &mut BytesMut) -> Result<()> {
+        use std::fmt::Write;
+
         let ctype = self.headers.content_type.as_ref();
         let clen = self.headers.content_length.as_ref();
 
@@ -285,5 +368,43 @@ impl fmt::Debug for Response {
 impl fmt::Display for Response {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}\n{}\n{:?}", self.status_code, self.headers, self.body)
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone)]
+pub struct Pending {
+    head: usize,
+    body: usize,
+    attempts: usize,
+}
+
+impl Pending {
+    pub fn new(head: usize, body: usize) -> Pending {
+        Self {
+            head,
+            body,
+            attempts: 1,
+        }
+    }
+
+    pub fn new_or_update(src: &mut Option<Pending>, head: usize, body: usize) -> Pending {
+        match src.as_ref() {
+            Some(p) => Pending {
+                attempts: p.attempts.saturating_add_signed(1),
+                ..p.clone()
+            },
+            None => Pending::new(head, body),
+        }
+    }
+}
+
+impl Default for Pending {
+    fn default() -> Self {
+        Self {
+            head: 0,
+            body: 0,
+            attempts: 1,
+        }
     }
 }
