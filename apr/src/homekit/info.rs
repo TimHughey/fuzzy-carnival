@@ -96,7 +96,6 @@ pub fn response(frame: Frame) -> Result<Response> {
         status_code: StatusCode::OK,
         headers: frame.headers.make_response(Plist, body.len()),
         body,
-        homekit: frame.homekit,
     })
 }
 

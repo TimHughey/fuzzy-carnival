@@ -88,115 +88,100 @@ impl HomeKit {
     ///
     /// This function will return an error if .
     pub fn respond_to(&mut self, frame: Frame) -> Result<Response> {
-        let path = frame.path.as_str();
-        let t_in = Tags::try_from(frame.body)?;
-        let state = t_in.get_state()?;
+        use crate::rtsp::Method;
 
-        match path {
-            path if path.ends_with("verify") => {
-                use VerifyState::{Msg01, Msg02, Msg03, Msg04};
+        let (method, path) = frame.method_path();
 
-                let state = VerifyState::try_from(state)?;
+        if method == Method::GET && path == "/info" {
+            info::response(frame)
+        } else {
+            let t_in = Tags::try_from(frame.body)?;
+            let state = t_in.get_state()?;
 
-                match state {
-                    Msg01 => {
-                        info!("{path} {state:?}");
-                        let verify = &self.verify;
+            match (method, path) {
+                (Method::GET | Method::POST, path) if path.ends_with("verify") => {
+                    use VerifyState::{Msg01, Msg02, Msg03, Msg04};
 
-                        let pk = t_in.get_public_key()?;
+                    let state = VerifyState::try_from(state)?;
 
-                        let tags = verify.m1_m2(pk)?;
+                    match state {
+                        Msg01 => {
+                            info!("{path} {state:?}");
+                            let verify = &self.verify;
 
-                        let body = Body::OctetStream(tags.encode().to_vec());
+                            let pk = t_in.get_public_key()?;
 
-                        Ok(Response {
-                            headers: HeaderList::make_response2(frame.headers, &body)?,
-                            body,
-                            ..Response::default()
-                        })
-                    }
-                    Msg02 | Msg03 | Msg04 => Err(anyhow!("{path}: got state {state:?}")),
-                }
-            }
+                            let tags = verify.m1_m2(pk)?;
 
-            path if path.ends_with("setup") => {
-                use states::Generic as State;
+                            let body = Body::OctetStream(tags.encode().to_vec());
 
-                const M1: State = State(1);
-                const M3: State = State(3);
-
-                let setup_ctx = self.setup.take();
-
-                match (state, setup_ctx) {
-                    (M1, None) => {
-                        info!("{path} M1");
-                        let mut setup_ctx = SetupCtx::build(2);
-                        let t_out = setup_ctx.m1_m2(&t_in);
-
-                        let body = Body::OctetStream(t_out.encode().to_vec());
-
-                        self.setup = Some(setup_ctx);
-
-                        Ok(Response {
-                            headers: HeaderList::make_response2(frame.headers, &body)?,
-                            body,
-                            ..Response::default()
-                        })
-                    }
-
-                    (M3, Some(mut setup_ctx)) => {
-                        info!("{path} M2");
-
-                        let t_out = setup_ctx.m3_m4(&t_in);
-
-                        let body = Body::OctetStream(t_out.encode().to_vec());
-
-                        self.setup = Some(setup_ctx);
-
-                        Ok(Response {
-                            headers: HeaderList::make_response2(frame.headers, &body)?,
-                            body,
-                            ..Response::default()
-                        })
-                    }
-
-                    (_state, _setup_ctx) => {
-                        info!("Setup UNKNOWN  {t_in:?}");
-
-                        Ok(Response::default())
+                            Ok(Response {
+                                headers: HeaderList::make_response2(frame.headers, &body)?,
+                                body,
+                                ..Response::default()
+                            })
+                        }
+                        Msg02 | Msg03 | Msg04 => Err(anyhow!("{path}: got state {state:?}")),
                     }
                 }
-            }
 
-            path => {
-                error!("unhandled {path}\n{t_in:?}");
+                (Method::GET | Method::POST, path) if path.ends_with("setup") => {
+                    use states::Generic as State;
 
-                Err(anyhow!("unhandled path: {path}"))
+                    const M1: State = State(1);
+                    const M3: State = State(3);
+
+                    let setup_ctx = self.setup.take();
+
+                    match (state, setup_ctx) {
+                        (M1, None) => {
+                            info!("{path} M1");
+                            let mut setup_ctx = SetupCtx::build(2);
+                            let t_out = setup_ctx.m1_m2(&t_in);
+
+                            let body = Body::OctetStream(t_out.encode().to_vec());
+
+                            self.setup = Some(setup_ctx);
+
+                            Ok(Response {
+                                headers: HeaderList::make_response2(frame.headers, &body)?,
+                                body,
+                                ..Response::default()
+                            })
+                        }
+
+                        (M3, Some(mut setup_ctx)) => {
+                            info!("{path} M2");
+
+                            let t_out = setup_ctx.m3_m4(&t_in);
+
+                            let body = Body::OctetStream(t_out.encode().to_vec());
+
+                            self.setup = Some(setup_ctx);
+
+                            Ok(Response {
+                                headers: HeaderList::make_response2(frame.headers, &body)?,
+                                body,
+                                ..Response::default()
+                            })
+                        }
+
+                        (_state, _setup_ctx) => {
+                            info!("Setup UNKNOWN  {t_in:?}");
+
+                            Ok(Response::default())
+                        }
+                    }
+                }
+
+                (method, path) => {
+                    error!("unhandled {path}\n{t_in:?}");
+
+                    Err(anyhow!("unhandled: {method} {path}"))
+                }
             }
         }
     }
-}
-
-/// Creates a response to a `Frame`
-///
-///
-///
-/// # Errors
-///
-/// This function will return an error if .
-pub fn respond_to(mut frame: Frame) -> Result<Response> {
-    if let Some(mut kit) = frame.homekit.take() {
-        let response = kit.respond_to(frame)?;
-
-        return Ok(Response {
-            homekit: Some(kit),
-            ..response
-        });
-    }
-
-    error!("homekit not present in {frame}");
-
-    Err(anyhow!("frame missing homekit"))
 }
 
 #[cfg(test)]

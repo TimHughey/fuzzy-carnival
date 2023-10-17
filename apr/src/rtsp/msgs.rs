@@ -14,13 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{header, Method};
-use crate::{HomeKit, Result};
+use super::{header, HeaderList, Method, StatusCode};
+use crate::Result;
 use anyhow::anyhow;
 use bstr::ByteSlice;
 use bytes::BytesMut;
 use pretty_hex::PrettyHex;
-use std::{fmt, str::FromStr};
+use std::{fmt, fmt::Write, str::FromStr};
 
 #[derive(Debug, Default)]
 pub struct Frame {
@@ -28,17 +28,13 @@ pub struct Frame {
     pub path: String,
     pub headers: header::List,
     pub body: Body,
-    pub homekit: Option<HomeKit>,
+    pub consumed: usize,
 }
 
 impl Frame {
     const MIN_BYTES: usize = 80;
     const SPACE: char = ' ';
     const PROTOCOL: &str = "RTSP/1.0";
-
-    pub fn accept_homekit(&mut self, homekit: Option<HomeKit>) {
-        self.homekit = homekit;
-    }
 
     /// # Errors
     ///
@@ -67,17 +63,9 @@ impl Frame {
     }
 
     #[must_use]
-    pub fn method_path(&self) -> (&Method, &str) {
-        (&self.method, self.path.as_str())
-    }
-
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn take_homekit(&mut self) -> Option<HomeKit> {
-        self.homekit.take()
+    pub fn method_path(&self) -> (Method, String) {
+        // must return actual objects to avoid borrow checker
+        (self.method, self.path.clone())
     }
 }
 
@@ -227,5 +215,75 @@ impl TryInto<BytesMut> for Body {
         };
 
         Ok(buf)
+    }
+}
+
+pub struct Response {
+    pub status_code: StatusCode,
+    pub headers: header::List,
+    pub body: Body,
+}
+
+impl Response {
+    #[inline]
+    #[must_use]
+    pub fn has_body(&self) -> bool {
+        !matches!(self.body, Body::Empty)
+    }
+
+    /// # Errors
+    ///
+    #[inline]
+    pub fn extend_with_content_info(&self, dst: &mut BytesMut) -> Result<()> {
+        let ctype = self.headers.content_type.as_ref();
+        let clen = self.headers.content_length.as_ref();
+
+        if let (Some(ctype), Some(clen)) = (ctype, clen) {
+            let avail = dst.capacity();
+            tracing::debug!("buf avail: {avail}");
+
+            let ctype_key = header::Key2::ContentType.as_str();
+            let ctype_val = ctype.as_str();
+            let clen_key = header::Key2::ContentLength.as_str();
+
+            let res = write!(
+                dst,
+                "\
+                {ctype_key}: {ctype_val}\r\n\
+                {clen_key}: {clen}\r\n\
+                \r\n\
+                "
+            );
+
+            return Ok(res?);
+        }
+
+        Err(anyhow!("no content type or length"))
+    }
+}
+
+impl Default for Response {
+    fn default() -> Self {
+        Self {
+            status_code: StatusCode::OK,
+            headers: HeaderList::default(),
+            body: Body::Empty,
+        }
+    }
+}
+
+impl fmt::Debug for Response {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let status_code = &self.status_code;
+        let headers = &self.headers;
+        let body = &self.body;
+
+        write!(f, "{status_code}\n{headers}{body}")
+    }
+}
+
+impl fmt::Display for Response {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}\n{}\n{:?}", self.status_code, self.headers, self.body)
     }
 }

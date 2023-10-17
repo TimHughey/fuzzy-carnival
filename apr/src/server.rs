@@ -20,7 +20,7 @@
 //! spawning a task per connection.
 
 use crate::{
-    rtsp::{codec, Response},
+    rtsp::{codec, Frame},
     serdis::SerDis,
     HomeKit, Result, Shutdown,
 };
@@ -112,7 +112,12 @@ struct Handler {
 
     /// Not used directly. Instead, when `Handler` is dropped...?
     _shutdown_complete: mpsc::Sender<()>,
+
+    active: bool,
 }
+
+type MaybeFrame = Option<Result<Frame>>;
+type HandleResult = Result<(HomeKit, Result<()>)>;
 
 impl Handler {
     /// Process a single connection.
@@ -127,71 +132,53 @@ impl Handler {
     ///
     /// When the shutdown signal is received, the connection is processed until
     /// it reaches a safe state, at which point it is terminated.
-    async fn run(&mut self) -> Result<()> {
-        let mut active = true;
-        let mut homekit = Some(HomeKit::build());
+    async fn run(mut self) -> Result<()> {
+        let mut homekit = HomeKit::build();
 
-        while !self.shutdown.is_shutdown() && active {
+        while !self.shutdown.is_shutdown() && self.active {
             tokio::select! {
-                maybe_frame = self.framed.next(), if active => {
-
-                    match maybe_frame {
-                        Some(Ok(mut frame)) => {
-                            info!("\n{}", frame);
-
-                            frame.homekit = homekit.take();
-
-                            match Response::respond_to(frame) {
-
-                                Ok(mut response) => {
-                                    info!("sending response:\n{response:?}");
-                                    homekit = response.take_homekit();
-
-                                    self.framed.send(response).await?;
-
-                                  //  active = true;
-                                }
-
-                                Err(e) => {
-                                    active = false;
-                                    error!(cause = ?e);
-                                    Err(anyhow!(e))?;
-                                }
-                            }
-
-
-                        }
-
-                        Some(Err(e)) => {
-                            active = false;
-                            error!(cause = ?e);
-                            Err(anyhow!(e))?;
-                        }
-
-                        None => {
-                            warn!("stream finished");
-                            active = false;
-                        }
-                    }
+                maybe_frame = self.framed.next(), if self.active => {
+                   let (kit, _) = self.handle_frame(homekit, maybe_frame).await?;
+                   homekit = kit;
                 },
                 _ = self.shutdown.recv() => (),
             }
         }
 
-        // cmd.apply(&mut self.session).await?;
-
-        // Perform the work needed to apply the command. This may mutate the
-        // database state as a result.
-        //
-        // The connection is passed into the apply function which allows the
-        // command to write response frames directly to the connection. In
-        // the case of pub/sub, multiple frames may be send back to the
-        // peer.
-        // cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
-        //    .await?;
-        // }
-
         Ok(())
+    }
+
+    async fn handle_frame(&mut self, mut kit: HomeKit, frame: MaybeFrame) -> HandleResult {
+        self.active = false;
+
+        match frame {
+            Some(Ok(frame)) => {
+                info!("\n{}", frame);
+
+                match kit.respond_to(frame) {
+                    Ok(response) => {
+                        self.active = true;
+                        info!("sending response:\n{response:?}");
+                        Ok((kit, self.framed.send(response).await))
+                    }
+
+                    Err(e) => {
+                        error!(cause = ?e);
+                        Ok((kit, Err(anyhow!(e))))
+                    }
+                }
+            }
+
+            Some(Err(e)) => {
+                error!(cause = ?e);
+                Ok((kit, Err(anyhow!(e))))
+            }
+
+            None => {
+                warn!("stream finished");
+                Ok((kit, Ok(())))
+            }
+        }
     }
 }
 
@@ -352,7 +339,7 @@ impl Listener {
             let socket = self.accept().await?;
 
             // Create the necessary per-connection handler state.
-            let mut handler = Handler {
+            let handler = Handler {
                 // Initialize the connection state. This allocates read/write
                 // buffers to perform redis protocol frame parsing.
                 framed: codec::Rtsp::new().framed(socket),
@@ -363,13 +350,16 @@ impl Listener {
                 // Notifies the receiver half once all clones are
                 // dropped.
                 _shutdown_complete: self.shutdown_complete_tx.clone(),
+
+                active: true,
             };
 
             // Spawn a new task to process the connections. Tokio tasks are like
             // asynchronous green threads and are executed concurrently.
             tokio::spawn(async move {
                 // Process the connection. If an error is encountered, log it.
-                if let Err(err) = handler.run().await {
+
+                if let Err(err) = Handler::run(handler).await {
                     error!(cause = ?err, "connection error");
                 }
                 // Move the permit into the task and drop it after completion.
