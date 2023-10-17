@@ -214,7 +214,6 @@ impl Verifier {
         // username.push(0x00);
 
         // SRP-6a safety check
-
         let A_mod_N = &A % N;
 
         if A_mod_N > BigUint::zero() {
@@ -354,34 +353,12 @@ mod helper {
         BigUint::from_be_bytes(&sha2::sha512::hash(&bin).unwrap().0)
     }
 
-    #[must_use]
-    #[allow(unused)]
-    pub fn H_pad_bnums(bnums: Vec<&BigUint>, pad_len: usize) -> BigUint {
-        let mut hasher = sha2::Multipart::new().unwrap();
-
-        for bnum in bnums {
-            let bytes_be = bnum.to_bytes_be();
-
-            if bytes_be.len() < pad_len {
-                let mut buf = vec![0u8; pad_len];
-                buf[(pad_len - bytes_be.len())..].copy_from_slice(bytes_be.as_slice());
-
-                hasher.update(&buf);
-            } else {
-                hasher.update(&bytes_be);
-            }
-        }
-
-        BigUint::from_bytes_be(&hasher.calculate().0)
-    }
-
     pub fn n_to_bytes(n: &BigUint) -> Vec<u8> {
         n.to_be_bytes()
     }
 
     pub fn random_uint(bits: u64) -> BigUint {
         let mut rng = rand::thread_rng();
-        //    rng.gen_biguint(bits).rem_euclid(&super::G_3072.n)
 
         rng.gen_biguint(bits)
     }
@@ -482,100 +459,42 @@ mod tests {
         pub v: Vec<u8>,
     }
 
-    impl Data {
-        pub fn get() -> Self {
-            TEST_DATA.clone()
-        }
-
-        pub fn make_server(&self) -> Server {
-            use helper::slice_to_bnum;
-
-            let user = "Pair-Setup";
-            let passwd = br#"3939"#;
-            let salt = Some(slice_to_bnum(&self.s));
-            let b = Some(slice_to_bnum(&self.b));
-            Server::new(user, *passwd, salt, b)
-        }
-    }
-
-    impl Default for Data {
-        fn default() -> Self {
-            use std::path::Path;
-
-            let base = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-            let dir = Path::new(&base)
-                .parent()
-                .unwrap()
-                .join("extra")
-                .join("test-data");
-
-            let read = |f: &str| {
-                let mut file = dir.clone().join(f);
-
-                file.set_extension("bin");
-
-                std::fs::read(&file).unwrap()
-            };
-
-            Self {
-                A: read("A"),
-                B: read("B"),
-                b: read("b"),
-                client_M1: read("client_M1"),
-                H_AMK: read("H_AMK"),
-                s: read("s"),
-                server_M: read("server_M"),
-                server_M2: read("server_M2"),
-                session_key: read("session_key"),
-                u: read("u"),
-                user_M: read("user_M"),
-                v: read("v"),
-            }
-        }
-    }
-
-    impl fmt::Debug for Data {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str("TestData\n")?;
-            writeln!(f, "A {:?}\n", self.A.hex_dump())?;
-            writeln!(f, "B {:?}\n", self.B.hex_dump())?;
-            writeln!(f, "b {:?}\n", self.b.hex_dump())?;
-            writeln!(f, "client M1 {:?}\n", self.client_M1.hex_dump())?;
-            writeln!(f, "H_AMK {:?}\n", self.H_AMK.hex_dump())?;
-            writeln!(f, "s {:?}\n", self.s.hex_dump())?;
-            writeln!(f, "server M {:?}\n", self.server_M.hex_dump())?;
-            writeln!(f, "server M2 {:?}\n", self.server_M2.hex_dump())?;
-            writeln!(f, "sesion_key {:?}\n", self.session_key.hex_dump())?;
-            writeln!(f, "u {:?}\n", self.u.hex_dump())?;
-            writeln!(f, "user_bin {:?}\n", self.user_M.hex_dump())?;
-            writeln!(f, "v {:?}\n", self.v.hex_dump())
-        }
-    }
-
-    fn hash_cmp(desc: &str, z: &Vec<u8>, z_td: &Vec<u8>) -> bool {
-        let equal = z == z_td;
-
-        if !equal {
-            println!("\n\n*** {desc} comparison FAILED ***");
-
-            println!(
-                "\n<<< {desc} {:?}\n\n>>> {desc} {:?}",
-                z.hex_dump(),
-                z_td.hex_dump()
-            );
-        }
-
-        equal
-    }
-
     #[test]
     fn can_load_test_data() {
+        use alkali::hash::sha2;
+
+        const PUB_KEY_LEN: usize = 384;
+        const SALT_LEN: usize = 16;
+        const SEC_KEY_LEN: usize = 32;
+        const SHA512_LEN: usize = sha2::sha512::DIGEST_LENGTH;
+
         let td = Data::get();
 
-        println!("\n{td:?}\n");
+        let members: [(&Vec<u8>, usize); 11] = [
+            (&td.A, PUB_KEY_LEN),
+            (&td.B, PUB_KEY_LEN),
+            (&td.b, SEC_KEY_LEN),
+            (&td.client_M1, SHA512_LEN),
+            (&td.H_AMK, SHA512_LEN),
+            (&td.s, SALT_LEN),
+            (&td.server_M, SHA512_LEN),
+            (&td.server_M2, SHA512_LEN),
+            (&td.session_key, SHA512_LEN),
+            (&td.user_M, SHA512_LEN),
+            (&td.v, PUB_KEY_LEN),
+        ];
 
-        assert_eq!(td.A.len(), 384);
-        assert_eq!(td.B.len(), 384);
+        for (member, expected_len) in members {
+            // validate the length in bytes
+            assert_eq!(member.len(), expected_len);
+
+            let bnum = BigUint::from_be_bytes(member);
+            let want_bits = (expected_len * 7) as u64;
+
+            // validate sufficient bits are required to represent the
+            // big integer (aka non-zero)
+            assert!(bnum.bits() >= want_bits);
+        }
     }
 
     #[test]
@@ -678,38 +597,100 @@ mod tests {
 
     #[test]
     fn can_hash_single_n() {
-        use super::helper;
-        // use pretty_hex::PrettyHex;
+        use super::helper::{hash_bnum, slice_to_bnum, H_len};
 
         let n = BigUint::from_be_bytes(b"A");
 
-        let hashed = helper::hash_bnum(&n);
-        assert_eq!(hashed.len(), helper::H_len());
+        let hashed = hash_bnum(&n);
+        assert_eq!(hashed.len(), H_len());
 
-        let hashed_num = helper::slice_to_bnum(&hashed);
+        let hashed_num = slice_to_bnum(&hashed);
         assert_ne!(hashed_num, BigUint::zero());
     }
 
-    #[test]
-    fn ensure_same_N() {
-        let other_n = r#"
-        FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63  B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E4  85B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4
-        B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F8365
-        5D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA182
-        17C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCB
-        F6955817183995497CEA956AE515D2261898FA051015728E5A8AAAC42DAD33170D04507A3
-        3A85521ABDF1CBA64ECFB850458DBEF0A8AEA71575D060C7DB3970F85A6E1E4C7ABF5AE8C
-        DB0933D71E8C94E04A25619DCEE3D2261AD2EE6BF12FFA06D98A0864D87602733EC86A645
-        21F2B18177B200CBBE117577A615D6C770988C0BAD946E208E24FA074E5AB3143DB5BFCE0
-        FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF"#;
+    impl Data {
+        pub fn get() -> Self {
+            TEST_DATA.clone()
+        }
 
-        let n_bytes = other_n
-            .split_ascii_whitespace()
-            .collect::<Vec<&str>>()
-            .concat();
+        pub fn make_server(&self) -> Server {
+            use helper::slice_to_bnum;
 
-        let N = BigUint::parse_bytes(n_bytes.as_bytes(), 16).unwrap();
+            let user = "Pair-Setup";
+            let passwd = br#"3939"#;
+            let salt = Some(slice_to_bnum(&self.s));
+            let b = Some(slice_to_bnum(&self.b));
+            Server::new(user, *passwd, salt, b)
+        }
+    }
 
-        assert_eq!(&N, &G_3072.n);
+    impl Default for Data {
+        fn default() -> Self {
+            use std::path::Path;
+
+            let base = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+            let dir = Path::new(&base)
+                .parent()
+                .unwrap()
+                .join("extra")
+                .join("test-data");
+
+            let read = |f: &str| {
+                let mut file = dir.clone().join(f);
+
+                file.set_extension("bin");
+
+                std::fs::read(&file).unwrap()
+            };
+
+            Self {
+                A: read("A"),
+                B: read("B"),
+                b: read("b"),
+                client_M1: read("client_M1"),
+                H_AMK: read("H_AMK"),
+                s: read("s"),
+                server_M: read("server_M"),
+                server_M2: read("server_M2"),
+                session_key: read("session_key"),
+                u: read("u"),
+                user_M: read("user_M"),
+                v: read("v"),
+            }
+        }
+    }
+
+    impl fmt::Debug for Data {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("TestData\n")?;
+            writeln!(f, "A {:?}\n", self.A.hex_dump())?;
+            writeln!(f, "B {:?}\n", self.B.hex_dump())?;
+            writeln!(f, "b {:?}\n", self.b.hex_dump())?;
+            writeln!(f, "client M1 {:?}\n", self.client_M1.hex_dump())?;
+            writeln!(f, "H_AMK {:?}\n", self.H_AMK.hex_dump())?;
+            writeln!(f, "s {:?}\n", self.s.hex_dump())?;
+            writeln!(f, "server M {:?}\n", self.server_M.hex_dump())?;
+            writeln!(f, "server M2 {:?}\n", self.server_M2.hex_dump())?;
+            writeln!(f, "sesion_key {:?}\n", self.session_key.hex_dump())?;
+            writeln!(f, "u {:?}\n", self.u.hex_dump())?;
+            writeln!(f, "user_bin {:?}\n", self.user_M.hex_dump())?;
+            writeln!(f, "v {:?}\n", self.v.hex_dump())
+        }
+    }
+
+    fn hash_cmp(desc: &str, z: &Vec<u8>, z_td: &Vec<u8>) -> bool {
+        let equal = z == z_td;
+
+        if !equal {
+            println!("\n\n*** {desc} comparison FAILED ***");
+
+            println!(
+                "\n<<< {desc} {:?}\n\n>>> {desc} {:?}",
+                z.hex_dump(),
+                z_td.hex_dump()
+            );
+        }
+
+        equal
     }
 }
