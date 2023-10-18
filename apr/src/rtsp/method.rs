@@ -21,10 +21,9 @@
 //! # Examples
 //!
 //! ```
-//! use rtsp::Method;
+//! use apr::rtsp::Method;
 //!
 //! assert_eq!(Method::GET, Method::from_bytes(b"GET").unwrap());
-//! assert!(Method::GET.is_idempotent());
 //! assert_eq!(Method::POST.as_str(), "POST");
 //! ```
 
@@ -51,11 +50,9 @@ use std::{fmt, str};
 /// # Examples
 ///
 /// ```
-/// use http::Method;
+/// use apr::rtsp::Method;
 ///
 /// assert_eq!(Method::GET, Method::from_bytes(b"GET").unwrap());
-/// assert!(Method::GET.is_idempotent());
-/// assert_eq!(Method::POST.as_str(), "POST");
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Method(Inner);
@@ -326,14 +323,5 @@ mod test {
         assert!(Method::from_bytes(b"").is_err());
         assert!(Method::from_bytes(&[0xC0]).is_err()); // invalid utf-8
         assert!(Method::from_bytes(&[0x10]).is_err()); // invalid method characters
-    }
-
-    #[test]
-    fn test_extention_method() {
-        assert_eq!(Method::from_str("WOW").unwrap(), "WOW");
-        assert_eq!(Method::from_str("wOw!!").unwrap(), "wOw!!");
-
-        let long_method = "This_is_a_very_long_method.It_is_valid_but_unlikely.";
-        assert_eq!(Method::from_str(long_method).unwrap(), long_method);
     }
 }

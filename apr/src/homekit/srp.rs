@@ -50,7 +50,10 @@
 //! [1]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
 //! [2]: https://tools.ietf.org/html/rfc5054
 
-use super::TagVal::{self, Proof, PublicKey, Salt};
+use super::{
+    CipherCtx,
+    TagVal::{self, Proof, PublicKey, Salt},
+};
 use crate::Result;
 use alkali::hash::sha2;
 use anyhow::anyhow;
@@ -59,12 +62,13 @@ use groups::G_3072;
 use num_bigint::BigUint;
 use num_traits::{Euclid, Zero};
 use pretty_hex::PrettyHex;
-use tracing::{info, warn};
+use tracing::info;
 
 const SALT_BITS: u64 = 128;
 const SERVER_PRIVATE_BITS: u64 = 256;
 
 #[allow(non_snake_case)]
+#[derive(Default)]
 pub struct Server {
     pub username: Vec<u8>, // shared username
     pub passwd: [u8; 4],   // shared password
@@ -76,22 +80,17 @@ pub struct Server {
     pub B: BigUint,        // server ephemeral public
     pub b: BigUint,        // server ephemeral secret
     pub A: BigUint,        // client ephemeral public
-    pub verifier: Verifier,
 }
 
 #[allow(non_snake_case)]
 #[allow(clippy::many_single_char_names)]
 impl Server {
-    pub fn authenticate(&mut self) -> Result<()> {
-        self.verifier.authenticate()
-    }
-
     pub fn new(user: &str, passwd: [u8; 4], salt: Option<BigUint>, b: Option<BigUint>) -> Self {
         use helper::{bnum_bytes, multipart_to_num};
 
         let seperator = b":";
-        let s = salt.unwrap_or_else(|| helper::random_uint(SALT_BITS));
         let (N, g, k) = G_3072.get_params();
+        let s = salt.unwrap_or_else(|| helper::random_uint(SALT_BITS));
         let b = b.unwrap_or_else(|| helper::random_uint(SERVER_PRIVATE_BITS));
         let username: Vec<u8> = user.into();
 
@@ -120,15 +119,7 @@ impl Server {
             B: ((k * v) + g.modpow(&b, &N)).rem_euclid(&N),
             b,
             A: BigUint::default(),
-
-            verifier: Verifier::default(),
         }
-    }
-
-    pub fn build_verifier(&mut self, A: &[u8], client_M1: &[u8]) -> Result<()> {
-        self.verifier = Verifier::new(self, A, client_M1)?;
-
-        Ok(())
     }
 
     pub fn get_pk(&self) -> TagVal {
@@ -136,11 +127,7 @@ impl Server {
     }
 
     pub fn get_salt(&self) -> TagVal {
-        Salt(self.s.to_bytes_be())
-    }
-
-    pub fn proof(&self) -> TagVal {
-        Proof(self.verifier.H_AMK.clone())
+        Salt(helper::bnum_bytes(&self.s))
     }
 }
 
@@ -182,21 +169,20 @@ pub struct Verifier {
 
 #[allow(non_snake_case)]
 impl Verifier {
-    pub fn authenticate(&mut self) -> Result<()> {
+    pub fn authenticate(&mut self) -> Result<CipherCtx> {
         use helper::calculate_H_AMK;
 
         self.H_AMK = calculate_H_AMK(&self.A, &self.M_bytes, &self.session_key);
 
-        if self.M_bytes != self.client_M1 {
-            warn!("authentication failed");
-            return Err(anyhow!("authentication failed"));
+        if self.M_bytes == self.client_M1 {
+            info!("authenticated");
+
+            self.authenticated = true;
+
+            return Ok(CipherCtx::new(&self.session_key));
         }
 
-        info!("authenticated");
-
-        self.authenticated = true;
-
-        Ok(())
+        Err(anyhow!("authentication failed, proofs do not match"))
     }
 
     pub fn new(server: &Server, A_bytes: &[u8], client_M1: &[u8]) -> Result<Verifier> {
@@ -209,12 +195,8 @@ impl Verifier {
         let v = &server.v;
         let s = &server.s;
 
-        // appears we need to zero pad end of username
-        // let username = server.username.clone();
-        // username.push(0x00);
-
         // SRP-6a safety check
-        let A_mod_N = &A % N;
+        let A_mod_N = A.rem_euclid(N);
 
         if A_mod_N > BigUint::zero() {
             let u = H_nn_pad(&A, B);
@@ -238,18 +220,11 @@ impl Verifier {
             });
         }
 
-        Err(anyhow!("A is zero"))
+        Err(anyhow!("client pub key is empty"))
     }
 
-    pub fn validate_session(self, user_M: &[u8]) -> Result<Self> {
-        if user_M == self.M_bytes {
-            return Ok(Self {
-                authenticated: true,
-                ..self
-            });
-        }
-
-        Err(anyhow!("invalid session"))
+    pub fn proof(&self) -> TagVal {
+        Proof(self.H_AMK.clone())
     }
 }
 
@@ -257,7 +232,7 @@ impl fmt::Debug for Verifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use helper::bnum_bytes;
 
-        f.write_str("TestData\n")?;
+        f.write_str("VERIFIER\n")?;
         writeln!(f, "authenticated: {}", self.authenticated)?;
         writeln!(f, "A {:?}\n", bnum_bytes(&self.A).hex_dump())?;
         writeln!(f, "B {:?}\n", bnum_bytes(&self.B).hex_dump())?;
@@ -360,6 +335,7 @@ mod helper {
     pub fn random_uint(bits: u64) -> BigUint {
         let mut rng = rand::thread_rng();
 
+        // BigUint::from_be_bytes(&rng.gen_biguint(bits).to_le_bytes())
         rng.gen_biguint(bits)
     }
 
@@ -434,7 +410,9 @@ mod groups {
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
-    use super::{groups::G_3072, helper, Server};
+    use crate::homekit::srp::Verifier;
+
+    use super::{groups::G_3072, helper, Result, Server};
     use num_bigint::BigUint;
     use num_traits::{FromBytes, Zero};
     use once_cell::sync::Lazy;
@@ -498,46 +476,47 @@ mod tests {
     }
 
     #[test]
-    fn can_generate_same_proof() {
+    fn can_generate_same_proof() -> Result<()> {
         use super::helper::n_to_bytes;
 
         let td = Data::get();
-        let mut server = td.make_server();
+        let server = td.make_server();
 
-        let build = server.build_verifier(&td.A, &td.client_M1);
-
-        assert!(build.is_ok());
+        let verifier = Verifier::new(&server, &td.A, &td.client_M1)?;
 
         assert_eq!(n_to_bytes(&server.v), td.v.as_slice());
-        assert_eq!(n_to_bytes(&server.verifier.A), td.A.as_slice());
+        assert_eq!(n_to_bytes(&verifier.A), td.A.as_slice());
         assert_eq!(n_to_bytes(&server.B), td.B.as_slice());
-        assert_eq!(n_to_bytes(&server.verifier.u), td.u.as_slice());
+        assert_eq!(n_to_bytes(&verifier.u), td.u.as_slice());
 
-        hash_cmp("M (server", &server.verifier.M_bytes, &td.server_M);
-        hash_cmp("session_key", &server.verifier.session_key, &td.session_key);
+        hash_cmp("M (server", &verifier.M_bytes, &td.server_M);
+        hash_cmp("session_key", &verifier.session_key, &td.session_key);
+
+        Ok(())
     }
 
     #[test]
-    fn can_authenticate() {
+    fn can_authenticate() -> Result<()> {
         let td = Data::get();
-        let mut server = td.make_server();
+        let server = td.make_server();
 
-        let build = server.build_verifier(&td.A, &td.client_M1);
+        let mut verifier = Verifier::new(&server, &td.A, &td.client_M1)?;
 
-        assert!(build.is_ok());
-
-        let res = match server.authenticate() {
-            Ok(()) => true,
+        let res = match verifier.authenticate() {
+            Ok(cipher) => {
+                println!("{cipher:?}");
+                true
+            }
             Err(e) => {
                 println!("{e:?}");
 
                 println!(
                     "SERVER M {:?}\n\nCLIENT M {:?}",
-                    server.verifier.M_bytes.hex_dump(),
-                    server.verifier.client_M1.hex_dump()
+                    verifier.M_bytes.hex_dump(),
+                    verifier.client_M1.hex_dump()
                 );
 
-                println!("\nVERIFIER {:?}", server.verifier);
+                //   println!("\nVERIFIER {:?}", server.verifier);
 
                 false
             }
@@ -545,7 +524,9 @@ mod tests {
 
         assert!(res);
 
-        assert!(hash_cmp("H_AMK", &server.verifier.H_AMK, &td.H_AMK));
+        assert!(hash_cmp("H_AMK", &verifier.H_AMK, &td.H_AMK));
+
+        Ok(())
     }
 
     #[test]
@@ -573,8 +554,6 @@ mod tests {
         assert_eq!(server.v.to_bytes_be().len(), 384);
         assert_eq!(server.b.to_bytes_be().len(), 32);
         assert_eq!(server.B.to_bytes_be().len(), 384);
-
-        // println!("\n{server:?}");
     }
 
     #[test]

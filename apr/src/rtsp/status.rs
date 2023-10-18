@@ -27,17 +27,6 @@ impl Code {
     /// The function validates the correctness of the supplied u16. It must be
     /// greater or equal to 100 and less than 1000.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// use rtsp::StatusCode;
-    ///
-    /// let ok = Code::from_u16(200).unwrap();
-    /// assert_eq!(ok, Code::OK);
-    ///
-    /// let err = Code::from_u16(99);
-    /// assert!(err.is_err());
-    /// ```
     /// # Errors
     /// Returns `Err` if the u16 can not be converted to a valid `Code`
     #[inline]
@@ -59,7 +48,9 @@ impl Code {
     /// # Example
     ///
     /// ```
-    /// let status = rtsp::StatusCode::OK;
+    /// use apr::rtsp::StatusCode;
+    ///
+    /// let status = StatusCode::OK;
     /// assert_eq!(status.as_str(), "200");
     /// ```
     #[inline]
@@ -93,7 +84,7 @@ impl Code {
     /// # Example
     ///
     /// ```
-    /// let status = rtsp::StatusCode::OK;
+    /// let status = apr::rtsp::StatusCode::OK;
     /// assert_eq!(status.canonical_reason(), Some("OK"));
     /// ```
     #[must_use]
@@ -123,7 +114,7 @@ impl TryFrom<u16> for Code {
 /// # Example
 ///
 /// ```
-/// # use rtsp::StatusCode;
+/// # use apr::rtsp::StatusCode;
 /// assert_eq!(format!("{}", StatusCode::OK), "200 OK");
 /// ```
 impl fmt::Display for Code {

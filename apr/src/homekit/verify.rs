@@ -15,66 +15,13 @@
 // limitations under the License.
 
 use crate::{homekit::Tags, HostInfo, Result};
+use anyhow::anyhow;
 use once_cell::sync::OnceCell;
 use std::fmt;
 
-pub struct AccessoryBuilder {
-    pub public: Option<x25519_dalek::PublicKey>,
-    pub client_pub: Option<x25519_dalek::PublicKey>,
-    pub shared_secret: Option<x25519_dalek::SharedSecret>,
-}
-
-impl AccessoryBuilder {
-    pub fn build(accessory_client_pub: &[u8]) -> AccessoryBuilder {
-        let mut client_pub_buf = [0u8; 32];
-        client_pub_buf.copy_from_slice(&accessory_client_pub[0..32]);
-        let accessory_client_pub: x25519_dalek::PublicKey = client_pub_buf.into();
-
-        let random = x25519_dalek::EphemeralSecret::random();
-        let public = x25519_dalek::PublicKey::from(&random);
-
-        Self {
-            shared_secret: Some(random.diffie_hellman(&accessory_client_pub)),
-            client_pub: Some(accessory_client_pub),
-            public: Some(public),
-        }
-    }
-}
-
-pub struct Accessory {
-    pub public: x25519_dalek::PublicKey,
-    pub client_pub: x25519_dalek::PublicKey,
-    pub shared: x25519_dalek::SharedSecret,
-}
-
-impl From<AccessoryBuilder> for Accessory {
-    fn from(mut builder: AccessoryBuilder) -> Self {
-        Self {
-            public: builder.public.take().unwrap(),
-            client_pub: builder.client_pub.take().unwrap(),
-            shared: builder.shared_secret.take().unwrap(),
-        }
-    }
-}
 #[derive(Default)]
 pub struct Context {
     pub accessory: OnceCell<Accessory>,
-}
-
-impl fmt::Debug for Context {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // let ss = if let Some(ss) = self.shared_secret.get() {
-        //     ss.hex_dump().to_string()
-        // } else {
-        //     "None".to_string()
-        // };
-
-        f.write_str("Verify Context")
-
-        // f.debug_struct("VerifyCtx")
-        //     .field("device_id", &self.device_id.hex_dump())
-        //     .finish()
-    }
 }
 
 impl Context {
@@ -99,9 +46,9 @@ impl Context {
         let sign_key = &HostInfo::get().accessory_sign_key;
         let id = HostInfo::id_as_slice();
 
-        let builder = AccessoryBuilder::build(accessory_client_pub);
-
-        let accessory = Accessory::from(builder);
+        let accessory = self
+            .accessory
+            .get_or_init(|| Accessory::build(accessory_client_pub));
 
         let mut info = BytesMut::with_capacity(64 * 3);
         info.extend_from_slice(accessory.public.as_bytes());
@@ -127,11 +74,10 @@ impl Context {
 
         let tag = cipher
             .encrypt_in_place_detached(nonce, &[], &mut data)
-            .expect("foobar");
+            .map_err(|e| anyhow!("{e}"))?;
 
         data.extend_from_slice(&tag);
 
-        let accessory = self.accessory.get_or_init(|| accessory);
         let mut tags = Tags::default();
 
         tags.push(TagVal::State(super::states::Generic(0x02)));
@@ -139,6 +85,48 @@ impl Context {
         tags.push(TagVal::EncryptedData(data.to_vec()));
 
         Ok(tags)
+    }
+}
+
+impl fmt::Debug for Context {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("\nVerify Context\n")?;
+        writeln!(f, "{:?}", self.accessory)
+    }
+}
+
+pub struct Accessory {
+    pub public: x25519_dalek::PublicKey,
+    pub client_pub: x25519_dalek::PublicKey,
+    pub shared: x25519_dalek::SharedSecret,
+}
+
+impl Accessory {
+    pub fn build(accessory_client_pub: &[u8]) -> Self {
+        let mut client_pub_buf = [0u8; 32];
+        client_pub_buf.copy_from_slice(&accessory_client_pub[0..32]);
+        let accessory_client_pub: x25519_dalek::PublicKey = client_pub_buf.into();
+
+        let random = x25519_dalek::EphemeralSecret::random();
+        let public = x25519_dalek::PublicKey::from(&random);
+
+        Self {
+            shared: random.diffie_hellman(&accessory_client_pub),
+            client_pub: accessory_client_pub,
+            public,
+        }
+    }
+}
+
+impl fmt::Debug for Accessory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use pretty_hex::PrettyHex;
+
+        f.write_str("\nAccessory\n")?;
+
+        writeln!(f, "PUBLIC {:?}\n", self.public.hex_dump())?;
+        writeln!(f, "CLIENT PUB {:?}\n", self.client_pub.hex_dump())?;
+        writeln!(f, "SHARED {:?}", self.shared.hex_dump())
     }
 }
 

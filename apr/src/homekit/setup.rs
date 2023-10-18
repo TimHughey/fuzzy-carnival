@@ -14,28 +14,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::homekit::srp::Verifier;
+
 #[allow(unused_imports)]
-use super::{states, HostInfo, SrpServer, TagIdx, TagVal, Tags};
+use super::{states, CipherCtx, HostInfo, Result, SrpServer, TagIdx, TagVal, Tags};
+use once_cell::sync::Lazy;
 use tracing::error;
 
 #[derive(Debug, Default)]
 pub struct Context {
-    pub steps_n: u8,
     pub transient: bool,
-    pub encrypted: bool,
-    pub server: Option<SrpServer>,
+    pub server: Lazy<SrpServer>,
+    cipher: Option<CipherCtx>,
 }
 
 impl Context {
     const USERNAME: &str = "Pair-Setup";
     const PASSWORD: &[u8; 4] = b"3939";
 
-    pub fn build(steps_n: u8) -> Self {
+    pub fn build() -> Self {
         Self {
-            steps_n,
             transient: false,
-            encrypted: false,
-            server: Some(SrpServer::new(Self::USERNAME, *Self::PASSWORD, None, None)),
+            server: Lazy::new(|| SrpServer::new(Self::USERNAME, *Self::PASSWORD, None, None)),
+            cipher: None,
         }
     }
 
@@ -51,15 +52,13 @@ impl Context {
         let method = tags_in.get_cloned(MethodIdx);
         let flags = tags_in.get_cloned(FlagsIdx);
 
-        let server = self.server.as_ref().unwrap();
-
         match (method, flags) {
             (Ok(PAIR_SETUP), Ok(TRANSIENT)) => {
                 self.transient = true;
 
                 tags.push(State(states::Generic(2)));
-                tags.push(server.get_salt());
-                tags.push(server.get_pk());
+                tags.push(self.server.get_salt());
+                tags.push(self.server.get_pk());
             }
 
             other => {
@@ -71,7 +70,7 @@ impl Context {
     }
 
     #[allow(clippy::unused_self)]
-    pub fn m3_m4(&mut self, tags_in: &Tags) -> Tags {
+    pub fn m3_m4(&mut self, tags_in: &Tags) -> Result<Tags> {
         use TagIdx::{Proof as ProofIdx, PublicKey as PublicKeyIdx};
         use TagVal::{Proof, PublicKey};
 
@@ -82,16 +81,17 @@ impl Context {
 
         match (client_pk, client_proof) {
             (Ok(PublicKey(pk)), Ok(Proof(proof))) => {
-                let mut server = self.server.take().unwrap();
+                let mut verifier = Verifier::new(&self.server, &pk, &proof)?;
 
-                if server.build_verifier(&pk, &proof).is_ok() {
-                    if server.authenticate().is_ok() {
+                match verifier.authenticate() {
+                    Ok(cipher) => {
+                        self.cipher = Some(cipher);
                         tags.push(TagVal::make_state(4));
-                        tags.push(server.proof());
-                        self.encrypted = true;
+                        tags.push(verifier.proof());
                     }
-
-                    self.server = Some(server);
+                    Err(e) => {
+                        tracing::error!("setup M3_M4: {e}");
+                    }
                 }
             }
 
@@ -100,32 +100,27 @@ impl Context {
             }
         }
 
-        tags
+        Ok(tags)
     }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use crate::Result;
     use alkali::hash::sha2;
+    use anyhow::anyhow;
     use base16ct::lower;
     use bytes::BytesMut;
-    use pretty_hex::PrettyHex;
 
     #[test]
-    fn can_work_with_hasher() {
+    fn can_work_with_hasher() -> Result<()> {
         let hash = sha2::hash(b"Pair-Setup:3939").unwrap();
-        let encoded = hex::encode(hash.0);
+        let mut buf = BytesMut::zeroed(128);
+        let e = lower::encode(&hash.0, &mut buf).map_err(|e| anyhow!("{e}"))?;
 
-        println!("{:?}", encoded.hex_dump());
+        assert_eq!(e.len(), 128);
 
-        let mut buf = BytesMut::zeroed(512);
-        let e = lower::encode(&hash.0, &mut buf);
-
-        if let Ok(e) = e {
-            println!("\nvia base16ct:\n{:?}", e.hex_dump());
-        } else {
-            println!("{e:?}");
-        }
+        Ok(())
     }
 }

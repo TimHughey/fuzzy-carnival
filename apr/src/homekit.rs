@@ -23,6 +23,7 @@ use bytes::BytesMut;
 use std::fmt;
 use tracing::{error, info};
 
+pub mod cipher;
 pub mod info;
 pub mod setup;
 pub mod srp;
@@ -30,6 +31,7 @@ pub mod states;
 pub mod tags;
 pub mod verify;
 
+pub use cipher::Context as CipherCtx;
 pub use setup::Context as SetupCtx;
 pub use srp::Server as SrpServer;
 pub use states::Generic as GenericState;
@@ -41,9 +43,10 @@ pub use verify::Context as VerifyCtx;
 
 pub struct Context {
     pub device_id: Vec<u8>,
-    pub setup: Option<SetupCtx>,
+    pub setup: SetupCtx,
     pub verify: VerifyCtx,
     pub encrypted: bool,
+    pub cipher: Option<CipherCtx>,
 }
 
 pub use Context as HomeKit;
@@ -72,13 +75,14 @@ impl HomeKit {
 
         let device_id = id_buf.freeze();
 
-        info!("\nDEVICE ID {:?}", device_id.hex_dump());
+        tracing::debug!("\nDEVICE ID {:?}", device_id.hex_dump());
 
         Self {
             device_id: device_id.into(),
-            setup: None,
+            setup: SetupCtx::build(),
             verify: VerifyCtx::build(),
             encrypted: false,
+            cipher: None,
         }
     }
 
@@ -107,11 +111,10 @@ impl HomeKit {
                     match state {
                         Msg01 => {
                             info!("{path} {state:?}");
-                            let verify = &self.verify;
 
                             let pk = t_in.get_public_key()?;
 
-                            let tags = verify.m1_m2(pk)?;
+                            let tags = self.verify.m1_m2(pk)?;
 
                             let body = Body::OctetStream(tags.encode().to_vec());
 
@@ -131,17 +134,13 @@ impl HomeKit {
                     const M1: State = State(1);
                     const M3: State = State(3);
 
-                    let setup_ctx = self.setup.take();
-
-                    match (state, setup_ctx) {
-                        (M1, None) => {
+                    match state {
+                        M1 => {
                             info!("{path} M1");
-                            let mut setup_ctx = SetupCtx::build(2);
-                            let t_out = setup_ctx.m1_m2(&t_in);
+                            self.setup = SetupCtx::build();
+                            let t_out = self.setup.m1_m2(&t_in);
 
                             let body = Body::OctetStream(t_out.encode().to_vec());
-
-                            self.setup = Some(setup_ctx);
 
                             Ok(Response {
                                 headers: HeaderList::make_response2(frame.headers, &body)?,
@@ -150,14 +149,12 @@ impl HomeKit {
                             })
                         }
 
-                        (M3, Some(mut setup_ctx)) => {
-                            info!("{path} M2");
+                        M3 => {
+                            info!("{path} M3");
 
-                            let t_out = setup_ctx.m3_m4(&t_in);
+                            let t_out = self.setup.m3_m4(&t_in)?;
 
                             let body = Body::OctetStream(t_out.encode().to_vec());
-
-                            self.setup = Some(setup_ctx);
 
                             Ok(Response {
                                 headers: HeaderList::make_response2(frame.headers, &body)?,
@@ -166,7 +163,7 @@ impl HomeKit {
                             })
                         }
 
-                        (_state, _setup_ctx) => {
+                        _state => {
                             info!("Setup UNKNOWN  {t_in:?}");
 
                             Ok(Response::default())

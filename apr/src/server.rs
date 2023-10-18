@@ -153,12 +153,12 @@ impl Handler {
 
         match frame {
             Some(Ok(frame)) => {
-                info!("\n{}", frame);
+                info!("{}", frame);
 
                 match kit.respond_to(frame) {
                     Ok(response) => {
                         self.active = true;
-                        info!("sending response:\n{response:?}");
+                        info!("{response}");
                         Ok((kit, self.framed.send(response).await))
                     }
 

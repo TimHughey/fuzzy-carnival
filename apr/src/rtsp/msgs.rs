@@ -185,10 +185,13 @@ impl<'a> TryFrom<&'a [u8]> for Frame {
 
 impl fmt::Display for Frame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!(
-            "{} {}\n{}\n{}",
-            self.method, self.path, self.headers, self.body
-        ))
+        write!(f, "FRAME {} {}", self.method, self.path)?;
+
+        if f.alternate() {
+            write!(f, "\n{}\n{}", self.headers, self.body)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -367,7 +370,13 @@ impl fmt::Debug for Response {
 
 impl fmt::Display for Response {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}\n{}\n{:?}", self.status_code, self.headers, self.body)
+        write!(f, "RESPONSE {}", self.status_code)?;
+
+        if f.alternate() {
+            write!(f, "\n{}\n{}", self.headers, self.body)?;
+        }
+
+        Ok(())
     }
 }
 

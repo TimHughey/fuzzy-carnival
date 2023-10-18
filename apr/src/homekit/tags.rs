@@ -318,10 +318,6 @@ impl Map {
         Err(anyhow!("state not present"))
     }
 
-    pub fn get_state2(&self) -> Option<&Val> {
-        self.0.get(&Idx::STATE)
-    }
-
     pub fn get_public_key(&self) -> Result<&Vec<u8>> {
         if let Some(Val::PublicKey(s)) = self.0.get(&Val::PUBLIC_KEY) {
             return Ok(s);

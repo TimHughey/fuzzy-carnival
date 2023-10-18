@@ -27,7 +27,9 @@ use tracing::{error, info};
 ///
 /// # Errors
 ///
-///
+/// Returns errors for any failure related to establishing
+/// the base app runtime information (e.g. hostname) or setup
+/// of the networking socket.
 pub async fn main() -> crate::Result<()> {
     setup_logging()?;
 

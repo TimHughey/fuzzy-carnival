@@ -368,7 +368,7 @@ mod tests {
     // use crate::Result;
 
     const CONTENT_LEN_LINE: &str =
-        "Content-Length: 30\r\nContent-Type: application/x-apple-binary-plist\r\n";
+        "CSeq: 1\r\nContent-Length: 30\r\nContent-Type: application/x-apple-binary-plist\r\n";
 
     #[test]
     fn can_create_map() {
