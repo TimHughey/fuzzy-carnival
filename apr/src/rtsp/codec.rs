@@ -15,13 +15,18 @@
 // limitations under the License.
 
 use crate::{
+    homekit::{CipherCtx, CipherLock},
     rtsp::{msgs::Pending, Body, Frame, Response},
     Result,
 };
 use anyhow::anyhow;
 use bytes::{Buf, BytesMut};
 use pretty_hex::PrettyHex;
-use std::{fmt, fs::OpenOptions};
+use std::{
+    fmt,
+    fs::OpenOptions,
+    sync::{Arc, RwLock},
+};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::debug;
 
@@ -29,10 +34,11 @@ use tracing::debug;
 ///
 /// [`Decoder`]: crate::codec::Decoder
 /// [`Encoder`]: crate::codec::Encoder
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Debug)]
 pub struct Rtsp {
     // incomplete body tracking
     pending: Option<Pending>,
+    cipher: CipherLock,
 }
 
 impl Rtsp {
@@ -40,6 +46,10 @@ impl Rtsp {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn install_cipher(&mut self, ctx: CipherCtx) {
+        self.cipher = Some(Arc::new(RwLock::new(ctx)));
     }
 }
 
@@ -123,7 +133,22 @@ impl Decoder for Rtsp {
         if Frame::min_bytes(cnt) {
             // enough bytes in buffer for a potential frame
 
-            debug!("\nDECODE BUFFER {:?}", buf.hex_dump());
+            if let Some(cipher) = self.cipher.as_ref() {
+                // effectively take the entire buffer while keeping the original buffer so we can
+                // merge (unsplit) the plaintext
+                let block = buf.split_to(cnt);
+
+                // decrypt the data
+                let block = cipher.read().unwrap().decrypt(block)?;
+
+                // the block returned contains the encrypted data replaced by plaintext,
+                // auth tag consumed, and any data that followed the encrypted data + auth tag.
+                // let's merge this block back into the buffer provided by the codec so subsequent
+                // code can do whatever is necessary
+                buf.unsplit(block);
+            }
+
+            tracing::info!("\nDECODE BUFFER {:?}", buf.hex_dump());
 
             match Frame::try_from(buf.clone()) {
                 Ok(mut frame) => {

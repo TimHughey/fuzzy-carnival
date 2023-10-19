@@ -40,6 +40,10 @@ impl Context {
         }
     }
 
+    pub fn cipher_available(&self) -> bool {
+        self.cipher.is_some()
+    }
+
     pub fn m1_m2(&mut self, tags_in: &Tags) -> Tags {
         use TagIdx::{Flags as FlagsIdx, Method as MethodIdx};
         use TagVal::{Flags, Method, State};
@@ -70,11 +74,11 @@ impl Context {
     }
 
     #[allow(clippy::unused_self)]
-    pub fn m3_m4(&mut self, tags_in: &Tags) -> Result<Tags> {
+    pub fn m3_m4(&mut self, tags_in: &Tags) -> Result<(Tags, Option<CipherCtx>)> {
         use TagIdx::{Proof as ProofIdx, PublicKey as PublicKeyIdx};
         use TagVal::{Proof, PublicKey};
 
-        let mut tags = Tags::default();
+        let mut tags_out = Tags::default();
 
         let client_pk = tags_in.get_cloned(PublicKeyIdx);
         let client_proof = tags_in.get_cloned(ProofIdx);
@@ -84,10 +88,12 @@ impl Context {
                 let mut verifier = Verifier::new(&self.server, &pk, &proof)?;
 
                 match verifier.authenticate() {
+                    // authentication success returns the cipher context
                     Ok(cipher) => {
-                        self.cipher = Some(cipher);
-                        tags.push(TagVal::make_state(4));
-                        tags.push(verifier.proof());
+                        tags_out.push(TagVal::make_state(4));
+                        tags_out.push(verifier.proof());
+
+                        return Ok((tags_out, Some(cipher)));
                     }
                     Err(e) => {
                         tracing::error!("setup M3_M4: {e}");
@@ -100,7 +106,11 @@ impl Context {
             }
         }
 
-        Ok(tags)
+        Ok((tags_out, None))
+    }
+
+    pub fn take_cipher(&mut self) -> Option<CipherCtx> {
+        self.cipher.take()
     }
 }
 

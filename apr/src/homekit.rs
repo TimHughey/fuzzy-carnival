@@ -32,6 +32,7 @@ pub mod tags;
 pub mod verify;
 
 pub use cipher::Context as CipherCtx;
+pub use cipher::Lock as CipherLock;
 pub use setup::Context as SetupCtx;
 pub use srp::Server as SrpServer;
 pub use states::Generic as GenericState;
@@ -152,7 +153,11 @@ impl HomeKit {
                         M3 => {
                             info!("{path} M3");
 
-                            let t_out = self.setup.m3_m4(&t_in)?;
+                            let (t_out, mut cipher) = self.setup.m3_m4(&t_in)?;
+
+                            if self.cipher.is_none() && cipher.is_some() {
+                                self.cipher = cipher.take();
+                            }
 
                             let body = Body::OctetStream(t_out.encode().to_vec());
 

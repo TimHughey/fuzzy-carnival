@@ -62,7 +62,6 @@ use groups::G_3072;
 use num_bigint::BigUint;
 use num_traits::{Euclid, Zero};
 use pretty_hex::PrettyHex;
-use tracing::info;
 
 const SALT_BITS: u64 = 128;
 const SERVER_PRIVATE_BITS: u64 = 256;
@@ -175,7 +174,7 @@ impl Verifier {
         self.H_AMK = calculate_H_AMK(&self.A, &self.M_bytes, &self.session_key);
 
         if self.M_bytes == self.client_M1 {
-            info!("authenticated");
+            tracing::debug!("authenticated");
 
             self.authenticated = true;
 
@@ -435,6 +434,9 @@ mod tests {
         pub u: Vec<u8>,
         pub user_M: Vec<u8>,
         pub v: Vec<u8>,
+        pub shared_secret: Vec<u8>, // should match session key
+        pub read_key: Vec<u8>,      // after HKDF expand/extract
+        pub write_key: Vec<u8>,     // after HKDF expand/extract
     }
 
     #[test]
@@ -448,7 +450,7 @@ mod tests {
 
         let td = Data::get();
 
-        let members: [(&Vec<u8>, usize); 11] = [
+        let members: Vec<(&Vec<u8>, usize)> = vec![
             (&td.A, PUB_KEY_LEN),
             (&td.B, PUB_KEY_LEN),
             (&td.b, SEC_KEY_LEN),
@@ -460,6 +462,9 @@ mod tests {
             (&td.session_key, SHA512_LEN),
             (&td.user_M, SHA512_LEN),
             (&td.v, PUB_KEY_LEN),
+            (&td.shared_secret, SHA512_LEN),
+            (&td.read_key, SEC_KEY_LEN),
+            (&td.write_key, SEC_KEY_LEN),
         ];
 
         for (member, expected_len) in members {
@@ -527,6 +532,25 @@ mod tests {
         assert!(hash_cmp("H_AMK", &verifier.H_AMK, &td.H_AMK));
 
         Ok(())
+    }
+
+    #[test]
+    fn can_generate_same_read_write_keys() {
+        use super::CipherCtx;
+
+        let td = Data::get();
+
+        let cipher = CipherCtx::new(&td.shared_secret);
+
+        let mut key = vec![];
+        key.extend_from_slice(&cipher.encrypt_key[..]);
+
+        hash_cmp("encrypt key", &td.write_key, &key);
+
+        let mut key = vec![];
+        key.extend_from_slice(&cipher.decrypt_key[..]);
+
+        hash_cmp("decrypt key", &td.read_key, &key);
     }
 
     #[test]
@@ -635,6 +659,9 @@ mod tests {
                 u: read("u"),
                 user_M: read("user_M"),
                 v: read("v"),
+                shared_secret: read("shared_secret"),
+                read_key: read("read_key"),
+                write_key: read("write_key"),
             }
         }
     }
@@ -653,7 +680,12 @@ mod tests {
             writeln!(f, "sesion_key {:?}\n", self.session_key.hex_dump())?;
             writeln!(f, "u {:?}\n", self.u.hex_dump())?;
             writeln!(f, "user_bin {:?}\n", self.user_M.hex_dump())?;
-            writeln!(f, "v {:?}\n", self.v.hex_dump())
+            writeln!(f, "v {:?}\n", self.v.hex_dump())?;
+            writeln!(f, "shared_secret {:?}\n", self.shared_secret.hex_dump())?;
+            writeln!(f, "read_key {:?}\n", self.read_key.hex_dump())?;
+            writeln!(f, "write_key {:?}\n", self.write_key.hex_dump())?;
+
+            Ok(())
         }
     }
 

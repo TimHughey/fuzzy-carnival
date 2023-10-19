@@ -157,6 +157,10 @@ impl Handler {
 
                 match kit.respond_to(frame) {
                     Ok(response) => {
+                        if let Some(cipher) = kit.cipher.take() {
+                            self.framed.codec_mut().install_cipher(cipher);
+                        }
+
                         self.active = true;
                         info!("{response}");
                         Ok((kit, self.framed.send(response).await))
