@@ -16,15 +16,15 @@
 
 use crate::{
     homekit::{CipherCtx, CipherLock},
-    rtsp::{msgs::Pending, Body, Frame, Response},
+    rtsp::{msgs::Pending, Body, Frame, HeaderList, Response},
     Result,
 };
 use anyhow::anyhow;
 use bytes::{Buf, BytesMut};
 use pretty_hex::PrettyHex;
 use std::{
-    fmt,
-    fs::OpenOptions,
+    // io::Write,
+    path::PathBuf,
     sync::{Arc, RwLock},
 };
 use tokio_util::codec::{Decoder, Encoder};
@@ -38,6 +38,7 @@ use tracing::debug;
 pub struct Rtsp {
     // incomplete body tracking
     pending: Option<Pending>,
+    block_len: Option<u16>,
     cipher: CipherLock,
 }
 
@@ -53,8 +54,95 @@ impl Rtsp {
     }
 }
 
-/// Implementation of encoding an HTTP response into a `BytesMut`, basically
-/// just writing out an HTTP/1.1 response.
+// Right now `write!` on `Vec<u8>` goes through io::Write and is not
+// super speedy, so inline a less-crufty implementation here which
+// doesn't go through io::Error.
+// struct BytesWrite<'a>(&'a mut BytesMut);
+//
+// impl fmt::Write for BytesWrite<'_> {
+//     fn write_str(&mut self, s: &str) -> fmt::Result {
+//         self.0.extend_from_slice(s.as_bytes());
+//         Ok(())
+//     }
+//
+//     fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
+//         fmt::write(self, args)
+//     }
+// }
+
+impl Decoder for Rtsp {
+    type Item = Frame;
+    type Error = anyhow::Error;
+
+    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>> {
+        // const U16_SIZE: usize = std::mem::size_of::<u16>();
+
+        if buf.len() < 3 {
+            return Ok(None);
+        }
+
+        if let Some(cipher) = self.cipher.as_ref() {
+            // since this is an encrypted message we have the luxury of determining
+            // if the buffer contains enough bytes to proceed with decryption by
+            // examining the header (u16 value)
+
+            // enough bytes in buffer for a potential frame
+            let block_len = self.block_len.get_or_insert_with(|| buf.get_u16_le());
+
+            let buf_len = buf.len();
+            let block_needed_len = (*block_len as usize) + 16;
+
+            if buf_len < block_needed_len {
+                tracing::warn!("incomplete block, buf {buf_len} < {block_needed_len}");
+
+                return Ok(None);
+            }
+
+            let data = buf.split_to(block_needed_len);
+
+            tracing::info!("\nINBOUND DATA (raw) {:?}", data.hex_dump());
+
+            if !buf.is_empty() {
+                tracing::warn!("spurious data in buf\nBUF (SUPRIOUS) {:?}", buf.hex_dump());
+            }
+
+            // decrypt the data.
+            // returns:
+            //   Ok(Some) => the clear text buffer
+            //   Err => handle immediately with question mark
+            let plaintext = cipher.write().unwrap().decrypt(data, *block_len)?;
+
+            buf.unsplit(plaintext);
+
+            self.block_len = None;
+
+            tracing::info!("\nDECODED CLEAR TEXT {:?}", buf.hex_dump());
+        }
+
+        // we now have a clear text buffer that we can parse into a frame
+        match Frame::try_from(buf.clone()) {
+            Ok(mut frame) => {
+                if frame.pending.is_none() {
+                    buf.advance(frame.consumed);
+
+                    if !buf.is_empty() {
+                        tracing::warn!("additional bytes in buffer len={}", buf.len());
+                    }
+
+                    Ok(Some(frame))
+                } else {
+                    // TODO: do something with pending
+                    self.pending = frame.pending.take();
+                    Ok(None)
+                }
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
+/// Implementation of encoding an RTSP response into a `BytesMut`, basically
+/// just writing out an RTSP/1.0 response.
 impl Encoder<Response> for Rtsp {
     type Error = anyhow::Error;
 
@@ -62,40 +150,14 @@ impl Encoder<Response> for Rtsp {
         use std::fmt::Write;
         use Body::{Bulk, Dict, Empty, OctetStream, Text};
 
-        // Right now `write!` on `Vec<u8>` goes through io::Write and is not
-        // super speedy, so inline a less-crufty implementation here which
-        // doesn't go through io::Error.
-        struct BytesWrite<'a>(&'a mut BytesMut);
-
-        impl fmt::Write for BytesWrite<'_> {
-            fn write_str(&mut self, s: &str) -> fmt::Result {
-                self.0.extend_from_slice(s.as_bytes());
-                Ok(())
-            }
-
-            fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
-                fmt::write(self, args)
-            }
-        }
+        let mut bin_save = BinSave::new(&item.headers)?;
 
         let status = item.status_code;
-        let path = item.headers.debug_file_path("out")?;
         let cseq = item.headers.cseq.unwrap();
 
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(path)?;
-
-        dst.write_fmt(format_args!(
-            "\
-             RTSP/1.0 {status}\r\n\
-             CSeq: {cseq}\r\n\
-             Server: AirPierre/366.0\r\n\
-             ",
-        ))
-        .map_err(|e| anyhow!("write response failed: {e}"))?;
+        dst.write_fmt(format_args!("RTSP/1.0 {status}\r\n"))?;
+        dst.write_fmt(format_args!("CSeq: {cseq}\r\n"))?;
+        dst.write_str("Server: AirPierre/366.0\r\n")?;
 
         match &item.body {
             Bulk(extend) | OctetStream(extend) => {
@@ -108,64 +170,74 @@ impl Encoder<Response> for Rtsp {
                 dst.extend_from_slice(extend.as_bytes());
             }
 
-            Dict(_) => Err(anyhow!("Dict not supported"))?,
+            Dict(_) => Err(anyhow!("Dict not implemented yet"))?,
             Empty => (),
         }
 
-        debug!("\nENCODED: {:?}", dst.hex_dump());
+        debug!("\nOUTBOUND CLEAR TEXT {:?}", dst.hex_dump());
 
-        {
-            use std::io::Write;
-            file.write_all(dst.as_ref())?;
+        bin_save.persist(dst.as_ref())?;
+
+        if let Some(cipher) = self.cipher.as_ref() {
+            let cleartext = dst.split();
+            let encrypted = cipher.write().unwrap().encrypt(cleartext)?;
+
+            tracing::debug!("\nENCRYPTED (before unsplit) {:?}", encrypted.hex_dump());
+
+            dst.unsplit(encrypted);
         }
+
+        tracing::info!("\nOUTBOUND BUF {:?}", dst.hex_dump());
+
+        bin_save.persist_last(dst.as_ref())?;
 
         Ok(())
     }
 }
 
-impl Decoder for Rtsp {
-    type Item = Frame;
-    type Error = anyhow::Error;
+struct BinSave {
+    file: std::fs::File,
+    dump_path: Option<PathBuf>,
+}
 
-    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>> {
-        let cnt = buf.len();
+impl BinSave {
+    pub fn new(headers: &HeaderList) -> Result<Self> {
+        let path = headers.debug_file_path("out")?;
 
-        if Frame::min_bytes(cnt) {
-            // enough bytes in buffer for a potential frame
+        Ok(Self {
+            file: std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(path)?,
+            dump_path: headers.dump_path(),
+        })
+    }
 
-            if let Some(cipher) = self.cipher.as_ref() {
-                // effectively take the entire buffer while keeping the original buffer so we can
-                // merge (unsplit) the plaintext
-                let block = buf.split_to(cnt);
+    pub fn persist(&mut self, buf: &[u8]) -> Result<()> {
+        use std::io::Write;
+        Ok(self.file.write_all(buf)?)
+    }
 
-                // decrypt the data
-                let block = cipher.read().unwrap().decrypt(block)?;
+    pub fn persist_last(&mut self, buf: &[u8]) -> Result<()> {
+        use std::io::Write;
 
-                // the block returned contains the encrypted data replaced by plaintext,
-                // auth tag consumed, and any data that followed the encrypted data + auth tag.
-                // let's merge this block back into the buffer provided by the codec so subsequent
-                // code can do whatever is necessary
-                buf.unsplit(block);
-            }
+        if let Some(base) = &self.dump_path {
+            let mut path = base.clone();
+            path.push("all.bin");
 
-            tracing::info!("\nDECODE BUFFER {:?}", buf.hex_dump());
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(path)?;
 
-            match Frame::try_from(buf.clone()) {
-                Ok(mut frame) => {
-                    if frame.pending.is_none() {
-                        buf.advance(frame.consumed);
+            file.write_all(buf)?;
 
-                        Ok(Some(frame))
-                    } else {
-                        self.pending = frame.pending.take();
-                        Ok(None)
-                    }
-                }
-                Err(e) => Err(e),
-            }
-        } else {
-            // not enough bytes in buffer for a minimal frame
-            Ok(None)
+            let sep = b"\x00!*!*!*\x00";
+            file.write_all(sep)?;
         }
+
+        Ok(())
     }
 }

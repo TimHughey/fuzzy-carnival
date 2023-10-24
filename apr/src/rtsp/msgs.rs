@@ -315,6 +315,32 @@ impl Response {
         !matches!(self.body, Body::Empty)
     }
 
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn ok_with_body(headers: HeaderList, body: Body) -> Result<Self> {
+        Ok(Self {
+            status_code: StatusCode::OK,
+            headers: headers.make_response2(&body)?,
+            body,
+        })
+    }
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn internal_server_error(headers: HeaderList) -> Result<Self> {
+        Ok(Self {
+            status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            headers: headers.make_response_no_body(),
+            body: Body::Empty,
+        })
+    }
+
     /// # Errors
     ///
     #[inline]

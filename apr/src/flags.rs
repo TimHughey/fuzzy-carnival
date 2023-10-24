@@ -24,8 +24,8 @@ bitflags! {
   ///
   #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
   pub struct Features : u64 {
-    const B00_VIDEO = 0x01;
-    const B01_PHOTO = 0x01 << 1;
+    const B00_VIDEO = 0b1;
+    const B01_PHOTO = 0b1 << 1;
     const B02_VIDEO_FAIRPLAY = 0x01 << 2;
     const B03_VIDEO_VOL_CTRL = 0x01 << 3;
     const B04_VIDEO_HTTP_LIVE_STREAMING = 0x01 << 4;
@@ -129,51 +129,44 @@ impl Features {
     #[must_use]
     pub fn as_lsb_msb_hex(self) -> String {
         let bits = self.bits();
-        let most_sb = bits >> 32;
-        let least_sb = (bits << 32) >> 32;
+        let native_bytes = bits.to_ne_bytes();
 
-        format!("{least_sb:#X},{most_sb:#X}")
+        let least = u32::from_ne_bytes(native_bytes[..4].try_into().unwrap());
+        let most = u32::from_ne_bytes(native_bytes[4..].try_into().unwrap());
+
+        // let most_sb = bits >> 32;
+        // let least_sb = (bits << 32) >> 32;
+
+        // format!("{least_sb:#X},{most_sb:#X}")
+        format!("0X{least:X},0X{most:X}")
     }
-
-    // #[must_use]
-    // pub fn as_u64(self) -> u64 {
-    //     self.bits()
-    // }
-
-    // #[must_use]
-    // #[allow(clippy::cast_possible_wrap)]
-    // pub fn as_plist_val(self) -> i64 {
-    //     self.bits() as i64
-    // }
-
-    // #[must_use]
-    // pub fn as_txt_airplay(self) -> TxtProperty {
-    //     TxtProperty::from(("features", self.as_lsb_msb_hex()))
-    // }
-
-    // #[must_use]
-    // pub fn as_txt_raop(self) -> TxtProperty {
-    //     TxtProperty::from(("ft", self.as_lsb_msb_hex()))
-    // }
 }
+
+// auto set_bits = std::vector{
+//     b09AirPlayAudio,     b14MFiSoft_FairPlay,       b15AudioMetaCovers,  b16AudioMetaProgress,
+//     b17AudioMetaTxtDAAP, b18ReceiveAudioPCM,        b19ReceiveAudioALAC, b20ReceiveAudioAAC_LC,
+//     b22AudioUnencrypted, b30UnifiedAdvertisingInfo, b40BufferedAudio,    b41PTPClock,
+//     b46HomeKitPairing,   b47PeerManagement,         b48TransientPairing,
+// };
 
 impl Default for Features {
     fn default() -> Self {
-        Self::B48_TRANSIENT_PAIRING
-            | Self::B47_PEER_MANAGEMENT
-            | Self::B46_HOME_KIT_PAIRING
-            | Self::B41_PTP_CLOCK
-            | Self::B40_BUFFERED_AUDIO
-            | Self::B30_UNIFIDED_ADVERTISING_INFO
-            | Self::B22_AUDIO_UNENCRYPTED
-            | Self::B20_RECEIVE_AUDIO_AAC_LC
-            | Self::B19_RECEIVE_AUDIO_ALAC
-            | Self::B18_RECEIVE_AUDIO_PCM
-            | Self::B17_AUDIO_META_TXT_DAAP
-            | Self::B16_AUDIO_META_PROGRESS
-            | Self::B15_AUDIO_META_COVERS
+        Self::B09_AIRPLAY_AUDIO
             | Self::B14_MFI_SOFT_AIRPLAY
-            | Self::B09_AIRPLAY_AUDIO
+            | Self::B15_AUDIO_META_COVERS
+            | Self::B16_AUDIO_META_PROGRESS
+            | Self::B17_AUDIO_META_TXT_DAAP
+            | Self::B18_RECEIVE_AUDIO_PCM
+            | Self::B19_RECEIVE_AUDIO_ALAC
+            | Self::B20_RECEIVE_AUDIO_AAC_LC
+            | Self::B22_AUDIO_UNENCRYPTED
+            | Self::B30_UNIFIDED_ADVERTISING_INFO
+            | Self::B40_BUFFERED_AUDIO
+            | Self::B41_PTP_CLOCK
+            | Self::B46_HOME_KIT_PAIRING
+            | Self::B47_PEER_MANAGEMENT
+            | Self::B48_TRANSIENT_PAIRING
+            | Self::B52_PEERS_EXTENDED_MESSAGE
     }
 }
 
@@ -285,7 +278,16 @@ mod tests {
 
     #[test]
     fn feature_flags_default() {
-        assert!(Features::default().bits() == 0x1_C300_405F_C200);
+        assert!(Features::default().bits() == 0x11_C300_405F_C200);
+    }
+
+    #[test]
+    fn can_generate_lsb_msb_hex() {
+        let lsb_msb = Features::default().as_lsb_msb_hex();
+
+        let expected = "0X405FC200,0X11C300";
+
+        assert_eq!(lsb_msb.as_str(), expected);
     }
 
     // #[test]

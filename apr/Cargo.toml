@@ -30,14 +30,15 @@ path = "src/bin/pierre2.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bnum = { version = "~0.9" }
 alkali = { version = ">=0.3.0", features = ["hazmat"] }
 anyhow = "1.0"
 async-stream = "0.3.0"
 base16ct = "0.2.0"
-bitflags = ">=2.3.3"
+bitflags = ">=2.4.1"
 bstr = ">=0.1.6"
 bytes = "1"
-chacha20poly1305 = ">=0.10.1"
+chacha20poly1305 = { version = ">=0.10.1", features = [] }
 crypto-bigint = { version = ">=0.5.3", features = ["generic-array", "rand_core"] }
 digest = ">=0.10.7"
 ed25519-dalek = { version = ">=2.0.0", features = ["hazmat", "serde"] }
@@ -72,6 +73,11 @@ tracing-subscriber = { version = "0.3.11", features = ["env-filter", "fmt"] }
 uuid = { version = ">=1.4.1", features = ["v4"] }
 x25519-dalek = { version = ">=2.0.0", features = ["getrandom"] }
 
+[dependencies.aead]
+# for chacha20poly1305
+version = "~0.5"
+features = ["bytes"]
+
 # arrayvec = ">=0.7.4"
 # asn1-rs = { version = "0.5.2", features = ["bits"] }
 # atoi = ">=2.0.0"
@@ -81,10 +87,11 @@ x25519-dalek = { version = ">=2.0.0", features = ["getrandom"] }
 # der-parser = "8.2.0"
 # derive-new = ">=0.5.0"
 # ed25519-compact = "2.0.4"
-# Integration between the tracing crate and the opentelemetry crate
 # srp = { version = "0.6.0" }
 # thiserror = ">=1.0"
 # tinyvec = ">=1.6.0"
+
+# Integration between the tracing crate and the opentelemetry crate
 # tracing-opentelemetry = { version = "0.19.0", optional = true }
 
 # Implements the types defined in the OTel spec

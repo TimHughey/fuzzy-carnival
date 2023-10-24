@@ -50,15 +50,16 @@
 //! [1]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
 //! [2]: https://tools.ietf.org/html/rfc5054
 
-use super::{
-    CipherCtx,
-    TagVal::{self, Proof, PublicKey, Salt},
+use crate::{
+    homekit::{
+        helper, CipherCtx,
+        TagVal::{self, Proof, PublicKey, Salt},
+    },
+    Result,
 };
-use crate::Result;
 use alkali::hash::sha2;
 use anyhow::anyhow;
 use core::fmt;
-use groups::G_3072;
 use num_bigint::BigUint;
 use num_traits::{Euclid, Zero};
 use pretty_hex::PrettyHex;
@@ -88,7 +89,7 @@ impl Server {
         use helper::{bnum_bytes, multipart_to_num};
 
         let seperator = b":";
-        let (N, g, k) = G_3072.get_params();
+        let (N, g, k) = get_group_bnums();
         let s = salt.unwrap_or_else(|| helper::random_uint(SALT_BITS));
         let b = b.unwrap_or_else(|| helper::random_uint(SERVER_PRIVATE_BITS));
         let username: Vec<u8> = user.into();
@@ -178,7 +179,7 @@ impl Verifier {
 
             self.authenticated = true;
 
-            return Ok(CipherCtx::new(&self.session_key));
+            return CipherCtx::new(&self.session_key);
         }
 
         Err(anyhow!("authentication failed, proofs do not match"))
@@ -245,124 +246,26 @@ impl fmt::Debug for Verifier {
 }
 
 #[allow(non_snake_case)]
-mod helper {
-    use crate::homekit::srp::groups::G;
-
-    use super::groups::G_3072;
-    use alkali::hash::sha2;
-    use num_bigint::{BigUint, RandBigInt};
-    use num_traits::{FromBytes, ToBytes};
-
-    pub fn bnum_bytes(num: &BigUint) -> Vec<u8> {
-        num.to_be_bytes()
-    }
-
-    pub fn calculate_H_AMK(A: &BigUint, M: &[u8], K: &[u8]) -> Vec<u8> {
-        use sha2::sha512::Multipart;
-
-        let mut hasher = Multipart::new().unwrap();
-        hasher.update(&n_to_bytes(A));
-        hasher.update(M);
-        hasher.update(K);
-
-        hasher.calculate().0.to_vec()
-    }
-
-    pub fn calculate_M(I: &[u8], s: &BigUint, A: &BigUint, B: &BigUint, K: &[u8]) -> Vec<u8> {
-        use sha2::sha512::Multipart;
-
-        let (N, g, _k) = G_3072.get_params();
-
-        let h_N = hash_bnum(&N);
-        let h_g = hash_bnum(&g);
-        let h_I = hash_slice(I);
-
-        let h_xor: Vec<u8> = h_N.iter().zip(h_g.iter()).map(|(n0, n1)| n0 ^ n1).collect();
-
-        let mut hasher = Multipart::new().unwrap();
-        hasher.update(&h_xor);
-        hasher.update(&h_I);
-        hasher.update(&n_to_bytes(s));
-        hasher.update(&n_to_bytes(A));
-        hasher.update(&n_to_bytes(B));
-        hasher.update(K);
-
-        hasher.calculate().0.to_vec()
-    }
-
-    pub fn slice_to_bnum<T: AsRef<[u8]>>(data: T) -> BigUint {
-        BigUint::from_be_bytes(data.as_ref())
-    }
-
-    pub fn multipart_to_num(mp: sha2::Multipart) -> BigUint {
-        BigUint::from_be_bytes(mp.calculate().0.as_ref())
-    }
-
-    pub fn hash_bnum(n: &BigUint) -> Vec<u8> {
-        sha2::sha512::hash(&n.to_be_bytes()).unwrap().0.into()
-    }
-
-    pub fn hash_slice(s: &[u8]) -> Vec<u8> {
-        sha2::sha512::hash(s).unwrap().0.into()
-    }
-
-    #[allow(unused)]
-    pub fn H_len() -> usize {
-        sha2::DIGEST_LENGTH
-    }
-
-    pub fn H_nn_pad(n0: &BigUint, n1: &BigUint) -> BigUint {
-        let pad_len = G::N_len();
-        let capacity = pad_len * 2;
-
-        let mut bin: Vec<u8> = Vec::with_capacity(capacity);
-
-        for n in [n0, n1] {
-            let be_bytes = n.to_be_bytes();
-
-            bin.extend_from_slice(&vec![0u8; pad_len - be_bytes.len()]); // padding
-            bin.extend_from_slice(&be_bytes);
-        }
-
-        BigUint::from_be_bytes(&sha2::sha512::hash(&bin).unwrap().0)
-    }
-
-    pub fn n_to_bytes(n: &BigUint) -> Vec<u8> {
-        n.to_be_bytes()
-    }
-
-    pub fn random_uint(bits: u64) -> BigUint {
-        let mut rng = rand::thread_rng();
-
-        // BigUint::from_be_bytes(&rng.gen_biguint(bits).to_le_bytes())
-        rng.gen_biguint(bits)
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use num_bigint::BigUint;
-        use num_traits::FromPrimitive;
-
-        #[test]
-        fn can_hash_nn_with_padding() {
-            let n0 = BigUint::from_u8(b'A').unwrap();
-            let n1 = BigUint::from_u8(b'B').unwrap();
-
-            let h_n = super::H_nn_pad(&n0, &n1);
-
-            assert!(h_n.bits() == 511);
-        }
-    }
-}
-
-#[allow(non_snake_case)]
-mod groups {
+pub(crate) mod groups {
     use num_bigint::BigUint;
     use once_cell::sync::Lazy;
 
+    pub type BnumN = BigUint;
+    pub type Bnumg = BigUint;
+    pub type Bnumk = BigUint;
+
     const BINARY_3072: &[u8] = include_bytes!("srp/groups/3072.bin");
 
-    pub static G_3072: Lazy<G> = Lazy::new(G::build);
+    static G_3072: Lazy<G> = Lazy::new(G::build);
+
+    pub fn get_params() -> (BnumN, Bnumg, Bnumk) {
+        G_3072.get_params()
+    }
+
+    #[allow(unused)]
+    pub fn get_3072() -> &'static G {
+        &G_3072
+    }
 
     pub struct G {
         pub n: BigUint,
@@ -392,7 +295,7 @@ mod groups {
             }
         }
 
-        pub fn get_params(&self) -> (BigUint, BigUint, BigUint) {
+        pub fn get_params(&self) -> (BnumN, Bnumg, Bnumk) {
             (self.n.clone(), self.g.clone(), self.k_bnum())
         }
 
@@ -406,302 +309,9 @@ mod groups {
     }
 }
 
-#[cfg(test)]
-#[allow(non_snake_case)]
-mod tests {
-    use crate::homekit::srp::Verifier;
+pub use groups::{BnumN as GroupValN, Bnumg as GroupValg, Bnumk as GroupValk};
 
-    use super::{groups::G_3072, helper, Result, Server};
-    use num_bigint::BigUint;
-    use num_traits::{FromBytes, Zero};
-    use once_cell::sync::Lazy;
-    use pretty_hex::PrettyHex;
-    use std::fmt;
-
-    pub static TEST_DATA: Lazy<Data> = Lazy::new(Data::default);
-
-    #[derive(Clone)]
-    pub struct Data {
-        pub A: Vec<u8>,
-        pub B: Vec<u8>,
-        pub b: Vec<u8>,
-        pub client_M1: Vec<u8>,
-        pub H_AMK: Vec<u8>,
-        pub s: Vec<u8>,
-        pub server_M: Vec<u8>,
-        pub server_M2: Vec<u8>,
-        pub session_key: Vec<u8>,
-        pub u: Vec<u8>,
-        pub user_M: Vec<u8>,
-        pub v: Vec<u8>,
-        pub shared_secret: Vec<u8>, // should match session key
-        pub read_key: Vec<u8>,      // after HKDF expand/extract
-        pub write_key: Vec<u8>,     // after HKDF expand/extract
-    }
-
-    #[test]
-    fn can_load_test_data() {
-        use alkali::hash::sha2;
-
-        const PUB_KEY_LEN: usize = 384;
-        const SALT_LEN: usize = 16;
-        const SEC_KEY_LEN: usize = 32;
-        const SHA512_LEN: usize = sha2::sha512::DIGEST_LENGTH;
-
-        let td = Data::get();
-
-        let members: Vec<(&Vec<u8>, usize)> = vec![
-            (&td.A, PUB_KEY_LEN),
-            (&td.B, PUB_KEY_LEN),
-            (&td.b, SEC_KEY_LEN),
-            (&td.client_M1, SHA512_LEN),
-            (&td.H_AMK, SHA512_LEN),
-            (&td.s, SALT_LEN),
-            (&td.server_M, SHA512_LEN),
-            (&td.server_M2, SHA512_LEN),
-            (&td.session_key, SHA512_LEN),
-            (&td.user_M, SHA512_LEN),
-            (&td.v, PUB_KEY_LEN),
-            (&td.shared_secret, SHA512_LEN),
-            (&td.read_key, SEC_KEY_LEN),
-            (&td.write_key, SEC_KEY_LEN),
-        ];
-
-        for (member, expected_len) in members {
-            // validate the length in bytes
-            assert_eq!(member.len(), expected_len);
-
-            let bnum = BigUint::from_be_bytes(member);
-            let want_bits = (expected_len * 7) as u64;
-
-            // validate sufficient bits are required to represent the
-            // big integer (aka non-zero)
-            assert!(bnum.bits() >= want_bits);
-        }
-    }
-
-    #[test]
-    fn can_generate_same_proof() -> Result<()> {
-        use super::helper::n_to_bytes;
-
-        let td = Data::get();
-        let server = td.make_server();
-
-        let verifier = Verifier::new(&server, &td.A, &td.client_M1)?;
-
-        assert_eq!(n_to_bytes(&server.v), td.v.as_slice());
-        assert_eq!(n_to_bytes(&verifier.A), td.A.as_slice());
-        assert_eq!(n_to_bytes(&server.B), td.B.as_slice());
-        assert_eq!(n_to_bytes(&verifier.u), td.u.as_slice());
-
-        hash_cmp("M (server", &verifier.M_bytes, &td.server_M);
-        hash_cmp("session_key", &verifier.session_key, &td.session_key);
-
-        Ok(())
-    }
-
-    #[test]
-    fn can_authenticate() -> Result<()> {
-        let td = Data::get();
-        let server = td.make_server();
-
-        let mut verifier = Verifier::new(&server, &td.A, &td.client_M1)?;
-
-        let res = match verifier.authenticate() {
-            Ok(cipher) => {
-                println!("{cipher:?}");
-                true
-            }
-            Err(e) => {
-                println!("{e:?}");
-
-                println!(
-                    "SERVER M {:?}\n\nCLIENT M {:?}",
-                    verifier.M_bytes.hex_dump(),
-                    verifier.client_M1.hex_dump()
-                );
-
-                //   println!("\nVERIFIER {:?}", server.verifier);
-
-                false
-            }
-        };
-
-        assert!(res);
-
-        assert!(hash_cmp("H_AMK", &verifier.H_AMK, &td.H_AMK));
-
-        Ok(())
-    }
-
-    #[test]
-    fn can_generate_same_read_write_keys() {
-        use super::CipherCtx;
-
-        let td = Data::get();
-
-        let cipher = CipherCtx::new(&td.shared_secret);
-
-        let mut key = vec![];
-        key.extend_from_slice(&cipher.encrypt_key[..]);
-
-        hash_cmp("encrypt key", &td.write_key, &key);
-
-        let mut key = vec![];
-        key.extend_from_slice(&cipher.decrypt_key[..]);
-
-        hash_cmp("decrypt key", &td.read_key, &key);
-    }
-
-    #[test]
-    fn can_get_G3072() {
-        let G = &G_3072;
-
-        assert_ne!(&G.n, &BigUint::zero());
-        assert_ne!(&G.g, &BigUint::zero());
-
-        let n_be_bytes = G.n.to_bytes_be();
-        let g_be_bytes = G.g.to_bytes_be();
-
-        assert_eq!(n_be_bytes.len(), 384);
-        assert_eq!(g_be_bytes.len(), 1);
-    }
-
-    #[test]
-    fn can_create_srp_server() {
-        let server = Server::new("Pair-Setup", *b"3939", None, None);
-
-        assert_eq!(server.N.to_bytes_be().len(), 384);
-        assert_eq!(server.g.to_bytes_be().len(), 1);
-        assert_eq!(server.s.to_bytes_be().len(), 16);
-        assert_eq!(server.x.to_bytes_be().len(), 64);
-        assert_eq!(server.v.to_bytes_be().len(), 384);
-        assert_eq!(server.b.to_bytes_be().len(), 32);
-        assert_eq!(server.B.to_bytes_be().len(), 384);
-    }
-
-    #[test]
-    fn can_compute_known_v() {
-        use super::Server;
-
-        let td = Data::get();
-
-        let user = "Pair-Setup";
-        let passwd = b"3939";
-        let salt = Some(BigUint::from_be_bytes(&td.s));
-        let server = Server::new(user, *passwd, salt, None);
-
-        let v = &server.v;
-        assert!(v.bits() >= 3071);
-
-        let v_bytes = v.to_bytes_be();
-        assert_eq!(v_bytes.as_slice(), td.v.as_slice());
-    }
-
-    #[test]
-    fn can_hash_single_n() {
-        use super::helper::{hash_bnum, slice_to_bnum, H_len};
-
-        let n = BigUint::from_be_bytes(b"A");
-
-        let hashed = hash_bnum(&n);
-        assert_eq!(hashed.len(), H_len());
-
-        let hashed_num = slice_to_bnum(&hashed);
-        assert_ne!(hashed_num, BigUint::zero());
-    }
-
-    impl Data {
-        pub fn get() -> Self {
-            TEST_DATA.clone()
-        }
-
-        pub fn make_server(&self) -> Server {
-            use helper::slice_to_bnum;
-
-            let user = "Pair-Setup";
-            let passwd = br#"3939"#;
-            let salt = Some(slice_to_bnum(&self.s));
-            let b = Some(slice_to_bnum(&self.b));
-            Server::new(user, *passwd, salt, b)
-        }
-    }
-
-    impl Default for Data {
-        fn default() -> Self {
-            use std::path::Path;
-
-            let base = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-            let dir = Path::new(&base)
-                .parent()
-                .unwrap()
-                .join("extra")
-                .join("test-data");
-
-            let read = |f: &str| {
-                let mut file = dir.clone().join(f);
-
-                file.set_extension("bin");
-
-                std::fs::read(&file).unwrap()
-            };
-
-            Self {
-                A: read("A"),
-                B: read("B"),
-                b: read("b"),
-                client_M1: read("client_M1"),
-                H_AMK: read("H_AMK"),
-                s: read("s"),
-                server_M: read("server_M"),
-                server_M2: read("server_M2"),
-                session_key: read("session_key"),
-                u: read("u"),
-                user_M: read("user_M"),
-                v: read("v"),
-                shared_secret: read("shared_secret"),
-                read_key: read("read_key"),
-                write_key: read("write_key"),
-            }
-        }
-    }
-
-    impl fmt::Debug for Data {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str("TestData\n")?;
-            writeln!(f, "A {:?}\n", self.A.hex_dump())?;
-            writeln!(f, "B {:?}\n", self.B.hex_dump())?;
-            writeln!(f, "b {:?}\n", self.b.hex_dump())?;
-            writeln!(f, "client M1 {:?}\n", self.client_M1.hex_dump())?;
-            writeln!(f, "H_AMK {:?}\n", self.H_AMK.hex_dump())?;
-            writeln!(f, "s {:?}\n", self.s.hex_dump())?;
-            writeln!(f, "server M {:?}\n", self.server_M.hex_dump())?;
-            writeln!(f, "server M2 {:?}\n", self.server_M2.hex_dump())?;
-            writeln!(f, "sesion_key {:?}\n", self.session_key.hex_dump())?;
-            writeln!(f, "u {:?}\n", self.u.hex_dump())?;
-            writeln!(f, "user_bin {:?}\n", self.user_M.hex_dump())?;
-            writeln!(f, "v {:?}\n", self.v.hex_dump())?;
-            writeln!(f, "shared_secret {:?}\n", self.shared_secret.hex_dump())?;
-            writeln!(f, "read_key {:?}\n", self.read_key.hex_dump())?;
-            writeln!(f, "write_key {:?}\n", self.write_key.hex_dump())?;
-
-            Ok(())
-        }
-    }
-
-    fn hash_cmp(desc: &str, z: &Vec<u8>, z_td: &Vec<u8>) -> bool {
-        let equal = z == z_td;
-
-        if !equal {
-            println!("\n\n*** {desc} comparison FAILED ***");
-
-            println!(
-                "\n<<< {desc} {:?}\n\n>>> {desc} {:?}",
-                z.hex_dump(),
-                z_td.hex_dump()
-            );
-        }
-
-        equal
-    }
+#[allow(unused)]
+pub fn get_group_bnums() -> (GroupValN, GroupValg, GroupValk) {
+    groups::get_params()
 }

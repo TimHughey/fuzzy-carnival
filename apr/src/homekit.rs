@@ -24,6 +24,8 @@ use std::fmt;
 use tracing::{error, info};
 
 pub mod cipher;
+pub mod fairplay;
+pub mod helper;
 pub mod info;
 pub mod setup;
 pub mod srp;
@@ -31,8 +33,12 @@ pub mod states;
 pub mod tags;
 pub mod verify;
 
+#[cfg(test)]
+pub(crate) mod tests;
+
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
+pub use fairplay as Fairplay;
 pub use setup::Context as SetupCtx;
 pub use srp::Server as SrpServer;
 pub use states::Generic as GenericState;
@@ -99,6 +105,8 @@ impl HomeKit {
 
         if method == Method::GET && path == "/info" {
             info::response(frame)
+        } else if method == Method::POST && path.starts_with("/fp-") {
+            Fairplay::make_response(frame)
         } else {
             let t_in = Tags::try_from(frame.body)?;
             let state = t_in.get_state()?;
@@ -183,46 +191,5 @@ impl HomeKit {
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::Tags;
-    use crate::HostInfo;
-    use alkali::asymmetric::sign::Seed;
-    use bstr::ByteSlice;
-    use bytes::BytesMut;
-
-    #[test]
-    pub fn parse_verify_request1a() {
-        let bytes: [u8; 37] = [
-            0x06, 0x01, 0x01, 0x03, 0x20, 0xf0, 0x0B, 0x71, 0x42, 0x70, 0x26, 0xe1, 0x7e, 0x23,
-            0xed, 0x0a, 0x8b, 0x71, 0x17, 0x87, 0xa6, 0x79, 0x3d, 0x50, 0xd3, 0x21, 0x48, 0x4a,
-            0xa6, 0x49, 0xac, 0xaa, 0x44, 0x26, 0x81, 0x9f, 0x38,
-        ];
-
-        let mut buf = BytesMut::new();
-        buf.extend_from_slice(bytes.as_bytes());
-
-        let tags = Tags::try_from(buf);
-
-        assert!(tags.is_ok());
-    }
-
-    #[test]
-    pub fn check_key_creation() -> crate::Result<()> {
-        // println!("seed1 {:?}", seed0.hex_dump());
-
-        let dev_id1 = HostInfo::seed();
-        let seed1 = Seed::try_from(dev_id1.as_bytes())?;
-
-        // println!("host seed {:?}", dev_id1.hex_dump());
-        // println!("seed1 {:?}", seed1.hex_dump());
-
-        assert_eq!(dev_id1.as_slice(), seed1.as_slice());
-
-        Ok(())
     }
 }

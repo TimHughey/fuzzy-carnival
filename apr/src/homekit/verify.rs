@@ -66,7 +66,7 @@ impl Context {
 
         let prk = HKDF::extract(b"Pair-Verify-Encrypt-Salt", &accessory.shared);
         let mut session_key = BytesMut::zeroed(32);
-        HKDF::expand(&mut session_key, &prk[..], b"Pair-Verify-Encrypt-Info");
+        HKDF::expand(&mut session_key, &prk[..], b"Pair-Verify-Encrypt-Info\x01");
 
         let mut data = tags.encode();
         let nonce = Nonce::from_slice(b"\0\0\0\0PV-Msg02");
@@ -127,67 +127,5 @@ impl fmt::Debug for Accessory {
         writeln!(f, "PUBLIC {:?}\n", self.public.hex_dump())?;
         writeln!(f, "CLIENT PUB {:?}\n", self.client_pub.hex_dump())?;
         writeln!(f, "SHARED {:?}", self.shared.hex_dump())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use chacha20poly1305::{AeadCore, KeyInit};
-
-    #[test]
-    fn can_generate_keys() -> crate::Result<()> {
-        use crate::HostInfo;
-        use alkali::asymmetric::sign::Keypair;
-        use chacha20poly1305::ChaCha20Poly1305;
-        use pretty_hex::PrettyHex;
-        use rand::rngs::OsRng;
-        use x25519_dalek::{EphemeralSecret, PublicKey};
-
-        println!("\nSIGNING KEYS");
-        println!("-------------");
-
-        let secret: ed25519_dalek::SecretKey = HostInfo::id_as_key_src();
-        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret);
-
-        println!(
-            "\ned25519 secret key: {:?}\ned25519 signing key: {:?}",
-            secret.hex_dump(),
-            signing_key.as_ref().hex_dump()
-        );
-
-        println!("\nEPHEMERAL KEYS");
-        println!("--------------");
-
-        let chacha_poly_key = ChaCha20Poly1305::generate_key(&mut OsRng);
-        let chacha_poly_nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
-        println!(
-            "\nchacha_poly_key: {:?}\nchacha_poly_nonce: {:?}",
-            chacha_poly_key.hex_dump(),
-            chacha_poly_nonce.hex_dump()
-        );
-
-        let eph_sk = EphemeralSecret::random();
-        let eph_pub = PublicKey::from(&eph_sk);
-
-        let eph_client_es = EphemeralSecret::random();
-        let eph_client_pub = PublicKey::from(&eph_client_es);
-        let eph_shared_secret = eph_sk.diffie_hellman(&eph_client_pub);
-
-        println!(
-            "\nserver x25519 pk: {:?}\nclient x25519 pk: {:?}\nshared x25119 secret: {:?}",
-            eph_pub.hex_dump(),
-            eph_client_pub.hex_dump(),
-            eph_shared_secret.hex_dump()
-        );
-
-        let sign0 = Keypair::generate()?;
-
-        println!(
-            "\ngenerated sign priv: {:?}\npub: {:?}",
-            sign0.private_key.hex_dump(),
-            sign0.public_key.hex_dump()
-        );
-
-        Ok(())
     }
 }

@@ -157,7 +157,7 @@ impl fmt::Display for Key2 {
     }
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default)]
 pub struct List {
     pub active_remote: Option<u32>,
     pub cseq: Option<u32>,
@@ -169,6 +169,7 @@ pub struct List {
     extensions: Vec<(String, String)>,
 
     debug_path: OnceCell<PathBuf>,
+    dump_path: Option<PathBuf>,
 }
 
 impl List {
@@ -195,6 +196,10 @@ impl List {
             .debug_path
             .get_or_try_init(|| self.make_debug_path())?
             .with_file_name(file_name))
+    }
+
+    pub fn dump_path(&self) -> Option<PathBuf> {
+        self.dump_path.clone()
     }
 
     fn make_debug_path(&self) -> Result<PathBuf> {
@@ -226,6 +231,34 @@ impl List {
         Err(anyhow!("failed to create debug path"))
     }
 
+    fn make_dump_path(&mut self) -> Result<()> {
+        use std::env::var;
+
+        const KEY: &str = "CARGO_MANIFEST_DIR";
+        let path: PathBuf = var(KEY).map_err(|e| anyhow!(e))?.into();
+        let mut path = path.parent().unwrap().to_path_buf();
+
+        path.push("extra/ref/v2");
+
+        if let List {
+            dacp_id: Some(dacp_id),
+            active_remote: Some(active_remote),
+            ..
+        } = &self
+        {
+            path.push(dacp_id);
+            path.push(active_remote.to_string());
+
+            fs::create_dir_all(&path)?;
+
+            self.dump_path = Some(path);
+
+            return Ok(());
+        }
+
+        Err(anyhow!("failed to create dump path"))
+    }
+
     #[must_use]
     pub fn make_response(self, ctype: ContType, len: usize) -> Self {
         List {
@@ -237,6 +270,14 @@ impl List {
             user_agent: None,
             extensions: Vec::new(),
             ..self
+        }
+    }
+
+    #[must_use]
+    pub fn make_response_no_body(self) -> Self {
+        List {
+            cseq: self.cseq,
+            ..List::default()
         }
     }
 
@@ -301,7 +342,7 @@ impl<'a> TryFrom<&'a str> for List {
 
         let init = List::default();
 
-        let list = src
+        let mut list = src
             .trim()
             .lines()
             .filter_map(|l| l.split_once(DELIMITER))
@@ -310,6 +351,8 @@ impl<'a> TryFrom<&'a str> for List {
         if list.cseq.is_none() {
             return Err(anyhow!("CSeq not found: {src}"));
         }
+
+        list.make_dump_path()?;
 
         Ok(list)
     }
