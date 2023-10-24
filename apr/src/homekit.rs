@@ -23,30 +23,29 @@ use bytes::BytesMut;
 use std::fmt;
 use tracing::{error, info};
 
+pub mod auth;
 pub mod cipher;
 pub mod fairplay;
 pub mod helper;
 pub mod info;
-pub mod setup;
 pub mod srp;
 pub mod states;
 pub mod tags;
-pub mod verify;
 
 #[cfg(test)]
 pub(crate) mod tests;
 
+pub use auth::setup::Context as SetupCtx;
+pub use auth::verify::Context as VerifyCtx;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
 pub use fairplay as Fairplay;
-pub use setup::Context as SetupCtx;
 pub use srp::Server as SrpServer;
 pub use states::Generic as GenericState;
 pub use states::Verify as VerifyState;
 pub use tags::Idx as TagIdx;
 pub use tags::Map as Tags;
 pub use tags::Val as TagVal;
-pub use verify::Context as VerifyCtx;
 
 pub struct Context {
     pub device_id: Vec<u8>,
