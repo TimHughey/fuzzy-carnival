@@ -16,6 +16,8 @@
 
 use crate::{rtsp::Body, Result};
 use anyhow::anyhow;
+use bstr::ByteSlice;
+use bytes::BytesMut;
 use once_cell::sync::OnceCell;
 use std::{
     fmt::{self, Debug},
@@ -314,7 +316,8 @@ impl List {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the key passed
+    /// does not match a known or extended header "X-*".
     #[must_use]
     pub fn push(mut self, k: &str, v: &str) -> Self {
         match k {
@@ -341,6 +344,32 @@ impl<'a> TryFrom<&'a str> for List {
         const DELIMITER: &str = ": ";
 
         let init = List::default();
+
+        let mut list = src
+            .trim()
+            .lines()
+            .filter_map(|l| l.split_once(DELIMITER))
+            .fold(init, |acc, (k, v)| acc.push(k, v));
+
+        if list.cseq.is_none() {
+            return Err(anyhow!("CSeq not found: {src}"));
+        }
+
+        list.make_dump_path()?;
+
+        Ok(list)
+    }
+}
+
+impl TryFrom<BytesMut> for List {
+    type Error = anyhow::Error;
+
+    fn try_from(buf: BytesMut) -> Result<Self> {
+        const DELIMITER: &str = ": ";
+
+        let init = List::default();
+
+        let src = buf.to_str()?;
 
         let mut list = src
             .trim()

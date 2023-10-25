@@ -13,21 +13,3 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-pub mod codec;
-pub(crate) mod header;
-pub(crate) mod method;
-pub(crate) mod msgs;
-pub(crate) mod status;
-
-pub use header::ContType as HeaderContType;
-pub use header::List as HeaderList;
-pub use method::Method;
-pub use msgs::Body;
-pub use msgs::Frame;
-pub use msgs::Inflight;
-pub use msgs::Response;
-pub use status::Code as StatusCode;
-
-#[cfg(test)]
-mod tests;

@@ -15,7 +15,7 @@
 // limitations under the License.
 
 use super::{header, HeaderList, Method, StatusCode};
-use crate::Result;
+use crate::{homekit::BlockLen, Result};
 use anyhow::anyhow;
 use bstr::ByteSlice;
 use bytes::BytesMut;
@@ -23,44 +23,88 @@ use pretty_hex::PrettyHex;
 use std::{fmt, path::PathBuf, str::FromStr};
 
 #[derive(Debug, Default)]
+#[allow(unused)]
+pub struct Routing {
+    method: Method,
+    path: String,
+}
+
+impl TryFrom<BytesMut> for Routing {
+    type Error = anyhow::Error;
+
+    fn try_from(buf: BytesMut) -> Result<Self> {
+        let idx = buf.find_char(' ').ok_or_else(|| {
+            tracing::warn!("space delimiter not found in {:?}", buf.hex_dump());
+
+            anyhow!("method, path not found")
+        })?;
+
+        let (method, path) = buf.split_at(idx);
+
+        Ok(Self {
+            method: Method::try_from(method.to_str()?)?,
+            path: path.to_str()?.into(),
+        })
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Inflight {
+    pub routing: Option<Routing>,
+    pub headers: Option<HeaderList>,
+    pub body: Option<Body>,
+    pub residual: Option<BytesMut>,
+    pub block_len: Option<BlockLen>,
+    pub content_len: Option<usize>,
+}
+
+impl Inflight {
+    //
+}
+
+#[derive(Default)]
 pub struct Frame {
     pub method: Method,
     pub path: String,
-    pub headers: header::List,
+    pub headers: HeaderList,
     pub body: Body,
     pub consumed: usize,
     pub pending: Option<Pending>,
 }
 
 impl Frame {
-    const MIN_BYTES: usize = 80;
     const SPACE: char = ' ';
     const PROTOCOL: &str = "RTSP/1.0";
 
-    /// # Errors
-    ///
-    /// Will return `Err` if content length value can not
-    /// be parsed into a usize
     #[must_use]
     pub fn content_len(&self) -> Option<usize> {
         self.headers.content_length
+    }
+
+    #[must_use]
+    pub fn find_head_body_separator(src: &[u8]) -> Option<usize> {
+        // delimiter for end of RTSP message, content (if any) follows
+        const NEEDLE: &[u8; 4] = b"\r\n\r\n";
+        const MIN_BYTES: usize = 80;
+
+        if src.len() > MIN_BYTES {
+            return src.find(NEEDLE);
+        }
+
+        None
     }
 
     /// # Errors
     ///
     /// May return error if body is not recognized
     ///
+    #[inline]
     pub fn include_body(&mut self, src: &[u8]) -> Result<()> {
         if let Some(len) = self.headers.content_length {
             self.body = Body::try_from(&src[0..len])?;
         }
 
         Ok(())
-    }
-
-    #[must_use]
-    pub fn min_bytes(cnt: usize) -> bool {
-        cnt >= Self::MIN_BYTES
     }
 
     #[must_use]
@@ -77,7 +121,10 @@ impl TryFrom<BytesMut> for Frame {
         // delimiter for end of RTSP message, content (if any) follows
         const NEEDLE: &[u8; 4] = b"\r\n\r\n";
 
+        // clone the original buf for persisting to disk, this is a cheap operation
+        // and is also used to calculate the bytes consumed
         let file_buf = buf.clone();
+
         // locate the delim between head and body (aka needle)
         if let Some(needle_pos) = buf.find(NEEDLE) {
             // grab the head and tail slice, noting tail contains the needle and
@@ -96,10 +143,6 @@ impl TryFrom<BytesMut> for Frame {
 
                     frame.include_body(body)?;
                     frame.consumed = head.len() + body.len();
-
-                    let mut file_buf = BytesMut::with_capacity(frame.consumed);
-                    file_buf.extend_from_slice(head);
-                    file_buf.extend_from_slice(body);
 
                     persist_buf(&file_buf, Some(path))?;
 
@@ -122,7 +165,7 @@ impl TryFrom<BytesMut> for Frame {
                 }
             }
         } else {
-            persist_buf(&file_buf, None)?;
+            persist_buf(&buf, None)?;
 
             Err(anyhow!("unable to find request end"))
         }
@@ -159,27 +202,24 @@ impl<'a> TryFrom<&'a [u8]> for Frame {
 
         // split on the protocol to validate the version and remove the protocol
         // text from further comparisons
-        let chunks = src.split_once(Self::PROTOCOL);
+        let (request, rest) = src
+            .split_once(Self::PROTOCOL)
+            .ok_or_else(|| anyhow!("protocol version not found"))?;
 
-        match chunks {
-            Some((request, rest)) => {
-                // the first line is the request: METHOD PATH RTSP/1.0
-                let line = request.split_once(Self::SPACE);
+        // the first line is the request: METHOD PATH RTSP/1.0
+        let line = request.split_once(Self::SPACE);
 
-                // get the method and path
-                if let Some((method, path)) = line {
-                    return Ok(Self {
-                        method: Method::from_str(method)?,
-                        path: path.trim_end().to_owned(),
-                        headers: header::List::try_from(rest)?,
-                        ..Self::default()
-                    });
-                }
-
-                Ok(Self::default())
-            }
-            None => Err(anyhow!("protocol version not found")),
+        // get the method and path
+        if let Some((method, path)) = line {
+            return Ok(Self {
+                method: Method::from_str(method)?,
+                path: path.trim_end().to_owned(),
+                headers: header::List::try_from(rest)?,
+                ..Self::default()
+            });
         }
+
+        Ok(Self::default())
     }
 }
 
@@ -420,16 +460,6 @@ impl Pending {
             head,
             body,
             attempts: 1,
-        }
-    }
-
-    pub fn new_or_update(src: &mut Option<Pending>, head: usize, body: usize) -> Pending {
-        match src.as_ref() {
-            Some(p) => Pending {
-                attempts: p.attempts.saturating_add_signed(1),
-                ..p.clone()
-            },
-            None => Pending::new(head, body),
         }
     }
 }

@@ -346,7 +346,7 @@ impl Listener {
             let handler = Handler {
                 // Initialize the connection state. This allocates read/write
                 // buffers to perform redis protocol frame parsing.
-                framed: codec::Rtsp::new().framed(socket),
+                framed: codec::Rtsp::default().framed(socket),
 
                 // Receive shutdown notifications.
                 shutdown: Shutdown::new(&self.notify_shutdown),

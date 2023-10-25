@@ -15,12 +15,13 @@
 // limitations under the License.
 
 use crate::{
-    homekit::{CipherCtx, CipherLock},
-    rtsp::{msgs::Pending, Body, Frame, HeaderList, Response},
+    homekit::{BlockLen, CipherCtx, CipherLock},
+    rtsp::{Body, Frame, HeaderList, Inflight, Response},
     Result,
 };
 use anyhow::anyhow;
-use bytes::{Buf, BytesMut};
+// use bstr::ByteSlice;
+use bytes::BytesMut;
 use pretty_hex::PrettyHex;
 use std::{
     // io::Write,
@@ -28,27 +29,19 @@ use std::{
     sync::{Arc, RwLock},
 };
 use tokio_util::codec::{Decoder, Encoder};
-use tracing::debug;
 
 /// A simple [`Decoder`] and [`Encoder`] implementation that splits up data into lines.
 ///
 /// [`Decoder`]: crate::codec::Decoder
 /// [`Encoder`]: crate::codec::Encoder
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct Rtsp {
-    // incomplete body tracking
-    pending: Option<Pending>,
-    block_len: Option<u16>,
     cipher: CipherLock,
+    plaintext: Option<BytesMut>,
+    inflight: Option<Inflight>,
 }
 
 impl Rtsp {
-    /// Returns a `RtspCode` for creating Rtsp frames from buffered bytes
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn install_cipher(&mut self, ctx: CipherCtx) {
         self.cipher = Some(Arc::new(RwLock::new(ctx)));
     }
@@ -75,69 +68,86 @@ impl Decoder for Rtsp {
     type Error = anyhow::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>> {
-        // const U16_SIZE: usize = std::mem::size_of::<u16>();
-
-        if buf.len() < 3 {
-            return Ok(None);
-        }
+        const U16_SIZE: usize = std::mem::size_of::<u16>();
+        // const BLOCK_MIN_LEN: usize = U16_SIZE + 1 + 16;
+        const PLAINTEXT_MIN_LEN: usize = 80;
+        const ENCRYPTED_LEN_MAX: usize = 0x400;
 
         if let Some(cipher) = self.cipher.as_ref() {
-            // since this is an encrypted message we have the luxury of determining
-            // if the buffer contains enough bytes to proceed with decryption by
-            // examining the header (u16 value)
-
-            // enough bytes in buffer for a potential frame
-            let block_len = self.block_len.get_or_insert_with(|| buf.get_u16_le());
-
             let buf_len = buf.len();
-            let block_needed_len = (*block_len as usize) + 16;
+            let n_blocks = num_traits::clamp_min(buf_len / ENCRYPTED_LEN_MAX, 1);
+            tracing::debug!("buf len={buf_len} n_blocks={n_blocks}");
 
-            if buf_len < block_needed_len {
-                tracing::warn!("incomplete block, buf {buf_len} < {block_needed_len}");
+            loop {
+                // must get mut reference inside loop to make borrow checker happy
+                let inflight = self.inflight.get_or_insert(Inflight::default());
 
-                return Ok(None);
-            }
+                // if this is a new block then create a BlockLen, otherwise get the existing one
+                let block_len = inflight.block_len.get_or_insert(BlockLen::default());
 
-            let data = buf.split_to(block_needed_len);
+                // when this is a new block consume the block length bytes from the buffer
+                if block_len.is_empty() && BlockLen::have_min_bytes(buf.len()) {
+                    *block_len = BlockLen::from(buf.split_to(U16_SIZE));
+                }
 
-            tracing::info!("\nINBOUND DATA (raw) {:?}", data.hex_dump());
+                // now, do we have enough bytes in the buffer to decrypt this block?
+                if block_len.need_more(buf.len()) {
+                    // nope, signal to caller to send us more when ready
+                    return Ok(None);
+                }
 
-            if !buf.is_empty() {
-                tracing::warn!("spurious data in buf\nBUF (SUPRIOUS) {:?}", buf.hex_dump());
-            }
+                // we are good to go for decryption of this block
+                let cipher_block_len = block_len.len_with_auth_tag();
+                let encrypted = buf.split_to(cipher_block_len);
+                let decrypted = cipher.write().unwrap().decrypt(encrypted, **block_len)?;
+                tracing::debug!("\nDECRYPTED {:?}", decrypted.hex_dump());
 
-            // decrypt the data.
-            // returns:
-            //   Ok(Some) => the clear text buffer
-            //   Err => handle immediately with question mark
-            let plaintext = cipher.write().unwrap().decrypt(data, *block_len)?;
+                // accumulate the decrypted bytes
+                // yes, for the moment, we're doing buffer copies.  TODO: optimize to reuse buf
+                let plaintext = self.plaintext.get_or_insert(BytesMut::with_capacity(4096));
+                plaintext.extend_from_slice(&decrypted);
 
-            buf.unsplit(plaintext);
+                // finished with current block or have returned early, clear block_len
+                inflight.block_len = None;
 
-            self.block_len = None;
-
-            tracing::info!("\nDECODED CLEAR TEXT {:?}", buf.hex_dump());
-        }
-
-        // we now have a clear text buffer that we can parse into a frame
-        match Frame::try_from(buf.clone()) {
-            Ok(mut frame) => {
-                if frame.pending.is_none() {
-                    buf.advance(frame.consumed);
-
-                    if !buf.is_empty() {
-                        tracing::warn!("additional bytes in buffer len={}", buf.len());
-                    }
-
-                    Ok(Some(frame))
-                } else {
-                    // TODO: do something with pending
-                    self.pending = frame.pending.take();
-                    Ok(None)
+                if !BlockLen::have_min_bytes(buf.len()) {
+                    break;
                 }
             }
-            Err(e) => Err(e),
+
+            if !buf.is_empty() {
+                tracing::warn!("\nRESIDUAL CIPHER BUF {:?}", buf.hex_dump());
+            }
+        } else {
+            // we are operating in clear text mode, move buf to plaintext.
+            // yes, we are doing a buffer copy however we only receive two
+            // messages in clear text so it's not a big deal
+            let plaintext_buf = self.plaintext.get_or_insert(BytesMut::with_capacity(4096));
+            plaintext_buf.extend_from_slice(&buf.split());
         }
+
+        if let Some(plaintext_buf) = self.plaintext.as_mut() {
+            let plaintext_len = plaintext_buf.len();
+
+            if plaintext_len > PLAINTEXT_MIN_LEN {
+                if plaintext_len > 2048 {
+                    tracing::info!("\nLARGE MESSAGE {:?}", plaintext_buf.hex_dump());
+                }
+
+                let rollback_buf = plaintext_buf.clone();
+
+                let frame = Frame::try_from(plaintext_buf.split())?;
+
+                if frame.pending.is_none() {
+                    return Ok(Some(frame));
+                }
+
+                // frame creation failed, rollback plaintext
+                *buf = rollback_buf;
+            }
+        }
+
+        Ok(None)
     }
 }
 
@@ -174,7 +184,7 @@ impl Encoder<Response> for Rtsp {
             Empty => (),
         }
 
-        debug!("\nOUTBOUND CLEAR TEXT {:?}", dst.hex_dump());
+        tracing::debug!("\nOUTBOUND CLEAR TEXT {:?}", dst.hex_dump());
 
         bin_save.persist(dst.as_ref())?;
 
@@ -187,7 +197,7 @@ impl Encoder<Response> for Rtsp {
             dst.unsplit(encrypted);
         }
 
-        tracing::info!("\nOUTBOUND BUF {:?}", dst.hex_dump());
+        tracing::debug!("\nOUTBOUND BUF {:?}", dst.hex_dump());
 
         bin_save.persist_last(dst.as_ref())?;
 

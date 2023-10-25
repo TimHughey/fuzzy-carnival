@@ -17,7 +17,7 @@
 use super::Result;
 use alkali::{mem, symmetric::auth::hmacsha512256 as AlkaliHMAC};
 use anyhow::anyhow;
-use bytes::BytesMut;
+use bytes::{Buf, BytesMut};
 use chacha20poly1305::{
     aead::{AeadInPlace, KeyInit},
     ChaCha20Poly1305, Key, Nonce, Tag,
@@ -26,6 +26,7 @@ use once_cell::sync::Lazy;
 use std::{
     fmt,
     mem::size_of,
+    ops::Deref,
     sync::{Arc, RwLock},
 };
 
@@ -33,6 +34,53 @@ pub type Lock = Option<Arc<RwLock<Context>>>;
 // pub type AlkaliKey = AlkaliKeyBase<mem::FullAccess>;
 #[allow(unused)]
 pub type AlkaliAuthKey = alkali::symmetric::auth::Key<mem::FullAccess>;
+
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BlockLen(pub u16);
+
+impl BlockLen {
+    pub fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    pub fn from(mut buf: BytesMut) -> Self {
+        Self(buf.get_u16_le())
+    }
+
+    pub fn have_all_bytes(self, buf_len: usize) -> bool {
+        let need = 16 + self.0 as usize;
+
+        buf_len >= need
+    }
+
+    pub fn have_min_bytes(len: usize) -> bool {
+        let min = 16 + std::mem::size_of::<u16>() + 1;
+
+        len >= min
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    pub fn need_more(self, buf_len: usize) -> bool {
+        let need = 16 + self.0 as usize;
+
+        buf_len < need
+    }
+
+    pub fn len_with_auth_tag(self) -> usize {
+        16 + self.0 as usize
+    }
+}
+
+impl Deref for BlockLen {
+    type Target = u16;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Default)]
 #[allow(unused)]
@@ -47,22 +95,6 @@ pub struct Context {
     decrypt_nonce: u64,
     encrypt_nonce: u64,
 }
-
-// impl Default for Context {
-//     fn default() -> Self {
-//         Self {
-//             shared_secret: Vec::new(),
-//             encrypt_key: ChaChaKey::default(),
-//             // encrypt_key: AlkaliKeyBase::new_empty().unwrap(),
-//             decrypt_key: ChaChaKey::default(),
-//             // decrypt_key: AlkaliKeyBase::new_empty().unwrap(),
-//             // frames_in: u64::default(),
-//             // frames_out: u64::default(),
-//             decrypt_nonce: ChaChaNonce::default(),
-//             encrypt_nonce: ChaChaNonce::default(),
-//         }
-//     }
-// }
 
 const ENCRYPTED_LEN_MAX: usize = 0x400;
 const SALT: &[u8; 12] = b"Control-Salt";
@@ -115,7 +147,7 @@ impl Context {
             .decrypt_in_place_detached(&nonce, &associated_data, &mut buf, &auth_tag)
             .map_err(|e| anyhow!("decrypt: {e}"))?;
 
-        tracing::info!("\nDECRYPTED BUF {:?}", buf.hex_dump());
+        tracing::debug!("\nDECRYPTED BUF {:?}", buf.hex_dump());
 
         // increment the decrypted message count
         self.decrypt_nonce += 1;
@@ -133,7 +165,7 @@ impl Context {
                 return Err(anyhow!("cleartext buffer len={}", buf.len()));
             }
 
-            tracing::info!("\nMESSAGE (from codec) {:?}", buf.hex_dump());
+            tracing::debug!("\nMESSAGE (from codec) {:?}", buf.hex_dump());
 
             // first things first, split the clear text message from the buf
             // provided by the codec so we can build the complete encrypted
@@ -212,6 +244,10 @@ impl Context {
             ..Self::default()
         }
         .make_keys()
+    }
+
+    pub fn total_cipher_bytes(block_len: u16) -> usize {
+        16 + block_len as usize
     }
 }
 

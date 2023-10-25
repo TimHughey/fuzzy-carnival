@@ -37,6 +37,7 @@ pub(crate) mod tests;
 
 pub use auth::setup::Context as SetupCtx;
 pub use auth::verify::Context as VerifyCtx;
+pub use cipher::BlockLen;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
 pub use fairplay as Fairplay;
@@ -106,6 +107,9 @@ impl HomeKit {
             info::response(frame)
         } else if method == Method::POST && path.starts_with("/fp-") {
             Fairplay::make_response(frame)
+        } else if method == Method::SETUP && path.starts_with("rtsp") {
+            tracing::warn!("not implemented");
+            Err(anyhow!("missing implementation"))
         } else {
             let t_in = Tags::try_from(frame.body)?;
             let state = t_in.get_state()?;
