@@ -143,7 +143,7 @@ impl Method {
                 b"SETPEERSX" => Ok(Method(SetPeersX)),
                 _ => Err(Invalid::new()),
             },
-            13 => match src.split_at(2) {
+            13 => match src.split_at(3) {
                 (b"GET", _) => Ok(Method(GetParameter)),
                 (b"SET", _) => Ok(Method(SetParameter)),
                 (b"FLU", b"SHBUFFERED") => Ok(Method(FlushBuffered)),

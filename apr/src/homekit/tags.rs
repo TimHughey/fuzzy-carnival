@@ -430,7 +430,11 @@ impl TryFrom<Body> for Map {
     fn try_from(body: Body) -> Result<Self> {
         let buf: BytesMut = match body {
             Body::Bulk(v) | Body::OctetStream(v) => v.as_slice().into(),
-            _ => Err(anyhow!("can not convert to tag list"))?,
+            body => {
+                tracing::error!("unhandled body\n{body:#?}");
+
+                Err(anyhow!("can not convert body to tag map"))?
+            }
         };
 
         Self::try_from(buf)

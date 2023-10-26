@@ -19,12 +19,9 @@ use crate::{
     rtsp::{Body, Frame, HeaderList, Inflight, Response},
     Result,
 };
-use anyhow::anyhow;
-// use bstr::ByteSlice;
-use bytes::BytesMut;
+use bytes::{BufMut, BytesMut};
 use pretty_hex::PrettyHex;
 use std::{
-    // io::Write,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
@@ -180,8 +177,11 @@ impl Encoder<Response> for Rtsp {
                 dst.extend_from_slice(extend.as_bytes());
             }
 
-            Dict(_) => Err(anyhow!("Dict not implemented yet"))?,
-            Empty => (),
+            Dict(dict) => {
+                item.extend_with_content_info(dst)?;
+                plist::to_writer_binary(dst.writer(), &dict)?;
+            }
+            Empty => dst.write_str("\r\n")?,
         }
 
         tracing::debug!("\nOUTBOUND CLEAR TEXT {:?}", dst.hex_dump());

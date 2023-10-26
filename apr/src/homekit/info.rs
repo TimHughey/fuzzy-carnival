@@ -87,16 +87,8 @@ fn body() -> Result<Body> {
     Ok(Body::OctetStream(binary.into()))
 }
 
-pub fn response(frame: Frame) -> Result<Response> {
-    use crate::rtsp::{HeaderContType::AppAppleBinaryPlist as Plist, StatusCode};
-
-    let body = body()?;
-
-    Ok(Response {
-        status_code: StatusCode::OK,
-        headers: frame.headers.make_response(Plist, body.len()),
-        body,
-    })
+pub fn make_response(frame: Frame) -> Result<Response> {
+    Response::ok_with_body(frame.headers, body()?)
 }
 
 #[cfg(test)]
@@ -108,7 +100,7 @@ mod tests {
 
         println!("{body}");
 
-        assert_eq!(body.len(), 512);
+        assert_eq!(body.len()?, 512);
 
         Ok(())
     }

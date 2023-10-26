@@ -18,7 +18,7 @@ use super::{header, HeaderList, Method, StatusCode};
 use crate::{homekit::BlockLen, Result};
 use anyhow::anyhow;
 use bstr::ByteSlice;
-use bytes::BytesMut;
+use bytes::{BufMut, BytesMut};
 use pretty_hex::PrettyHex;
 use std::{fmt, path::PathBuf, str::FromStr};
 
@@ -259,14 +259,36 @@ impl Body {
         }
     }
 
-    #[must_use]
-    pub fn len(&self) -> usize {
-        match self {
-            Dict(plist) => plist.len(),
+    /// Returns the length of this [`Body`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if detemination of length fails.
+    pub fn len(&self) -> Result<usize> {
+        Ok(match self {
+            Dict(plist) => {
+                struct BytesWrite<'a>(&'a mut BytesMut);
+
+                impl std::io::Write for BytesWrite<'_> {
+                    fn write(&mut self, s: &[u8]) -> std::io::Result<usize> {
+                        self.0.extend_from_slice(s);
+                        Ok(s.len())
+                    }
+
+                    fn flush(&mut self) -> std::io::Result<()> {
+                        Ok(())
+                    }
+                }
+
+                let mut buf = BytesMut::with_capacity(1024);
+                plist::to_writer_binary(BytesWrite(&mut buf), plist)?;
+
+                buf.len()
+            }
             Bulk(v) | OctetStream(v) => v.len(),
             Text(text) => text.len(),
             Empty => 0,
-        }
+        })
     }
 
     #[must_use]
@@ -329,14 +351,16 @@ impl TryInto<BytesMut> for Body {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<BytesMut> {
-        let mut buf = BytesMut::new();
+        let mut buf = BytesMut::with_capacity(4096);
 
         match self {
             OctetStream(v) | Bulk(v) if !v.is_empty() => buf.extend_from_slice(&v),
             Text(t) if !t.is_empty() => buf.extend_from_slice(t.as_bytes()),
-            Dict(_) => Err(anyhow!("dict not supported"))?,
+            Dict(dict) => plist::to_writer_binary((&mut buf).writer(), &dict)?,
             OctetStream(_) | Bulk(_) | Text(_) | Empty => (),
         };
+
+        tracing::debug!("\nDICT {:?}", buf.hex_dump());
 
         Ok(buf)
     }
@@ -373,9 +397,35 @@ impl Response {
     /// # Errors
     ///
     /// This function will return an error if .
+    pub fn ok_without_body(headers: HeaderList) -> Result<Self> {
+        Ok(Self {
+            status_code: StatusCode::OK,
+            headers: headers.make_response_no_body(),
+            body: Body::Empty,
+        })
+    }
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
     pub fn internal_server_error(headers: HeaderList) -> Result<Self> {
         Ok(Self {
             status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            headers: headers.make_response_no_body(),
+            body: Body::Empty,
+        })
+    }
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn bad_request(headers: HeaderList) -> Result<Self> {
+        Ok(Self {
+            status_code: StatusCode::BAD_REQUEST,
             headers: headers.make_response_no_body(),
             body: Body::Empty,
         })

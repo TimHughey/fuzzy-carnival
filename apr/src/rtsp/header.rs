@@ -277,32 +277,37 @@ impl List {
 
     #[must_use]
     pub fn make_response_no_body(self) -> Self {
-        List {
-            cseq: self.cseq,
-            ..List::default()
+        Self {
+            active_remote: None,
+            content_length: None,
+            content_type: None,
+            dacp_id: None,
+            rtp_info: None,
+            user_agent: None,
+            extensions: Vec::new(),
+            ..self
         }
     }
 
-    /// .
+    /// Create RTSP response from the given [Body]
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if [Body] length
+    /// can not be determined.
     pub fn make_response2(self, body: &Body) -> Result<Self> {
         use Body::{Bulk, Dict, Empty, OctetStream, Text};
-
-        let len = body.len();
 
         let ctype = match body {
             Bulk(_) | OctetStream(_) => Some(ContType::AppOctetStream),
             Text(_) => Some(ContType::TextParameters),
+            Dict(_) => Some(ContType::AppAppleBinaryPlist),
             Empty => None,
-            Dict(_) => Err(anyhow!("unsupported response body: {body}"))?,
         };
 
         Ok(List {
             active_remote: None,
-            content_length: Some(len),
+            content_length: Some(body.len()?),
             content_type: ctype,
             dacp_id: None,
             rtp_info: None,

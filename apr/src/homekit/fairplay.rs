@@ -14,13 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::anyhow;
-use once_cell::sync::Lazy;
-
 use crate::{
     rtsp::{Body, Frame, Response},
     Result,
 };
+use anyhow::anyhow;
+use once_cell::sync::Lazy;
 
 const MODE_IDX: usize = 14;
 const SEQ_IDX: usize = 6;

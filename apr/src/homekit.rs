@@ -15,19 +15,19 @@
 // limitations under the License.
 
 use crate::{
-    rtsp::{Body, Frame, HeaderList, Response},
+    rtsp::{Body, Frame, Response},
     HostInfo, Result,
 };
 use anyhow::anyhow;
 use bytes::BytesMut;
 use std::fmt;
-use tracing::{error, info};
 
 pub mod auth;
 pub mod cipher;
 pub mod fairplay;
 pub mod helper;
 pub mod info;
+pub mod setup;
 pub mod srp;
 pub mod states;
 pub mod tags;
@@ -41,6 +41,7 @@ pub use cipher::BlockLen;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
 pub use fairplay as Fairplay;
+use setup as Setup;
 pub use srp::Server as SrpServer;
 pub use states::Generic as GenericState;
 pub use states::Verify as VerifyState;
@@ -75,14 +76,12 @@ impl HomeKit {
     /// generate security `Seed` or `KeyPair`.
     #[must_use]
     pub fn build() -> Self {
-        use pretty_hex::PrettyHex;
-
         let mut id_buf = BytesMut::with_capacity(64);
         id_buf.extend_from_slice(HostInfo::id_as_slice());
 
         let device_id = id_buf.freeze();
 
-        tracing::debug!("\nDEVICE ID {:?}", device_id.hex_dump());
+        tracing::debug!("\nDEVICE ID {:?}", pretty_hex::pretty_hex(&device_id));
 
         Self {
             device_id: device_id.into(),
@@ -103,95 +102,83 @@ impl HomeKit {
 
         let (method, path) = frame.method_path();
 
-        if method == Method::GET && path == "/info" {
-            info::response(frame)
-        } else if method == Method::POST && path.starts_with("/fp-") {
-            Fairplay::make_response(frame)
-        } else if method == Method::SETUP && path.starts_with("rtsp") {
-            tracing::warn!("not implemented");
-            Err(anyhow!("missing implementation"))
-        } else {
-            let t_in = Tags::try_from(frame.body)?;
-            let state = t_in.get_state()?;
+        match (method, path.as_str()) {
+            (Method::GET, "/info") => info::make_response(frame),
+            (Method::POST, "/fp-setup") => Fairplay::make_response(frame),
+            (Method::SETUP, path) if path.starts_with("rtsp") => Setup::make_response(frame),
+            (Method::GET_PARAMETER, path) if path.starts_with("rtsp") => {
+                Response::ok_with_body(frame.headers, Body::Text("\r\nvolume: 0.0\r\n".into()))
+            }
+            (Method::RECORD, path) if path.starts_with("rtsp") => {
+                Response::ok_without_body(frame.headers)
+            }
+            (Method::GET | Method::POST, "/pair-verify") => {
+                use VerifyState::{Msg01, Msg02, Msg03, Msg04};
 
-            match (method, path) {
-                (Method::GET | Method::POST, path) if path.ends_with("verify") => {
-                    use VerifyState::{Msg01, Msg02, Msg03, Msg04};
+                let t_in = Tags::try_from(frame.body)?;
+                let state = VerifyState::try_from(t_in.get_state()?)?;
 
-                    let state = VerifyState::try_from(state)?;
+                match state {
+                    Msg01 => {
+                        tracing::debug!("{path} {state:?}");
 
-                    match state {
-                        Msg01 => {
-                            info!("{path} {state:?}");
+                        let tags = self.verify.m1_m2(t_in.get_public_key()?)?;
+                        Response::ok_with_body(
+                            frame.headers,
+                            Body::OctetStream(tags.encode().into()),
+                        )
+                    }
+                    Msg02 | Msg03 | Msg04 => Err(anyhow!("{path}: got state {state:?}")),
+                }
+            }
 
-                            let pk = t_in.get_public_key()?;
+            (Method::GET | Method::POST, "/pair-setup") => {
+                use states::Generic as State;
 
-                            let tags = self.verify.m1_m2(pk)?;
+                const M1: State = State(1);
+                const M3: State = State(3);
 
-                            let body = Body::OctetStream(tags.encode().to_vec());
+                let t_in = Tags::try_from(frame.body)?;
+                let state = t_in.get_state()?;
 
-                            Ok(Response {
-                                headers: HeaderList::make_response2(frame.headers, &body)?,
-                                body,
-                                ..Response::default()
-                            })
+                match state {
+                    M1 => {
+                        tracing::debug!("{path} M1");
+                        self.setup = SetupCtx::build();
+                        let t_out = self.setup.m1_m2(&t_in);
+
+                        Response::ok_with_body(
+                            frame.headers,
+                            Body::OctetStream(t_out.encode().into()),
+                        )
+                    }
+
+                    M3 => {
+                        tracing::debug!("{path} M3");
+
+                        let (t_out, mut cipher) = self.setup.m3_m4(&t_in)?;
+
+                        if self.cipher.is_none() && cipher.is_some() {
+                            self.cipher = cipher.take();
                         }
-                        Msg02 | Msg03 | Msg04 => Err(anyhow!("{path}: got state {state:?}")),
+
+                        Response::ok_with_body(
+                            frame.headers,
+                            Body::OctetStream(t_out.encode().into()),
+                        )
+                    }
+
+                    _state => {
+                        tracing::warn!("Setup UNKNOWN  {t_in:?}");
+                        Response::internal_server_error(frame.headers)
                     }
                 }
+            }
 
-                (Method::GET | Method::POST, path) if path.ends_with("setup") => {
-                    use states::Generic as State;
+            (_method, _path) => {
+                tracing::warn!("\nUNHANDLED {frame:#}");
 
-                    const M1: State = State(1);
-                    const M3: State = State(3);
-
-                    match state {
-                        M1 => {
-                            info!("{path} M1");
-                            self.setup = SetupCtx::build();
-                            let t_out = self.setup.m1_m2(&t_in);
-
-                            let body = Body::OctetStream(t_out.encode().to_vec());
-
-                            Ok(Response {
-                                headers: HeaderList::make_response2(frame.headers, &body)?,
-                                body,
-                                ..Response::default()
-                            })
-                        }
-
-                        M3 => {
-                            info!("{path} M3");
-
-                            let (t_out, mut cipher) = self.setup.m3_m4(&t_in)?;
-
-                            if self.cipher.is_none() && cipher.is_some() {
-                                self.cipher = cipher.take();
-                            }
-
-                            let body = Body::OctetStream(t_out.encode().to_vec());
-
-                            Ok(Response {
-                                headers: HeaderList::make_response2(frame.headers, &body)?,
-                                body,
-                                ..Response::default()
-                            })
-                        }
-
-                        _state => {
-                            info!("Setup UNKNOWN  {t_in:?}");
-
-                            Ok(Response::default())
-                        }
-                    }
-                }
-
-                (method, path) => {
-                    error!("unhandled {path}\n{t_in:?}");
-
-                    Err(anyhow!("unhandled: {method} {path}"))
-                }
+                Response::internal_server_error(frame.headers)
             }
         }
     }
