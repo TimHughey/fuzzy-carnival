@@ -14,12 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::super::auth::srp::Server as SrpServer;
 use crate::{
-    homekit::{
+    kit::{
+        auth::srp::{self, Verifier},
         helper,
-        srp::{self, Verifier},
         tests::Data,
-        SrpServer,
     },
     Result,
 };
@@ -93,7 +93,7 @@ fn can_authenticate() -> Result<()> {
 
 #[test]
 fn can_generate_same_read_write_keys() -> Result<()> {
-    use crate::homekit::CipherCtx;
+    use crate::kit::CipherCtx;
 
     let td = Data::get();
 
@@ -142,7 +142,7 @@ fn can_create_srp_server() {
 
 #[test]
 fn can_compute_known_v() {
-    use crate::homekit::SrpServer;
+    use super::super::auth::srp::Server as SrpServer;
 
     let td = Data::get();
 

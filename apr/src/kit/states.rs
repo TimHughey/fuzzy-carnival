@@ -21,9 +21,9 @@ use anyhow::anyhow;
 pub struct Generic(pub u8);
 
 impl Generic {
-    pub const M1: u8 = 1;
-    pub const M2: u8 = 2;
-    pub const M3: u8 = 3;
+    // pub const M1: u8 = 1;
+    // pub const M2: u8 = 2;
+    // pub const M3: u8 = 3;
 }
 
 impl From<u8> for Generic {

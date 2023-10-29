@@ -18,14 +18,10 @@ use crate::{rtsp::Body, Result};
 use anyhow::anyhow;
 use bstr::ByteSlice;
 use bytes::BytesMut;
-use once_cell::sync::OnceCell;
 use std::{
     fmt::{self, Debug},
-    fs,
-    path::PathBuf,
     str::FromStr,
 };
-use tracing::error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ContType {
@@ -33,6 +29,7 @@ pub enum ContType {
     AppAppleBinaryPlist,
     AppOctetStream,
     TextParameters,
+    PeerListChanged,
     PeerListChangedX,
     ImageNone,
 }
@@ -42,8 +39,17 @@ impl ContType {
     const DMAP_TAGGED: &str = "application/x-dmap-tagged";
     const OCTET_STREAM: &str = "application/octet-stream";
     const TEXT_PARAMS: &str = "text/parameters";
+    const PEER_LIST_CHANGED_X: &str = "/peer-list-changed-x";
     const PEER_LIST_CHANGED: &str = "/peer-list-changed";
     const IMAGE_NONE: &str = "image/none";
+
+    const BINARY_PLIST_LEN: usize = Self::BINARY_PLIST.len();
+    const DMAP_TAGGED_LEN: usize = Self::DMAP_TAGGED.len();
+    const OCTET_STREAM_LEN: usize = Self::OCTET_STREAM.len();
+    const TEXT_PARAMS_LEN: usize = Self::TEXT_PARAMS.len();
+    const PEER_LIST_LEN: usize = Self::PEER_LIST_CHANGED.len();
+    const PEER_LIST_X_LEN: usize = Self::PEER_LIST_CHANGED_X.len();
+    const IMAGE_NONE_LEN: usize = Self::IMAGE_NONE.len();
 
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -52,7 +58,8 @@ impl ContType {
             Self::AppDMapTagged => Self::DMAP_TAGGED,
             Self::AppOctetStream => Self::OCTET_STREAM,
             Self::TextParameters => Self::TEXT_PARAMS,
-            Self::PeerListChangedX => Self::PEER_LIST_CHANGED,
+            Self::PeerListChanged => Self::PEER_LIST_CHANGED,
+            Self::PeerListChangedX => Self::PEER_LIST_CHANGED_X,
             Self::ImageNone => Self::IMAGE_NONE,
         }
     }
@@ -69,19 +76,24 @@ impl FromStr for ContType {
     type Err = anyhow::Error;
 
     fn from_str(src: &str) -> Result<ContType> {
-        if let Some((p1, p2)) = src.trim().split_once('/') {
-            match p1.len() {
-                11 if p2.ends_with("plist") => Ok(ContType::AppAppleBinaryPlist),
-                11 if p2.ends_with("tagged") => Ok(ContType::AppDMapTagged),
-                11 if p2.ends_with("stream") => Ok(ContType::AppOctetStream),
-                4 if p2.ends_with("meters") => Ok(ContType::TextParameters),
-                5 if p2.ends_with("changed-x") => Ok(ContType::PeerListChangedX),
-                0 if p2.ends_with("none") => Ok(ContType::ImageNone),
-                _ => Err(anyhow!("unknown content type: {p1}/{p2}")),
+        use ContType::{
+            AppAppleBinaryPlist, AppDMapTagged, AppOctetStream, ImageNone, PeerListChanged,
+            PeerListChangedX, TextParameters,
+        };
+
+        Ok(match src.len() {
+            Self::BINARY_PLIST_LEN if src.ends_with("plist") => AppAppleBinaryPlist,
+            Self::DMAP_TAGGED_LEN if src.ends_with("tagged") => AppDMapTagged,
+            Self::OCTET_STREAM_LEN if src.ends_with("stream") => AppOctetStream,
+            Self::TEXT_PARAMS_LEN if src.ends_with("meters") => TextParameters,
+            Self::PEER_LIST_LEN if src.ends_with("changed") => PeerListChanged,
+            Self::PEER_LIST_X_LEN if src.ends_with("changed-x") => PeerListChangedX,
+            Self::IMAGE_NONE_LEN if src.ends_with("none") => ImageNone,
+            _ => {
+                tracing::error!("unknown content type: {src}");
+                return Err(anyhow!("unknown content type: {src}"));
             }
-        } else {
-            Err(anyhow!("unknown content type: {src:?}"))
-        }
+        })
     }
 }
 
@@ -139,17 +151,17 @@ impl FromStr for Key2 {
     type Err = anyhow::Error;
 
     fn from_str(src: &str) -> Result<Key2> {
-        match src {
-            Self::ACTIVE_REMOTE => Ok(Self::ActiveRemote),
-            Self::CONTENT_LEN => Ok(Self::ContentLength),
-            Self::CONTENT_TYPE => Ok(Self::ContentType),
-            Self::CSEQ => Ok(Self::Cseq),
-            Self::DACP_ID => Ok(Self::DacpId),
-            Self::RTP_INFO => Ok(Self::RtpInfo),
-            Self::USER_AGENT => Ok(Self::UserAgent),
-            ext if ext.starts_with("X-") => Ok(Self::Extension(ext.into())),
-            unknown => Err(anyhow!("unknown header key: {unknown}")),
-        }
+        Ok(match src {
+            Self::ACTIVE_REMOTE => Self::ActiveRemote,
+            Self::CONTENT_LEN => Self::ContentLength,
+            Self::CONTENT_TYPE => Self::ContentType,
+            Self::CSEQ => Self::Cseq,
+            Self::DACP_ID => Self::DacpId,
+            Self::RTP_INFO => Self::RtpInfo,
+            Self::USER_AGENT => Self::UserAgent,
+            ext if ext.starts_with("X-") => Self::Extension(ext.into()),
+            unknown => return Err(anyhow!("unknown header key: {unknown}")),
+        })
     }
 }
 
@@ -169,9 +181,6 @@ pub struct List {
     rtp_info: Option<u64>,
     user_agent: Option<String>,
     extensions: Vec<(String, String)>,
-
-    debug_path: OnceCell<PathBuf>,
-    dump_path: Option<PathBuf>,
 }
 
 impl List {
@@ -185,80 +194,9 @@ impl List {
         self.content_length.unwrap()
     }
 
-    /// .
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if .
-    pub fn debug_file_path(&self, kind: &str) -> Result<PathBuf> {
-        let cseq = self.cseq.as_ref().ok_or(anyhow!("CSeq is missing"))?;
-        let file_name = format!("{cseq:03}-{kind}.bin");
-
-        Ok(self
-            .debug_path
-            .get_or_try_init(|| self.make_debug_path())?
-            .with_file_name(file_name))
-    }
-
-    pub fn dump_path(&self) -> Option<PathBuf> {
-        self.dump_path.clone()
-    }
-
-    fn make_debug_path(&self) -> Result<PathBuf> {
-        use std::env::var;
-
-        const KEY: &str = "CARGO_MANIFEST_DIR";
-        let path: PathBuf = var(KEY).map_err(|e| anyhow!(e))?.into();
-        let mut path = path.parent().unwrap().to_path_buf();
-
-        path.push("extra/ref/v2");
-
-        if let List {
-            dacp_id: Some(dacp_id),
-            active_remote: Some(active_remote),
-            ..
-        } = &self
-        {
-            path.push(dacp_id);
-            path.push(format!("{active_remote}"));
-
-            fs::create_dir_all(&path)?;
-
-            // this is replaced by with_filename
-            path.push("unset.bin");
-
-            return Ok(path);
-        }
-
-        Err(anyhow!("failed to create debug path"))
-    }
-
-    fn make_dump_path(&mut self) -> Result<()> {
-        use std::env::var;
-
-        const KEY: &str = "CARGO_MANIFEST_DIR";
-        let path: PathBuf = var(KEY).map_err(|e| anyhow!(e))?.into();
-        let mut path = path.parent().unwrap().to_path_buf();
-
-        path.push("extra/ref/v2");
-
-        if let List {
-            dacp_id: Some(dacp_id),
-            active_remote: Some(active_remote),
-            ..
-        } = &self
-        {
-            path.push(dacp_id);
-            path.push(active_remote.to_string());
-
-            fs::create_dir_all(&path)?;
-
-            self.dump_path = Some(path);
-
-            return Ok(());
-        }
-
-        Err(anyhow!("failed to create dump path"))
+    #[must_use]
+    pub fn cseq(&self) -> Option<u32> {
+        self.cseq
     }
 
     #[must_use]
@@ -317,12 +255,6 @@ impl List {
         })
     }
 
-    /// .
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the key passed
-    /// does not match a known or extended header "X-*".
     #[must_use]
     pub fn push(mut self, k: &str, v: &str) -> Self {
         match k {
@@ -335,10 +267,53 @@ impl List {
             Key2::USER_AGENT => self.user_agent = Some(v.into()),
 
             k if k.starts_with("X-") => self.extensions.push((k.into(), v.into())),
-            k => error!("unhandled header: {k} {v}"),
+            k => tracing::error!("unhandled header: {k} {v}"),
         }
 
         self
+    }
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the key passed
+    /// does not match a known or extended header "X-*".
+    pub fn push_kv(&mut self, k: &str, v: &str) -> Result<()> {
+        match k {
+            Key2::ACTIVE_REMOTE => self.active_remote = v.parse().ok(),
+            Key2::CSEQ => self.cseq = v.parse().ok(),
+            Key2::CONTENT_LEN => self.content_length = v.parse().ok(),
+            Key2::CONTENT_TYPE => self.content_type = ContType::from_str(v).ok(),
+            Key2::DACP_ID => self.dacp_id = Some(v.to_ascii_lowercase()),
+            Key2::RTP_INFO => self.rtp_info = make_rtptime(v),
+            Key2::USER_AGENT => self.user_agent = Some(v.into()),
+
+            k if k.starts_with("X-") => self.extensions.push((k.into(), v.into())),
+            k => {
+                tracing::error!("unhandled header: {k} {v}");
+                return Err(anyhow!("unrecognized header key/val"));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn push_from_slice(&mut self, buf: &[u8]) -> Result<()> {
+        if let Some((s0, s1)) = buf.to_str()?.split_once(':') {
+            let k = s0.trim();
+            let v = s1.trim();
+
+            self.push_kv(k, v)?;
+            return Ok(());
+        }
+
+        Err(anyhow!("not a header key/val slice"))
     }
 }
 
@@ -350,7 +325,7 @@ impl<'a> TryFrom<&'a str> for List {
 
         let init = List::default();
 
-        let mut list = src
+        let list = src
             .trim()
             .lines()
             .filter_map(|l| l.split_once(DELIMITER))
@@ -359,8 +334,6 @@ impl<'a> TryFrom<&'a str> for List {
         if list.cseq.is_none() {
             return Err(anyhow!("CSeq not found: {src}"));
         }
-
-        list.make_dump_path()?;
 
         Ok(list)
     }
@@ -376,7 +349,7 @@ impl TryFrom<BytesMut> for List {
 
         let src = buf.to_str()?;
 
-        let mut list = src
+        let list = src
             .trim()
             .lines()
             .filter_map(|l| l.split_once(DELIMITER))
@@ -385,8 +358,6 @@ impl TryFrom<BytesMut> for List {
         if list.cseq.is_none() {
             return Err(anyhow!("CSeq not found: {src}"));
         }
-
-        list.make_dump_path()?;
 
         Ok(list)
     }
@@ -442,7 +413,6 @@ fn make_rtptime(v: &str) -> Option<u64> {
 mod tests {
 
     use super::List;
-    // use crate::Result;
 
     const CONTENT_LEN_LINE: &str =
         "CSeq: 1\r\nContent-Length: 30\r\nContent-Type: application/x-apple-binary-plist\r\n";

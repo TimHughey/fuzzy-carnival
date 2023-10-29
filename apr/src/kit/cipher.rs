@@ -82,6 +82,12 @@ impl Deref for BlockLen {
     }
 }
 
+impl std::fmt::Display for BlockLen {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Default)]
 #[allow(unused)]
 pub struct Context {
@@ -279,7 +285,7 @@ mod tests {
     #[test]
     fn alkali_and_hmac_sha512_generate_same_prk() -> Result<()> {
         use super::SALT2;
-        use crate::homekit::tests::Data;
+        use crate::kit::tests::Data;
         use alkali::symmetric::auth::hmacsha512256::authenticate as alkali_authenticate;
         use hmac_sha512::HMAC;
         use pretty_hex::PrettyHex;

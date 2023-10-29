@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::homekit::srp::groups::G;
+use super::auth::srp::groups::G;
 use alkali::hash::sha2;
 use num_bigint::{BigUint, RandBigInt};
 use num_traits::{FromBytes, ToBytes};
@@ -37,7 +37,7 @@ pub fn calculate_H_AMK(A: &BigUint, M: &[u8], K: &[u8]) -> Vec<u8> {
 
 #[allow(non_snake_case)]
 pub fn calculate_M(I: &[u8], s: &BigUint, A: &BigUint, B: &BigUint, K: &[u8]) -> Vec<u8> {
-    use super::srp;
+    use super::auth::srp;
     use sha2::sha512::Multipart;
 
     let (N, g, _k) = srp::get_group_bnums();

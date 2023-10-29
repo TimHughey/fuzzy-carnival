@@ -14,12 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::homekit::srp::Verifier;
-
-#[allow(unused_imports)]
+use super::srp::{Server as SrpServer, Verifier};
 use crate::{
-    homekit::{states, CipherCtx, SrpServer, TagIdx, TagVal, Tags},
-    HostInfo, Result,
+    kit::{states, CipherCtx, TagIdx, TagVal, Tags},
+    Result,
 };
 use once_cell::sync::Lazy;
 use tracing::error;
@@ -28,7 +26,7 @@ use tracing::error;
 pub struct Context {
     pub transient: bool,
     pub server: Lazy<SrpServer>,
-    cipher: Option<CipherCtx>,
+    pub cipher: Option<CipherCtx>,
 }
 
 impl Context {
@@ -41,10 +39,6 @@ impl Context {
             server: Lazy::new(|| SrpServer::new(Self::USERNAME, *Self::PASSWORD, None, None)),
             cipher: None,
         }
-    }
-
-    pub fn cipher_available(&self) -> bool {
-        self.cipher.is_some()
     }
 
     pub fn m1_m2(&mut self, tags_in: &Tags) -> Tags {
@@ -77,7 +71,7 @@ impl Context {
     }
 
     #[allow(clippy::unused_self)]
-    pub fn m3_m4(&mut self, tags_in: &Tags) -> Result<(Tags, Option<CipherCtx>)> {
+    pub fn m3_m4(&mut self, tags_in: &Tags) -> Result<Tags> {
         use TagIdx::{Proof as ProofIdx, PublicKey as PublicKeyIdx};
         use TagVal::{Proof, PublicKey};
 
@@ -91,12 +85,12 @@ impl Context {
                 let mut verifier = Verifier::new(&self.server, &pk, &proof)?;
 
                 match verifier.authenticate() {
-                    // authentication success returns the cipher context
                     Ok(cipher) => {
                         tags_out.push(TagVal::make_state(4));
                         tags_out.push(verifier.proof());
+                        self.cipher = Some(cipher);
 
-                        return Ok((tags_out, Some(cipher)));
+                        return Ok(tags_out);
                     }
                     Err(e) => {
                         tracing::error!("setup M3_M4: {e}");
@@ -109,12 +103,12 @@ impl Context {
             }
         }
 
-        Ok((tags_out, None))
+        Ok(tags_out)
     }
 
-    pub fn take_cipher(&mut self) -> Option<CipherCtx> {
-        self.cipher.take()
-    }
+    // pub fn take_cipher(&mut self) -> Option<CipherCtx> {
+    //     self.cipher.take()
+    // }
 }
 
 #[cfg(test)]

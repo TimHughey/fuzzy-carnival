@@ -25,14 +25,10 @@ pub use host::Info as HostInfo;
 
 pub(crate) mod keys;
 
-pub mod server; // AirPlay Server (receiver)
-
-pub(crate) mod homekit;
-pub use homekit::HomeKit;
+pub(crate) mod kit; // RTSP Receiver (via HomeKit)
+pub use kit::Context as Kit;
 
 pub mod asym;
 pub mod rtsp;
 pub mod serdis;
-
-pub(crate) mod shutdown;
-use shutdown::Shutdown;
+pub(crate) mod util;

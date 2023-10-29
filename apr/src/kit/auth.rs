@@ -15,4 +15,5 @@
 // limitations under the License.
 
 pub mod setup;
+pub mod srp;
 pub mod verify;

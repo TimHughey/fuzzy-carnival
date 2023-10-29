@@ -85,7 +85,7 @@ impl Idx {
     pub const FLAGS: u8 = Self::Flags as u8;
     pub const FRAGMENT_DATA: u8 = Self::FragmentData as u8;
     pub const FRAGMENT_LAST: u8 = Self::FragmentLast as u8;
-    pub const METHOD: u8 = Self::Method as u8;
+    // pub const METHOD: u8 = Self::Method as u8;
     pub const PERMISSIONS: u8 = Self::Permissions as u8;
     pub const PROOF: u8 = Self::Proof as u8;
     pub const RETRY_DELAY: u8 = Self::RetryDelay as u8;
@@ -289,9 +289,9 @@ impl Map {
         }
     }
 
-    pub fn get(&self, idx: Idx) -> Option<&Val> {
-        self.0.get(&idx.discriminant())
-    }
+    // pub fn get(&self, idx: Idx) -> Option<&Val> {
+    //     self.0.get(&idx.discriminant())
+    // }
 
     pub fn get_cloned(&self, idx: Idx) -> Result<Val> {
         let val = self
@@ -302,13 +302,13 @@ impl Map {
         Ok(val?.clone())
     }
 
-    pub fn get_flags(&self) -> Option<&Val> {
-        self.0.get(&Idx::FLAGS)
-    }
+    // pub fn get_flags(&self) -> Option<&Val> {
+    //     self.0.get(&Idx::FLAGS)
+    // }
 
-    pub fn get_method(&self) -> Option<&Val> {
-        self.0.get(&Idx::METHOD)
-    }
+    // pub fn get_method(&self) -> Option<&Val> {
+    //     self.0.get(&Idx::METHOD)
+    // }
 
     pub fn get_state(&self) -> Result<GenericState> {
         if let Some(Val::State(s)) = self.0.get(&Idx::STATE) {
@@ -520,7 +520,7 @@ mod tests {
         let mut data = BytesMut::zeroed(512);
         data.fill(0xb0u8);
 
-        list.push(State(crate::homekit::GenericState(0x10u8)));
+        list.push(State(crate::kit::GenericState(0x10u8)));
         list.push(Identifier(ident.into()));
 
         list.push(EncryptedData(data.into()));

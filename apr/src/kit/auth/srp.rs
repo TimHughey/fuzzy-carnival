@@ -51,7 +51,7 @@
 //! [2]: https://tools.ietf.org/html/rfc5054
 
 use crate::{
-    homekit::{
+    kit::{
         helper, CipherCtx,
         TagVal::{self, Proof, PublicKey, Salt},
     },

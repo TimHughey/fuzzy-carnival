@@ -15,65 +15,129 @@
 // limitations under the License.
 
 use super::{header, HeaderList, Method, StatusCode};
-use crate::{homekit::BlockLen, Result};
+use crate::{kit::BlockLen, Result};
 use anyhow::anyhow;
-use bstr::ByteSlice;
-use bytes::{BufMut, BytesMut};
+use bstr::{ByteSlice, B};
+use bytes::{Buf, BufMut, BytesMut};
 use pretty_hex::PrettyHex;
-use std::{fmt, path::PathBuf, str::FromStr};
-
-#[derive(Debug, Default)]
-#[allow(unused)]
-pub struct Routing {
-    method: Method,
-    path: String,
-}
-
-impl TryFrom<BytesMut> for Routing {
-    type Error = anyhow::Error;
-
-    fn try_from(buf: BytesMut) -> Result<Self> {
-        let idx = buf.find_char(' ').ok_or_else(|| {
-            tracing::warn!("space delimiter not found in {:?}", buf.hex_dump());
-
-            anyhow!("method, path not found")
-        })?;
-
-        let (method, path) = buf.split_at(idx);
-
-        Ok(Self {
-            method: Method::try_from(method.to_str()?)?,
-            path: path.to_str()?.into(),
-        })
-    }
-}
+use std::fmt;
 
 #[derive(Debug, Default)]
 pub struct Inflight {
     pub routing: Option<Routing>,
     pub headers: Option<HeaderList>,
+    pub content_len: Option<usize>,
     pub body: Option<Body>,
     pub residual: Option<BytesMut>,
     pub block_len: Option<BlockLen>,
-    pub content_len: Option<usize>,
 }
 
-impl Inflight {
-    //
+impl TryFrom<&mut BytesMut> for Inflight {
+    type Error = anyhow::Error;
+
+    fn try_from(buf: &mut BytesMut) -> std::result::Result<Self, Self::Error> {
+        const SEP: &[u8; 2] = b"\x0a\x0d";
+        const PROTO: &[u8] = b"RTSP/1.0";
+
+        // for advancing the cursor
+        let msg = buf.clone();
+
+        let mut inflight = Self::default();
+
+        for (_n, line) in msg.lines_with_terminator().enumerate() {
+            // tracing::debug!("\nLINE {:?}\n", line.hex_dump());
+
+            let line_len = line.len();
+
+            // delimiter between headers and body
+            if line_len <= 2 && line.iter().all(|b| SEP.contains(b)) {
+                buf.advance(line_len);
+                break;
+            }
+
+            let line = line.as_bstr().trim();
+
+            if !line.is_empty() && line.is_ascii() {
+                // first pass of loop, handle the routing (method and path)
+                if inflight.routing.is_none() && line.ends_with(PROTO) {
+                    inflight.routing = Some(Routing::try_from(line)?);
+                    buf.advance(line_len);
+                    continue;
+                }
+
+                // subsequent lines are either headers or body
+                let headers = inflight.headers.get_or_insert(HeaderList::default());
+
+                headers.push_from_slice(line)?;
+                buf.advance(line_len);
+            }
+        }
+
+        tracing::info!("\nREMAINING BUF FOR BODY {:?}", buf.hex_dump());
+
+        if let Some(len) = inflight.headers.as_ref().and_then(|h| h.content_length) {
+            // trim spurious seperators
+            for sep in SEP {
+                if buf[0] == *sep {
+                    buf.advance(1);
+                }
+            }
+
+            if buf.len() >= len {
+                inflight.body = Some(Body::try_from(buf.split_to(len))?);
+            }
+
+            if !buf.is_empty() {
+                inflight.residual = Some(buf.clone());
+            }
+        }
+
+        Ok(inflight)
+    }
+}
+
+impl fmt::Display for Inflight {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("INFLIGHT FRAME")?;
+
+        self.content_len
+            .as_ref()
+            .and_then(|len| write!(f, "CONTENT LEN={len}").ok());
+
+        self.block_len
+            .as_ref()
+            .and_then(|len| write!(f, " {len:?}").ok());
+
+        f.write_str("\n")?;
+
+        self.routing
+            .as_ref()
+            .and_then(|routing| write!(f, "{routing} ").ok());
+
+        self.headers
+            .as_ref()
+            .and_then(|headers| write!(f, "\n{headers}").ok());
+
+        self.body
+            .as_ref()
+            .and_then(|body| write!(f, "\n{body}").ok());
+
+        self.residual
+            .as_ref()
+            .and_then(|buf| write!(f, "\nRESIDUAL {:?}", buf.hex_dump()).ok());
+
+        f.write_str("\n")
+    }
 }
 
 #[derive(Default)]
 pub struct Frame {
-    pub method: Method,
-    pub path: String,
+    pub routing: Routing,
     pub headers: HeaderList,
     pub body: Body,
-    pub consumed: usize,
-    pub pending: Option<Pending>,
 }
 
 impl Frame {
-    const SPACE: char = ' ';
     const PROTOCOL: &str = "RTSP/1.0";
 
     #[must_use]
@@ -108,89 +172,28 @@ impl Frame {
     }
 
     #[must_use]
-    pub fn method_path(&self) -> (Method, String) {
+    pub fn routing(&self) -> &Routing {
         // must return actual objects to avoid borrow checker
-        (self.method, self.path.clone())
+        &self.routing
     }
 }
 
-impl TryFrom<BytesMut> for Frame {
+impl TryFrom<Inflight> for Frame {
     type Error = anyhow::Error;
 
-    fn try_from(buf: BytesMut) -> Result<Self> {
-        // delimiter for end of RTSP message, content (if any) follows
-        const NEEDLE: &[u8; 4] = b"\r\n\r\n";
-
-        // clone the original buf for persisting to disk, this is a cheap operation
-        // and is also used to calculate the bytes consumed
-        let file_buf = buf.clone();
-
-        // locate the delim between head and body (aka needle)
-        if let Some(needle_pos) = buf.find(NEEDLE) {
-            // grab the head and tail slice, noting tail contains the needle and
-            // potentially the body (depending on content len header)
-            let mid = needle_pos + NEEDLE.len();
-            let (head, body) = buf.split_at(mid);
-
-            let mut frame = Frame::try_from(head)?;
-
-            let path = frame.headers.debug_file_path("in")?;
-
-            match frame.content_len() {
-                // has content length header and all content is in buffer
-                Some(len) if body.len() >= len => {
-                    let body = &body[0..len];
-
-                    frame.include_body(body)?;
-                    frame.consumed = head.len() + body.len();
-
-                    persist_buf(&file_buf, Some(path))?;
-
-                    Ok(frame)
-                }
-
-                // content header exists but full content check failed
-                // incomplete, need more bytes to proceed
-                Some(len) => Ok(Self {
-                    pending: Some(Pending::new(head.len(), len)),
-                    ..frame
-                }),
-                // no content header, frame is complete
-                _ => {
-                    frame.consumed = head.len();
-
-                    persist_buf(head, Some(path))?;
-
-                    Ok(frame)
-                }
-            }
-        } else {
-            persist_buf(&buf, None)?;
-
-            Err(anyhow!("unable to find request end"))
-        }
+    fn try_from(mut inflight: Inflight) -> Result<Self> {
+        Ok(Self {
+            routing: inflight
+                .routing
+                .take()
+                .ok_or_else(|| anyhow!("routing missing"))?,
+            headers: inflight
+                .headers
+                .take()
+                .ok_or_else(|| anyhow!("headers missing"))?,
+            body: inflight.body.take().unwrap_or(Body::Empty),
+        })
     }
-}
-
-fn persist_buf(buf: &[u8], path: Option<PathBuf>) -> Result<()> {
-    use std::{env::var, fs::OpenOptions, io::Write};
-
-    let path = path.unwrap_or_else(|| {
-        const KEY: &str = "CARGO_MANIFEST_DIR";
-        let path: PathBuf = var(KEY).unwrap().into();
-        let mut path = path.parent().unwrap().to_path_buf();
-
-        path.push("extra/ref/v2/error/frame.bin");
-
-        path
-    });
-
-    Ok(OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(path)?
-        .write_all(buf)?)
 }
 
 impl<'a> TryFrom<&'a [u8]> for Frame {
@@ -207,25 +210,23 @@ impl<'a> TryFrom<&'a [u8]> for Frame {
             .ok_or_else(|| anyhow!("protocol version not found"))?;
 
         // the first line is the request: METHOD PATH RTSP/1.0
-        let line = request.split_once(Self::SPACE);
+        // let line = request.split_once(Self::SPACE);
 
         // get the method and path
-        if let Some((method, path)) = line {
-            return Ok(Self {
-                method: Method::from_str(method)?,
-                path: path.trim_end().to_owned(),
-                headers: header::List::try_from(rest)?,
-                ..Self::default()
-            });
-        }
 
-        Ok(Self::default())
+        Ok(Self {
+            routing: Routing::try_from(request.as_bytes())?,
+            // method: Method::from_str(method)?,
+            // path: path.trim_end().into(),
+            headers: header::List::try_from(rest)?,
+            ..Self::default()
+        })
     }
 }
 
 impl fmt::Display for Frame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "FRAME {} {}", self.method, self.path)?;
+        write!(f, "FRAME {}", self.routing)?;
 
         if f.alternate() {
             write!(f, "\n{}\n{}", self.headers, self.body)?;
@@ -328,22 +329,60 @@ impl<'a> TryFrom<&'a [u8]> for Body {
     #[inline]
     fn try_from(raw: &'a [u8]) -> Result<Self> {
         const PLIST_HDR: &[u8; 6] = b"bplist";
+        const FPLY_HDR: &[u8; 4] = b"FPLY";
 
-        match raw {
+        Ok(match raw {
+            // detect and handle empty body
+            r if r.is_empty() => Empty,
+
             // detect and parse Apple Property List
-            r if r.starts_with(PLIST_HDR) => Ok(Dict(plist::from_bytes(r)?)),
-
-            r if r[0] < 20 => Ok(Bulk(r.into())),
+            r if r.starts_with(PLIST_HDR) => Dict(plist::from_bytes(r)?),
 
             // detect and copy plain ascii text
-            r if r.is_ascii() => Ok(Text(r.to_str()?.into())),
+            r if r.is_ascii() => Text(r.to_str()?.into()),
 
-            // detect and handle empty body
-            r if r.is_empty() => Ok(Empty),
+            r if r.starts_with(FPLY_HDR) => Bulk(r.into()),
+
+            // if the first byte is not ascii dump into Bulk
+            r if !r[0].is_ascii() => Bulk(r.into()),
 
             // unknown or unhandled body
-            r => Ok(Bulk(r.into())),
-        }
+            r => {
+                tracing::warn!("unable to detect body type:\nRAW {:?}", raw.hex_dump());
+                Bulk(r.into())
+            }
+        })
+    }
+}
+
+impl TryFrom<BytesMut> for Body {
+    type Error = anyhow::Error;
+
+    ///
+    /// Errors:
+    ///
+    #[inline]
+    fn try_from(raw: BytesMut) -> Result<Self> {
+        const PLIST_HDR: &[u8; 6] = b"bplist";
+
+        Ok(match raw {
+            // detect and parse Apple Property List
+            r if r.starts_with(PLIST_HDR) => Dict(plist::from_bytes(&r)?),
+
+            r if r[0] < 20 => Bulk(r.into()),
+
+            // detect and copy plain ascii text
+            r if r.is_ascii() => Text(r.to_str()?.into()),
+
+            // detect and handle empty body
+            r if r.is_empty() => Empty,
+
+            // unknown or unhandled body
+            r => {
+                tracing::warn!("unable to detect body type:\nRAW {:?}", r.hex_dump());
+                Bulk(r.into())
+            }
+        })
     }
 }
 
@@ -496,30 +535,47 @@ impl fmt::Display for Response {
     }
 }
 
+#[derive(Debug, Default)]
 #[allow(unused)]
-#[derive(Debug, Clone)]
-pub struct Pending {
-    head: usize,
-    body: usize,
-    attempts: usize,
+pub struct Routing {
+    method: Method,
+    path: String,
 }
 
-impl Pending {
-    pub fn new(head: usize, body: usize) -> Pending {
-        Self {
-            head,
-            body,
-            attempts: 1,
-        }
+impl Routing {
+    pub fn as_tuple(&self) -> (Method, String) {
+        (self.method, self.path.clone())
     }
 }
 
-impl Default for Pending {
-    fn default() -> Self {
-        Self {
-            head: 0,
-            body: 0,
-            attempts: 1,
-        }
+#[allow(non_snake_case)]
+impl TryFrom<&[u8]> for Routing {
+    type Error = anyhow::Error;
+
+    fn try_from(buf: &[u8]) -> Result<Self> {
+        let PROTO: &[u8] = B("RTSP/1.0");
+
+        let idx = buf.find_char(' ').ok_or_else(|| {
+            tracing::warn!("space delimiter not found:\nBUF {:?}", buf.hex_dump());
+
+            anyhow!("method and/or path not found")
+        })?;
+
+        let (method, path) = buf.split_at(idx);
+        let path = path
+            .strip_suffix(PROTO)
+            .ok_or_else(|| anyhow!("PROTOCOL not found"))?
+            .trim();
+
+        Ok(Self {
+            method: Method::try_from(method.to_str()?)?,
+            path: path.to_str()?.into(),
+        })
+    }
+}
+
+impl fmt::Display for Routing {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.method.as_str(), self.path)
     }
 }

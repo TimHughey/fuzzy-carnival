@@ -27,14 +27,19 @@
 //! assert_eq!(Method::POST.as_str(), "POST");
 //! ```
 
+use crate::Result;
+use anyhow::anyhow;
+use pretty_hex::PrettyHex;
+
 use self::Inner::{
     Continue, Feedback, FlushBuffered, Get, GetParameter, Options, Post, Record, SetParameter,
     SetPeers, SetPeersX, SetRateAnchorTime, Setup, Teardown,
 };
 
+// use std::any;
 use std::convert::AsRef;
 use std::convert::TryFrom;
-use std::error::Error;
+// use std::error::Error;
 use std::str::FromStr;
 use std::{fmt, str};
 
@@ -57,10 +62,10 @@ use std::{fmt, str};
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Method(Inner);
 
-/// A possible error value when converting `Method` from bytes.
-pub struct Invalid {
-    _priv: (),
-}
+// /// A possible error value when converting `Method` from bytes.
+// pub struct Invalid {
+//     _priv: (),
+// }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Inner {
@@ -121,35 +126,40 @@ impl Method {
     ///
     /// Returns Err for unknown method
     ///
-    pub fn from_bytes(src: &[u8]) -> Result<Method, Invalid> {
+    pub fn from_bytes(src: &[u8]) -> Result<Method> {
+        let error = anyhow!("invalid");
+
         match src.len() {
-            0 => Err(Invalid::new()),
+            0 => Err(error),
             len if (3..=5).contains(&len) => match src {
                 b"GET" => Ok(Method(Get)),
                 b"POST" => Ok(Method(Post)),
                 b"SETUP" => Ok(Method(Setup)),
-                _ => Err(Invalid::new()),
+                _ => Err(error),
             },
             len if (6..=7).contains(&len) => match src {
                 b"RECORD" => Ok(Method(Record)),
                 b"OPTIONS" => Ok(Method(Options)),
-                _ => Err(Invalid::new()),
+                _ => Err(error),
             },
-            len if (8..=9).contains(&len) => match src {
+            8 => match src {
                 b"FEEDBACK" => Ok(Method(Feedback)),
                 b"SETPEERS" => Ok(Method(SetPeers)),
                 b"TEARDOWN" => Ok(Method(Teardown)),
                 b"CONTINUE" => Ok(Method(Continue)),
-                b"SETPEERSX" => Ok(Method(SetPeersX)),
-                _ => Err(Invalid::new()),
+                _ => Err(error),
             },
+            9 if src == b"SETPEERSX" => Ok(Method(SetPeersX)),
             13 => match src.split_at(3) {
                 (b"GET", _) => Ok(Method(GetParameter)),
                 (b"SET", _) => Ok(Method(SetParameter)),
                 (b"FLU", b"SHBUFFERED") => Ok(Method(FlushBuffered)),
-                _ => Err(Invalid::new()),
+                _ => Err(error),
             },
-            _unknown => Err(Invalid { _priv: () }),
+            _unknown => {
+                tracing::error!("\nUNKNOWN METHOD {:?}", src.hex_dump());
+                Err(error)
+            }
         }
     }
 
@@ -252,53 +262,31 @@ impl<'a> From<&'a Method> for Method {
 }
 
 impl<'a> TryFrom<&'a [u8]> for Method {
-    type Error = Invalid;
+    type Error = anyhow::Error;
 
     #[inline]
-    fn try_from(t: &'a [u8]) -> Result<Self, Self::Error> {
+    fn try_from(t: &'a [u8]) -> Result<Self> {
         Method::from_bytes(t)
     }
 }
 
 impl<'a> TryFrom<&'a str> for Method {
-    type Error = Invalid;
+    type Error = anyhow::Error;
 
     #[inline]
-    fn try_from(t: &'a str) -> Result<Self, Self::Error> {
+    fn try_from(t: &'a str) -> Result<Self> {
         TryFrom::try_from(t.as_bytes())
     }
 }
 
 impl FromStr for Method {
-    type Err = Invalid;
+    type Err = anyhow::Error;
 
     #[inline]
-    fn from_str(t: &str) -> Result<Self, Self::Err> {
+    fn from_str(t: &str) -> Result<Self> {
         TryFrom::try_from(t)
     }
 }
-
-impl Invalid {
-    fn new() -> Invalid {
-        Invalid { _priv: () }
-    }
-}
-
-impl fmt::Debug for Invalid {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("InvalidMethod")
-            // skip _priv noise
-            .finish()
-    }
-}
-
-impl fmt::Display for Invalid {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("invalid HTTP method")
-    }
-}
-
-impl Error for Invalid {}
 
 #[cfg(test)]
 mod test {

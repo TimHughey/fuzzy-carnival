@@ -14,12 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Result;
+use anyhow::anyhow;
 use bstr::ByteSlice;
+use bytes::BytesMut;
 use once_cell::sync::Lazy;
 use pretty_hex::PrettyHex;
 use std::fmt;
 
-pub(crate) mod homekit;
+pub(crate) mod kit;
+pub(crate) mod msgs;
 pub(crate) mod srp;
 
 static TEST_DATA: Lazy<Data> = Lazy::new(Data::default);
@@ -43,6 +47,8 @@ pub struct Data {
     pub read_key: Vec<u8>,      // after HKDF expand/extract
     pub write_key: Vec<u8>,     // after HKDF expand/extract
     pub alice: String,          // first chapter of Alice in Wonderland
+    pub msgs: BytesMut,         // all inbound saved messages
+    pub setpeersx: BytesMut,    // unique SETPEERSX message
 }
 
 impl Data {
@@ -58,6 +64,25 @@ impl Data {
     #[allow(unused)]
     pub fn shared_secret_as_ref() -> &'static Vec<u8> {
         TEST_DATA.shared_secret.as_ref()
+    }
+
+    pub fn get_msg(method: &str) -> Result<BytesMut> {
+        let mut buf = TEST_DATA.msgs.clone();
+
+        let at = buf
+            .find(method)
+            .ok_or_else(|| anyhow!("{method} not available"))?;
+
+        let mut msg = buf.split_off(at);
+        let at = msg
+            .find(b"\x00!*!*!*\x00")
+            .ok_or_else(|| anyhow!("could not find message end"))?;
+
+        Ok(msg.split_to(at))
+    }
+
+    pub fn get_setpeersx() -> BytesMut {
+        TEST_DATA.setpeersx.clone()
     }
 }
 
@@ -75,6 +100,7 @@ impl Default for Data {
 
         let pairing_dir = data_dir.clone().join("pairing");
         let text_dir = data_dir.clone().join("text");
+        let msgs_dir = data_dir.clone().join("msgs");
 
         let read_bin = |f: &str| {
             let mut file = pairing_dir.clone().join(f);
@@ -90,6 +116,13 @@ impl Default for Data {
             file.set_extension("txt");
 
             fs::read(&file).unwrap().as_bstr().to_string()
+        };
+
+        let read_msgs = |f: &str| {
+            let mut file = msgs_dir.clone().join(f);
+            file.set_extension("bin");
+
+            BytesMut::from(fs::read(&file).unwrap().as_slice())
         };
 
         Self {
@@ -109,6 +142,8 @@ impl Default for Data {
             read_key: read_bin("read_key"),
             write_key: read_bin("write_key"),
             alice: read_txt("alice"),
+            msgs: read_msgs("all"),
+            setpeersx: read_msgs("setpeersx"),
         }
     }
 }
@@ -132,6 +167,8 @@ impl fmt::Debug for Data {
         writeln!(f, "read_key {:?}\n", self.read_key.hex_dump())?;
         writeln!(f, "write_key {:?}\n", self.write_key.hex_dump())?;
         writeln!(f, "alice {:?}\n", self.alice.hex_dump())?;
+        writeln!(f, "msgs {:?}\n", self.msgs.hex_dump())?;
+        writeln!(f, "setpeersx {:?}\n", self.setpeersx.hex_dump())?;
 
         Ok(())
     }
@@ -183,4 +220,10 @@ fn can_load_test_data() {
 
     let alice = &td.alice;
     assert!(alice.len() > 2048);
+
+    let msgs = &td.msgs;
+    assert!(msgs.len() > 4096);
+
+    let setpeersx: &BytesMut = &td.setpeersx;
+    assert!(setpeersx.len() >= 490);
 }

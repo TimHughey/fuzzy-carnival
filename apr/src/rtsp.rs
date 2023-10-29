@@ -25,7 +25,7 @@ pub use header::List as HeaderList;
 pub use method::Method;
 pub use msgs::Body;
 pub use msgs::Frame;
-pub use msgs::Inflight;
+pub use msgs::Inflight as InflightFrame;
 pub use msgs::Response;
 pub use status::Code as StatusCode;
 

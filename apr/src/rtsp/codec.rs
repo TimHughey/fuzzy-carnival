@@ -15,16 +15,14 @@
 // limitations under the License.
 
 use crate::{
-    homekit::{BlockLen, CipherCtx, CipherLock},
-    rtsp::{Body, Frame, HeaderList, Inflight, Response},
+    kit::{BlockLen, CipherCtx, CipherLock},
+    rtsp::{Body, Frame, InflightFrame, Response},
+    util::BinSave,
     Result,
 };
 use bytes::{BufMut, BytesMut};
 use pretty_hex::PrettyHex;
-use std::{
-    path::PathBuf,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 use tokio_util::codec::{Decoder, Encoder};
 
 /// A simple [`Decoder`] and [`Encoder`] implementation that splits up data into lines.
@@ -35,7 +33,8 @@ use tokio_util::codec::{Decoder, Encoder};
 pub struct Rtsp {
     cipher: CipherLock,
     plaintext: Option<BytesMut>,
-    inflight: Option<Inflight>,
+    inflight: Option<InflightFrame>,
+    bin_save: BinSave,
 }
 
 impl Rtsp {
@@ -67,7 +66,7 @@ impl Decoder for Rtsp {
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>> {
         const U16_SIZE: usize = std::mem::size_of::<u16>();
         // const BLOCK_MIN_LEN: usize = U16_SIZE + 1 + 16;
-        const PLAINTEXT_MIN_LEN: usize = 80;
+        const PLAINTEXT_MIN_LEN: usize = 50;
         const ENCRYPTED_LEN_MAX: usize = 0x400;
 
         if let Some(cipher) = self.cipher.as_ref() {
@@ -77,7 +76,7 @@ impl Decoder for Rtsp {
 
             loop {
                 // must get mut reference inside loop to make borrow checker happy
-                let inflight = self.inflight.get_or_insert(Inflight::default());
+                let inflight = self.inflight.get_or_insert(InflightFrame::default());
 
                 // if this is a new block then create a BlockLen, otherwise get the existing one
                 let block_len = inflight.block_len.get_or_insert(BlockLen::default());
@@ -132,15 +131,30 @@ impl Decoder for Rtsp {
                 }
 
                 let rollback_buf = plaintext_buf.clone();
+                self.bin_save.persist(&rollback_buf, BinSave::ALL, None)?;
 
-                let frame = Frame::try_from(plaintext_buf.split())?;
-
-                if frame.pending.is_none() {
-                    return Ok(Some(frame));
+                match InflightFrame::try_from(plaintext_buf) {
+                    Ok(inflight) => {
+                        match Frame::try_from(inflight) {
+                            Ok(frame) => {
+                                self.bin_save.persist(
+                                    &rollback_buf,
+                                    BinSave::IN,
+                                    frame.headers.cseq(),
+                                )?;
+                                return Ok(Some(frame));
+                            }
+                            
+                            Err(e) => {
+                                // frame creation failed, rollback plaintext
+                                *buf = rollback_buf;
+                                tracing::error!("failed to decode:\nBUF {:?}", buf.hex_dump());
+                                return Err(e);
+                            }
+                        }
+                    }
+                    Err(e) => return Err(e),
                 }
-
-                // frame creation failed, rollback plaintext
-                *buf = rollback_buf;
             }
         }
 
@@ -156,8 +170,6 @@ impl Encoder<Response> for Rtsp {
     fn encode(&mut self, item: Response, dst: &mut BytesMut) -> Result<()> {
         use std::fmt::Write;
         use Body::{Bulk, Dict, Empty, OctetStream, Text};
-
-        let mut bin_save = BinSave::new(&item.headers)?;
 
         let status = item.status_code;
         let cseq = item.headers.cseq.unwrap();
@@ -186,7 +198,8 @@ impl Encoder<Response> for Rtsp {
 
         tracing::debug!("\nOUTBOUND CLEAR TEXT {:?}", dst.hex_dump());
 
-        bin_save.persist(dst.as_ref())?;
+        self.bin_save
+            .persist(dst.as_ref(), BinSave::OUT, Some(cseq))?;
 
         if let Some(cipher) = self.cipher.as_ref() {
             let cleartext = dst.split();
@@ -199,54 +212,7 @@ impl Encoder<Response> for Rtsp {
 
         tracing::debug!("\nOUTBOUND BUF {:?}", dst.hex_dump());
 
-        bin_save.persist_last(dst.as_ref())?;
-
-        Ok(())
-    }
-}
-
-struct BinSave {
-    file: std::fs::File,
-    dump_path: Option<PathBuf>,
-}
-
-impl BinSave {
-    pub fn new(headers: &HeaderList) -> Result<Self> {
-        let path = headers.debug_file_path("out")?;
-
-        Ok(Self {
-            file: std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .append(true)
-                .open(path)?,
-            dump_path: headers.dump_path(),
-        })
-    }
-
-    pub fn persist(&mut self, buf: &[u8]) -> Result<()> {
-        use std::io::Write;
-        Ok(self.file.write_all(buf)?)
-    }
-
-    pub fn persist_last(&mut self, buf: &[u8]) -> Result<()> {
-        use std::io::Write;
-
-        if let Some(base) = &self.dump_path {
-            let mut path = base.clone();
-            path.push("all.bin");
-
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .append(true)
-                .open(path)?;
-
-            file.write_all(buf)?;
-
-            let sep = b"\x00!*!*!*\x00";
-            file.write_all(sep)?;
-        }
+        self.bin_save.persist(dst.as_ref(), BinSave::ALL, None)?;
 
         Ok(())
     }

@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{homekit::Tags, HostInfo, Result};
+use crate::{kit::Tags, HostInfo, Result};
 use anyhow::anyhow;
 use once_cell::sync::OnceCell;
 use std::fmt;
@@ -32,7 +32,7 @@ impl Context {
     }
 
     pub fn m1_m2(&self, accessory_client_pub: &[u8]) -> Result<Tags> {
-        use crate::homekit::{states, TagVal};
+        use crate::kit::{states, TagVal};
         use bytes::BytesMut;
         #[allow(unused)]
         use chacha20poly1305::{
