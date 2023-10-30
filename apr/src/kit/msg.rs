@@ -19,12 +19,16 @@ use crate::Result;
 use anyhow::anyhow;
 use bstr::ByteSlice;
 use bytes::{Buf, BytesMut};
+use plist::Dictionary;
 use pretty_hex::PrettyHex;
 
 pub mod parts;
 pub use parts::{Content, ContentMatch, MetaData, Routing};
 
 const CSEQ: &[u8] = b"CSeq";
+const STATUS_OK: u16 = 200;
+const STATUS_BAD_REQUEST: u16 = 400;
+const STATUS_INTERNAL_SERVER_ERROR: u16 = 500;
 
 #[derive(Debug, Default)]
 pub struct Inflight {
@@ -37,7 +41,9 @@ pub struct Inflight {
 
 impl Inflight {
     fn absorb_content_data(mut self, buf: &mut BytesMut) -> Result<Self> {
-        if let Some(content) = self.content.as_mut() {
+        if buf.is_empty() {
+            return Ok(self);
+        } else if let Some(content) = self.content.as_mut() {
             // trim spurious seperators
             for sep in b"\r\n" {
                 if buf[0] == *sep {
@@ -62,7 +68,6 @@ impl Inflight {
 
     fn absorb_desc_and_field(&mut self, line: &[u8], delim_at: usize) -> Result<()> {
         let cm = ContentMatch::get();
-        let content = self.content.get_or_insert(Content::default());
 
         let (desc, field) = line.split_at(delim_at);
 
@@ -71,20 +76,19 @@ impl Inflight {
             // handle three special cases.  we intentionally deviate from the
             // incoming message format and store CSeq and Content in self since
             // they are essential for downstream processes.
-            (CSEQ, field) => {
-                self.cseq.get_or_insert(field.to_str()?.parse()?);
-            }
+            (CSEQ, field) => self.store_cseq(field)?,
+
             (desc, field) if cm.is_kind(desc) => {
-                content.kind = field.to_str()?.into();
+                self.get_content_mut().kind = field.to_str()?.into();
             }
             (desc, field) if cm.is_len(desc) => {
-                content.len = field.to_str()?.parse()?;
+                self.get_content_mut().len = field.to_str()?.parse()?;
             }
             // all other header values are treated as captured metadata
             (desc, field) => {
-                let metadata = self.metadata.get_or_insert(MetaData::default());
-
-                metadata.push_from_slice(desc, field)?;
+                self.metadata
+                    .get_or_insert(MetaData::default())
+                    .push_from_slice(desc, field)?;
             }
         }
 
@@ -94,6 +98,43 @@ impl Inflight {
     fn absorb_routing(&mut self, src: &[u8]) -> Result<()> {
         self.routing
             .get_or_insert(Routing::try_from(src.as_bytes())?);
+
+        Ok(())
+    }
+
+    pub fn build_frame(mut self) -> Result<Option<Frame>> {
+        if self.block_len.is_none()
+            && self.routing.is_some()
+            && self.cseq.is_some()
+            && self.metadata.is_some()
+        {
+            Content::confirm_valid(&self.content)?;
+
+            let frame = Some(Frame {
+                routing: self.routing.unwrap(),
+                cseq: self.cseq.unwrap(),
+                content: self.content.take(),
+                metadata: self.metadata.unwrap(),
+            });
+
+            return Ok(frame);
+        }
+
+        Ok(None)
+    }
+
+    fn get_content_mut(&mut self) -> &mut Content {
+        self.content.get_or_insert(Content::default())
+    }
+
+    fn store_cseq(&mut self, cseq: &[u8]) -> Result<()> {
+        let cseq: u32 = cseq.to_str()?.parse()?;
+
+        self.cseq.get_or_insert(cseq);
+
+        if let Some(content) = self.content.as_mut() {
+            content.cseq = cseq;
+        }
 
         Ok(())
     }
@@ -237,6 +278,164 @@ impl std::fmt::Display for Frame {
                 write!(f, "\nCONTENT DATA {:?}", content.data.hex_dump())?;
             }
         }
+
+        Ok(())
+    }
+}
+
+pub mod method {
+    pub const GET: &str = "GET";
+    pub const POST: &str = "POST";
+    pub const SETUP: &str = "SETUP";
+    pub const GET_PARAMETER: &str = "GET_PARAMETER";
+    pub const RECORD: &str = "RECORD";
+    pub const SET_PEERS: &str = "SETPEERS";
+    pub const SET_PEERSX: &str = "SETPEERSX";
+}
+
+pub struct Response {
+    pub status_code: u16,
+    pub cseq: u32,
+    pub content: Option<Content>,
+}
+
+#[allow(unused)]
+impl Response {
+    pub fn bad_request(cseq: u32, content: Content) -> Self {
+        Self {
+            status_code: STATUS_BAD_REQUEST,
+            content: Some(content),
+            cseq,
+        }
+    }
+
+    pub fn encode_to(mut self, dst: &mut BytesMut) -> Result<()> {
+        use std::fmt::Write;
+
+        write!(dst, "RTSP/1.0 {}\r\n", self.status_code)?;
+        write!(dst, "CSeq: {}\r\n", self.cseq)?;
+        write!(dst, "Server: AirPierre/366.0\r\n")?;
+
+        if let Some(content) = self.content {
+            write!(dst, "{content:#}")?;
+        } else {
+            write!(dst, "\r\n")?;
+        }
+
+        Ok(())
+    }
+
+    pub fn internal_server_error(cseq: u32) -> Self {
+        Self {
+            status_code: STATUS_INTERNAL_SERVER_ERROR,
+            content: None,
+            cseq,
+        }
+    }
+
+    pub fn ok_plist_dict(cseq: u32, dict: &Dictionary) -> Result<Self> {
+        Ok(Self {
+            status_code: STATUS_OK,
+            content: Some(Content::new_binary_plist(cseq, dict)?),
+            cseq,
+        })
+    }
+
+    pub fn ok_octet_stream(cseq: u32, src: &[u8]) -> Self {
+        Self {
+            status_code: STATUS_OK,
+            content: Some(Content::new_octet_stream(cseq, src)),
+            cseq,
+        }
+    }
+
+    pub fn ok_simple(cseq: u32) -> Self {
+        Self {
+            status_code: STATUS_OK,
+            content: None,
+            cseq,
+        }
+    }
+
+    pub fn ok_text(cseq: u32, src: &str) -> Self {
+        Self {
+            status_code: STATUS_OK,
+            content: Some(Content::new_text(cseq, src)),
+            cseq,
+        }
+    }
+
+    pub fn ok_with_content(cseq: u32, content: Content) -> Self {
+        Self {
+            status_code: STATUS_OK,
+            content: Some(content),
+            cseq,
+        }
+    }
+
+    pub fn ok_without_content(cseq: u32) -> Self {
+        Self {
+            status_code: STATUS_OK,
+            content: None,
+            cseq,
+        }
+    }
+
+    // / # Errors
+    // /
+    // #[inline]
+    // pub fn extend_with_content_info(&self, dst: &mut BytesMut) -> Result<()> {
+    //     use std::fmt::Write;
+
+    //     let ctype = self.headers.content_type.as_ref();
+    //     let clen = self.headers.content_length.as_ref();
+
+    //     if let (Some(ctype), Some(clen)) = (ctype, clen) {
+    //         let avail = dst.capacity();
+    //         tracing::debug!("buf avail: {avail}");
+
+    //         let ctype_key = header::Key2::ContentType.as_str();
+    //         let ctype_val = ctype.as_str();
+    //         let clen_key = header::Key2::ContentLength.as_str();
+
+    //         let res = write!(
+    //             dst,
+    //             "\
+    //             {ctype_key}: {ctype_val}\r\n\
+    //             {clen_key}: {clen}\r\n\
+    //             \r\n\
+    //             "
+    //         );
+
+    //         return Ok(res?);
+    //     }
+
+    //     Err(anyhow!("no content type or length"))
+    // }
+}
+
+impl Default for Response {
+    fn default() -> Self {
+        Self::ok_without_content(0)
+    }
+}
+
+impl std::fmt::Debug for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let status_code = &self.status_code;
+        let cseq = &self.cseq;
+
+        writeln!(f, "{status_code}\nCSeq: {cseq}\n")
+    }
+}
+
+impl std::fmt::Display for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RESPONSE {} cseq={}", self.status_code, self.cseq)?;
+
+        // if f.alternate() {
+        //     write!(f, "\n{}\n{}", self.status_code, self.body)?;
+        // }
 
         Ok(())
     }

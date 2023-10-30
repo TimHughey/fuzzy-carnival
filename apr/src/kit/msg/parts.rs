@@ -19,6 +19,7 @@ use anyhow::anyhow;
 use bstr::ByteSlice;
 use bytes::BytesMut;
 use once_cell::sync::Lazy;
+use plist::Dictionary;
 use pretty_hex::PrettyHex;
 use std::{collections::hash_map::RandomState, hash::BuildHasher, str};
 
@@ -76,6 +77,7 @@ static CONTENT_MATCH: Lazy<ContentMatch> = Lazy::new(|| {
 
 #[derive(Debug, Default)]
 pub struct Content {
+    pub cseq: u32,
     pub kind: String,
     pub len: usize,
     pub data: BytesMut,
@@ -101,6 +103,83 @@ impl Content {
         }
 
         Ok(())
+    }
+
+    pub fn into_data(self) -> BytesMut {
+        self.data
+    }
+
+    pub fn new_binary_plist(cseq: u32, dict: &Dictionary) -> Result<Self> {
+        use bytes::BufMut;
+
+        let mut this = Self::default();
+        let buf = &mut this.data;
+        plist::to_writer_binary(buf.writer(), &dict)?;
+
+        Ok(Self {
+            cseq,
+            kind: "application/x-apple-binary-plist".into(),
+            len: buf.len(),
+            ..this
+        })
+    }
+
+    pub fn new_octet_stream(cseq: u32, src: &[u8]) -> Self {
+        let data = BytesMut::from(src);
+
+        Self {
+            cseq,
+            kind: "application/octet-stream".into(),
+            len: data.len(),
+            data,
+        }
+    }
+
+    pub fn new_text(cseq: u32, src: &str) -> Self {
+        Self {
+            cseq,
+            kind: "application/text".into(),
+            len: src.len(),
+            data: BytesMut::from(src),
+        }
+    }
+}
+
+impl AsRef<[u8]> for Content {
+    fn as_ref(&self) -> &[u8] {
+        self.data.as_ref()
+    }
+}
+
+impl From<u32> for Content {
+    fn from(cseq: u32) -> Self {
+        Self {
+            cseq,
+            ..Self::default()
+        }
+    }
+}
+
+impl TryFrom<Option<u32>> for Content {
+    type Error = anyhow::Error;
+
+    fn try_from(maybe_cseq: Option<u32>) -> Result<Self> {
+        if let Some(cseq) = maybe_cseq {
+            return Ok(Self {
+                cseq,
+                ..Self::default()
+            });
+        }
+
+        let error = "can not create Content with Cseq";
+        tracing::error!("{error}");
+        Err(anyhow!(error))
+    }
+}
+
+impl std::fmt::Display for Content {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "\nCONTENT {} {:?}", self.kind, self.data.hex_dump())
     }
 }
 
@@ -200,8 +279,12 @@ pub struct Routing {
 
 impl Routing {
     #[allow(unused)]
-    pub fn into_tuple(self) -> (String, String) {
-        (self.method, self.path)
+    pub fn parts_tuple(&self) -> (String, String) {
+        (self.method.clone(), self.path.clone())
+    }
+
+    pub fn is_rtsp(path: &str) -> bool {
+        path.starts_with("rtsp")
     }
 }
 

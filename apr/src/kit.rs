@@ -14,10 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    rtsp::{codec, Body, Frame, Response},
-    HostInfo, Result,
-};
+use crate::{HostInfo, Result};
 use anyhow::anyhow;
 use bytes::BytesMut;
 use futures::SinkExt;
@@ -33,6 +30,7 @@ use tokio_util::{
 
 mod auth;
 pub mod cipher;
+pub mod codec;
 mod fairplay;
 pub mod helper;
 pub mod info;
@@ -50,6 +48,7 @@ pub use cipher::BlockLen;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
 use fairplay as Fairplay;
+pub use msg::{Frame, Response};
 use setup::Method as SetupMethod;
 use states::Generic as GenericState;
 use states::Verify as VerifyState;
@@ -210,33 +209,38 @@ impl Kit {
 
     /// .
     ///
+    /// # Panics
+    ///
+    /// Panics if .
+    ///
     /// # Errors
     ///
     /// This function will return an error if .
     pub fn respond_to(&mut self, frame: Frame) -> Result<Response> {
-        use crate::rtsp::Method;
+        use msg::{
+            method::{GET, GET_PARAMETER, POST, RECORD, SETUP, SET_PEERS, SET_PEERSX},
+            Routing,
+        };
 
-        let (method, path) = frame.routing().as_tuple();
+        let (method, path) = frame.routing.parts_tuple();
 
-        match (method, path.as_str()) {
-            (Method::GET, "/info") => info::make_response(frame),
-            (Method::POST, "/fp-setup") => Fairplay::make_response(frame),
-            (Method::SETUP, path) if path.starts_with("rtsp") => {
+        match (method.as_str(), path.as_str()) {
+            (GET, "/info") => info::make_response(frame),
+            (POST, "/fp-setup") => Fairplay::make_response(frame),
+            (SETUP, path) if Routing::is_rtsp(path) => {
                 let setup = self
                     .setup
                     .get_or_insert_with(|| SetupMethod::build(self.listener_ports));
                 setup.make_response(frame)
             }
-            (Method::GET_PARAMETER, path) if path.starts_with("rtsp") => {
-                Response::ok_with_body(frame.headers, Body::Text("\r\nvolume: 0.0\r\n".into()))
+            (GET_PARAMETER, path) if path.starts_with("rtsp") => {
+                Ok(Response::ok_text(frame.cseq, "\r\nvolume: 0.0\r\n"))
             }
-            (Method::RECORD, path) if path.starts_with("rtsp") => {
-                Response::ok_without_body(frame.headers)
-            }
-            (Method::GET | Method::POST, "/pair-verify") => {
+            (RECORD, path) if Routing::is_rtsp(path) => Ok(Response::ok_simple(frame.cseq)),
+            (GET | POST, "/pair-verify") => {
                 use VerifyState::{Msg01, Msg02, Msg03, Msg04};
 
-                let t_in = Tags::try_from(frame.body)?;
+                let t_in = Tags::try_from(frame.content.unwrap().data)?;
                 let state = VerifyState::try_from(t_in.get_state()?)?;
 
                 match state {
@@ -244,21 +248,18 @@ impl Kit {
                         tracing::debug!("{path} {state:?}");
                         let tags = self.pair.verify.m1_m2(t_in.get_public_key()?)?;
 
-                        Response::ok_with_body(
-                            frame.headers,
-                            Body::OctetStream(tags.encode().into()),
-                        )
+                        Ok(Response::ok_octet_stream(frame.cseq, &tags.encode()))
                     }
                     Msg02 | Msg03 | Msg04 => Err(anyhow!("{path}: got state {state:?}")),
                 }
             }
-            (Method::GET | Method::POST, "/pair-setup") => {
+            (GET | POST, "/pair-setup") => {
                 use states::Generic as State;
 
                 const M1: State = State(1);
                 const M3: State = State(3);
 
-                let t_in = Tags::try_from(frame.body)?;
+                let t_in = Tags::try_from(frame.content.unwrap().data)?;
                 let state = t_in.get_state()?;
 
                 match state {
@@ -266,45 +267,37 @@ impl Kit {
                         tracing::debug!("{path} M1");
 
                         let t_out = self.pair.setup.m1_m2(&t_in);
-
-                        Response::ok_with_body(
-                            frame.headers,
-                            Body::OctetStream(t_out.encode().into()),
-                        )
+                        Ok(Response::ok_octet_stream(frame.cseq, &t_out.encode()))
                     }
 
                     M3 => {
                         tracing::debug!("{path} M3");
 
                         let t_out = self.pair.setup.m3_m4(&t_in)?;
-
-                        Response::ok_with_body(
-                            frame.headers,
-                            Body::OctetStream(t_out.encode().into()),
-                        )
+                        Ok(Response::ok_octet_stream(frame.cseq, &t_out.encode()))
                     }
 
                     _state => {
                         tracing::warn!("Setup UNKNOWN  {t_in:?}");
-                        Response::internal_server_error(frame.headers)
+                        Ok(Response::internal_server_error(frame.cseq))
                     }
                 }
             }
 
-            (Method::SET_PEERS, path) if path.starts_with("rtsp") => {
-                tracing::error!("implement {}", Method::SET_PEERS);
+            (SET_PEERS, path) if Routing::is_rtsp(path) => {
+                tracing::error!("implement {}", SET_PEERS);
 
-                Response::internal_server_error(frame.headers)
+                Ok(Response::internal_server_error(frame.cseq))
             }
-            (Method::SET_PEERSX, path) if path.starts_with("rtsp") => {
-                tracing::error!("implement {}", Method::SET_PEERSX);
+            (SET_PEERSX, path) if Routing::is_rtsp(path) => {
+                tracing::error!("implement {}", SET_PEERSX);
 
-                Response::internal_server_error(frame.headers)
+                Ok(Response::internal_server_error(frame.cseq))
             }
             (method, path) => {
-                tracing::warn!("UNHANDLED {method:?} {path}");
+                tracing::warn!("UNHANDLED {method} {path}");
 
-                Response::internal_server_error(frame.headers)
+                Ok(Response::internal_server_error(frame.cseq))
             }
         }
     }
@@ -334,11 +327,5 @@ mod tests_alt {
         }
 
         Ok(())
-
-        // match jh.await {
-        //     Ok(Ok(port)) => println!("connected port: {port}"),
-        //     Ok(Err(e)) => println!("task error: {e}"),
-        //     Err(e) => println!("{e}"),
-        // }
     }
 }

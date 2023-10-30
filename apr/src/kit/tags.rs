@@ -15,7 +15,7 @@
 // limitations under the License.
 
 use super::{states, GenericState};
-use crate::{rtsp::Body, Result};
+use crate::Result;
 use anyhow::anyhow;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use indexmap::IndexMap;
@@ -85,7 +85,6 @@ impl Idx {
     pub const FLAGS: u8 = Self::Flags as u8;
     pub const FRAGMENT_DATA: u8 = Self::FragmentData as u8;
     pub const FRAGMENT_LAST: u8 = Self::FragmentLast as u8;
-    // pub const METHOD: u8 = Self::Method as u8;
     pub const PERMISSIONS: u8 = Self::Permissions as u8;
     pub const PROOF: u8 = Self::Proof as u8;
     pub const RETRY_DELAY: u8 = Self::RetryDelay as u8;
@@ -131,19 +130,6 @@ fn tvb(id: u8, data: Vec<u8>) -> Bytes {
 
     out.into()
 }
-
-/*fn tmb(id: u8, data: &[u8; 32]) -> Bytes {
-    let data_len = data.len();
-    let mut buf = BytesMut::with_capacity(data_len + 1);
-
-    if let Ok(len) = u8::try_from(data_len) {
-        buf.put_u8(id);
-        buf.put_u8(len);
-        buf.extend_from_slice(data.as_slice());
-    }
-
-    buf.into()
-}*/
 
 impl Val {
     pub const METHOD: u8 = Idx::Method as u8;
@@ -289,10 +275,6 @@ impl Map {
         }
     }
 
-    // pub fn get(&self, idx: Idx) -> Option<&Val> {
-    //     self.0.get(&idx.discriminant())
-    // }
-
     pub fn get_cloned(&self, idx: Idx) -> Result<Val> {
         let val = self
             .0
@@ -301,14 +283,6 @@ impl Map {
 
         Ok(val?.clone())
     }
-
-    // pub fn get_flags(&self) -> Option<&Val> {
-    //     self.0.get(&Idx::FLAGS)
-    // }
-
-    // pub fn get_method(&self) -> Option<&Val> {
-    //     self.0.get(&Idx::METHOD)
-    // }
 
     pub fn get_state(&self) -> Result<GenericState> {
         if let Some(Val::State(s)) = self.0.get(&Idx::STATE) {
@@ -424,23 +398,6 @@ impl TryFrom<BytesMut> for Map {
     }
 }
 
-impl TryFrom<Body> for Map {
-    type Error = anyhow::Error;
-
-    fn try_from(body: Body) -> Result<Self> {
-        let buf: BytesMut = match body {
-            Body::Bulk(v) | Body::OctetStream(v) => v.as_slice().into(),
-            body => {
-                tracing::error!("unhandled body\n{body:#?}");
-
-                Err(anyhow!("can not convert body to tag map"))?
-            }
-        };
-
-        Self::try_from(buf)
-    }
-}
-
 impl fmt::Debug for Map {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Tag List\n")?;
@@ -485,9 +442,7 @@ impl fmt::Debug for Map {
 mod tests {
 
     use super::Map;
-    // use crate::rtsp::Body;
     use bytes::BytesMut;
-    // use pretty_hex::PrettyHex;
 
     #[test]
     fn can_parse_state_and_public_key() {
@@ -522,7 +477,6 @@ mod tests {
 
         list.push(State(crate::kit::GenericState(0x10u8)));
         list.push(Identifier(ident.into()));
-
         list.push(EncryptedData(data.into()));
 
         let bytes = list.encode();

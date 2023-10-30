@@ -14,14 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::ListenerPorts;
-use crate::{
-    rtsp::{Body, Frame, Response},
-    HostInfo, Result,
+use super::{
+    msg::{Frame, Response},
+    ListenerPorts,
 };
+use crate::{HostInfo, Result};
 use anyhow::anyhow;
-use bstr::ByteSlice;
-use bytes::{BufMut, BytesMut};
 
 #[derive(Debug, Default)]
 #[allow(unused)]
@@ -43,21 +41,16 @@ impl Method {
     pub fn make_response(&mut self, frame: Frame) -> Result<Response> {
         use plist::{Dictionary as Dict, Value as Val};
 
-        if let Body::Dict(dict) = frame.body {
+        if let Some(content) = frame.content {
             const STREAMS: &str = "streams";
             const TIMING_PROTO: &str = "timingProtocol";
 
-            let mut out = BytesMut::with_capacity(4096);
-            let writer = (&mut out).writer();
-
-            plist::to_writer_xml(writer, &dict)?;
-
-            tracing::debug!("\nSETUP DICT\n{}", out.to_str()?);
+            let dict_in: Dict = plist::from_bytes(&content.data)?;
 
             let mut rdict = plist::Dictionary::new();
 
             // initial setup request does not contain the key streams
-            if dict.contains_key(STREAMS) {
+            if dict_in.contains_key(STREAMS) {
                 tracing::info!("{STREAMS} present");
             } else {
                 const ADDRESSES: &str = "Addresses";
@@ -68,7 +61,7 @@ impl Method {
                 const TIMING_PEER_INFO: &str = "timingPeerInfo";
                 const TIMING_PORT: &str = "timingPort";
 
-                match dict
+                match dict_in
                     .get(TIMING_PROTO)
                     .and_then(plist::Value::as_string)
                     .ok_or_else(|| anyhow!("{TIMING_PROTO} not found or invalid"))?
@@ -78,7 +71,7 @@ impl Method {
                     timing => tracing::warn!("unhandled {TIMING_PROTO}: {timing}"),
                 }
 
-                let group_uuid = dict
+                let group_uuid = dict_in
                     .get(GROUP_UUID)
                     .ok_or_else(|| anyhow!("group_uuid missing"))?
                     .as_string()
@@ -86,7 +79,8 @@ impl Method {
                     .to_string();
 
                 self.group_uuid = Some(group_uuid);
-                self.has_group_leader = dict.get(GROUP_LEADER).and_then(plist::Value::as_boolean);
+                self.has_group_leader =
+                    dict_in.get(GROUP_LEADER).and_then(plist::Value::as_boolean);
 
                 // get timing peer list
 
@@ -116,10 +110,10 @@ impl Method {
                 );
                 rdict.insert(TIMING_PORT.into(), Val::Integer(0u16.into()));
 
-                return Response::ok_with_body(frame.headers, Body::from(rdict));
+                return Response::ok_plist_dict(frame.cseq, &rdict);
             }
         }
 
-        Response::internal_server_error(frame.headers)
+        Ok(Response::internal_server_error(frame.cseq))
     }
 }

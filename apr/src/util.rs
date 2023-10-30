@@ -16,6 +16,7 @@
 
 use crate::Result;
 use anyhow::anyhow;
+use bytes::BytesMut;
 use chrono::Local;
 use std::{io, path::PathBuf};
 
@@ -77,6 +78,22 @@ impl BinSave {
             file.write_all(sep)?;
         }
 
+        Ok(())
+    }
+}
+
+// Right now `write!` on `Vec<u8>` goes through io::Write and is not
+// super speedy, so inline a less-crufty implementation here which
+// doesn't go through io::Error.
+pub(crate) struct BytesWrite<'a>(pub &'a mut BytesMut);
+
+impl std::io::Write for BytesWrite<'_> {
+    fn write(&mut self, s: &[u8]) -> std::io::Result<usize> {
+        self.0.extend_from_slice(s);
+        Ok(s.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
 }

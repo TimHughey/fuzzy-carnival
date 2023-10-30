@@ -14,16 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    rtsp::{Body, Frame, Response},
-    Result,
-};
+use super::msg::{Frame, Response};
+use crate::Result;
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
+use pretty_hex::PrettyHex;
 
 const MODE_IDX: usize = 14;
 const SEQ_IDX: usize = 6;
-const TYPE_IDX: usize = 5;
+// const TYPE_IDX: usize = 5;
 const SETUP2_SUFFIX_LEN: usize = 20;
 
 const SETUP1_SEQ: u8 = 1;
@@ -35,39 +34,41 @@ static REPLY2: Lazy<Vec<u8>> = Lazy::new(|| include_bytes!("fairplay/reply2.bin"
 static SETUP2_MSG_SEQ: Lazy<Vec<u8>> =
     Lazy::new(|| include_bytes!("fairplay/setup2_msg_seq.bin").to_vec());
 
+#[allow(clippy::similar_names)]
 pub fn make_response(frame: Frame) -> Result<Response> {
-    if let Body::Bulk(body_in) = frame.body {
-        use pretty_hex::PrettyHex;
-        tracing::debug!("\nBODY {:?}", body_in.hex_dump());
+    if let Some(content) = frame.content {
+        tracing::debug!("\nBODY {:?}", content.hex_dump());
 
-        let seq = body_in[SEQ_IDX];
-        let _type = body_in[TYPE_IDX];
-        let mode = body_in[MODE_IDX];
+        let cseq = frame.cseq;
+        let seq = content.data[SEQ_IDX];
+        // let _type = content.data[TYPE_IDX];
+        let mode = content.data[MODE_IDX];
 
-        match (seq, mode) {
-            (SETUP1_SEQ, 0) => {
-                Response::ok_with_body(frame.headers, Body::OctetStream(REPLY1.clone()))
-            }
-            (SETUP1_SEQ, mode) if [1, 2, 3].contains(&mode) => {
-                Response::ok_with_body(frame.headers, Body::OctetStream(REPLY2.clone()))
-            }
+        let is_123 = |mode: u8| [1, 2, 3].contains(&mode);
+
+        let response = match (seq, mode) {
+            (SETUP1_SEQ, 0) => Response::ok_octet_stream(cseq, &REPLY1),
+            (SETUP1_SEQ, mode) if is_123(mode) => Response::ok_octet_stream(cseq, &REPLY2),
 
             (SETUP2_SEQ, _mode) => {
+                let data_in = content.into_data();
                 let capacity = HEADER_BIN.len() + SETUP2_SUFFIX_LEN + SETUP2_MSG_SEQ.len();
                 let mut buf = Vec::<u8>::with_capacity(capacity);
                 buf.extend_from_slice(&HEADER_BIN);
 
-                let at = body_in.len() - SETUP2_SUFFIX_LEN;
-                let (_discard, sliver) = body_in.split_at(at);
+                let at = data_in.len() - SETUP2_SUFFIX_LEN;
+                let (_discard, sliver) = data_in.split_at(at);
 
                 buf.extend_from_slice(sliver);
                 buf.extend_from_slice(&SETUP2_MSG_SEQ[..]);
 
-                Response::ok_with_body(frame.headers, Body::OctetStream(buf))
+                Response::ok_octet_stream(cseq, &buf)
             }
-            (_seq, _mode) => Response::internal_server_error(frame.headers),
-        }
-    } else {
-        Err(anyhow!("body should be bulk"))
+            (_seq, _mode) => Response::internal_server_error(cseq),
+        };
+
+        return Ok(response);
     }
+
+    Err(anyhow!("content must be present"))
 }

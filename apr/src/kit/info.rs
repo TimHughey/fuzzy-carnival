@@ -14,16 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    rtsp::{Body, Frame, Response},
-    FlagsCalc, HostInfo, Result,
-};
+use super::msg::{Frame, Response};
+use crate::{BytesWrite, FlagsCalc, HostInfo, Result};
 use bytes::BytesMut;
 use once_cell::sync::OnceCell;
 use plist::Dictionary;
-use std::{io, path::Path};
+use std::path::Path;
 
-pub struct Xml {
+struct Xml {
     cell: OnceCell<Vec<u8>>,
 }
 
@@ -49,24 +47,12 @@ impl Xml {
 
 static XML: Xml = Xml::new();
 
-fn body() -> Result<Body> {
+#[allow(clippy::no_effect_underscore_binding)]
+pub fn make_response(frame: Frame) -> Result<Response> {
     use plist::Value::{Integer as ValInt, String as ValString};
 
-    // Right now `write!` on `Vec<u8>` goes through io::Write and is not
-    // super speedy, so inline a less-crufty implementation here which
-    // doesn't go through io::Error.
-    struct BytesWrite<'a>(&'a mut BytesMut);
-
-    impl io::Write for BytesWrite<'_> {
-        fn write(&mut self, s: &[u8]) -> io::Result<usize> {
-            self.0.extend_from_slice(s);
-            Ok(s.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
+    let cseq = frame.cseq;
+    let _content = frame.content;
 
     let mut dict: Dictionary = plist::from_bytes(XML.bytes())?;
 
@@ -84,24 +70,5 @@ fn body() -> Result<Body> {
     let mut binary = BytesMut::with_capacity(1024);
     plist::to_writer_binary(BytesWrite(&mut binary), &dict)?;
 
-    Ok(Body::OctetStream(binary.into()))
-}
-
-pub fn make_response(frame: Frame) -> Result<Response> {
-    Response::ok_with_body(frame.headers, body()?)
-}
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    pub fn can_create_body() -> crate::Result<()> {
-        let body = super::body()?;
-
-        println!("{body}");
-
-        assert_eq!(body.len()?, 512);
-
-        Ok(())
-    }
+    Ok(Response::ok_octet_stream(cseq, &binary))
 }

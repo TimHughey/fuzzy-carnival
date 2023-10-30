@@ -15,12 +15,14 @@
 // limitations under the License.
 
 use crate::{
-    kit::{BlockLen, CipherCtx, CipherLock},
-    rtsp::{Body, Frame, InflightFrame, Response},
+    kit::{
+        msg::{Frame, Inflight, Response},
+        BlockLen, CipherCtx, CipherLock,
+    },
     util::BinSave,
     Result,
 };
-use bytes::{BufMut, BytesMut};
+use bytes::BytesMut;
 use pretty_hex::PrettyHex;
 use std::sync::{Arc, RwLock};
 use tokio_util::codec::{Decoder, Encoder};
@@ -32,8 +34,8 @@ use tokio_util::codec::{Decoder, Encoder};
 #[derive(Debug, Default)]
 pub struct Rtsp {
     cipher: CipherLock,
-    plaintext: Option<BytesMut>,
-    inflight: Option<InflightFrame>,
+    clear: Option<BytesMut>,
+    inflight: Option<Inflight>,
     bin_save: BinSave,
 }
 
@@ -43,31 +45,13 @@ impl Rtsp {
     }
 }
 
-// Right now `write!` on `Vec<u8>` goes through io::Write and is not
-// super speedy, so inline a less-crufty implementation here which
-// doesn't go through io::Error.
-// struct BytesWrite<'a>(&'a mut BytesMut);
-//
-// impl fmt::Write for BytesWrite<'_> {
-//     fn write_str(&mut self, s: &str) -> fmt::Result {
-//         self.0.extend_from_slice(s.as_bytes());
-//         Ok(())
-//     }
-//
-//     fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
-//         fmt::write(self, args)
-//     }
-// }
-
 impl Decoder for Rtsp {
     type Item = Frame;
     type Error = anyhow::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>> {
-        const U16_SIZE: usize = std::mem::size_of::<u16>();
-        // const BLOCK_MIN_LEN: usize = U16_SIZE + 1 + 16;
-        const PLAINTEXT_MIN_LEN: usize = 50;
         const ENCRYPTED_LEN_MAX: usize = 0x400;
+        const U16_SIZE: usize = std::mem::size_of::<u16>();
 
         if let Some(cipher) = self.cipher.as_ref() {
             let buf_len = buf.len();
@@ -76,7 +60,7 @@ impl Decoder for Rtsp {
 
             loop {
                 // must get mut reference inside loop to make borrow checker happy
-                let inflight = self.inflight.get_or_insert(InflightFrame::default());
+                let inflight = self.inflight.get_or_insert(Inflight::default());
 
                 // if this is a new block then create a BlockLen, otherwise get the existing one
                 let block_len = inflight.block_len.get_or_insert(BlockLen::default());
@@ -100,7 +84,7 @@ impl Decoder for Rtsp {
 
                 // accumulate the decrypted bytes
                 // yes, for the moment, we're doing buffer copies.  TODO: optimize to reuse buf
-                let plaintext = self.plaintext.get_or_insert(BytesMut::with_capacity(4096));
+                let plaintext = self.clear.get_or_insert(BytesMut::with_capacity(4096));
                 plaintext.extend_from_slice(&decrypted);
 
                 // finished with current block or have returned early, clear block_len
@@ -118,45 +102,59 @@ impl Decoder for Rtsp {
             // we are operating in clear text mode, move buf to plaintext.
             // yes, we are doing a buffer copy however we only receive two
             // messages in clear text so it's not a big deal
-            let plaintext_buf = self.plaintext.get_or_insert(BytesMut::with_capacity(4096));
-            plaintext_buf.extend_from_slice(&buf.split());
+            let clear = self.clear.get_or_insert(BytesMut::with_capacity(4096));
+            clear.extend_from_slice(&buf.split());
         }
 
-        if let Some(plaintext_buf) = self.plaintext.as_mut() {
-            let plaintext_len = plaintext_buf.len();
+        if let Some(clear) = self.clear.as_mut() {
+            const CLEAR_MIN_LEN: usize = 50;
+            const CLEAR_LARGE_MSG: usize = 2048;
 
-            if plaintext_len > PLAINTEXT_MIN_LEN {
-                if plaintext_len > 2048 {
-                    tracing::info!("\nLARGE MESSAGE {:?}", plaintext_buf.hex_dump());
-                }
+            let clear_len = clear.len();
 
-                let rollback_buf = plaintext_buf.clone();
-                self.bin_save.persist(&rollback_buf, BinSave::ALL, None)?;
-
-                match InflightFrame::try_from(plaintext_buf) {
-                    Ok(inflight) => {
-                        match Frame::try_from(inflight) {
-                            Ok(frame) => {
-                                self.bin_save.persist(
-                                    &rollback_buf,
-                                    BinSave::IN,
-                                    frame.headers.cseq(),
-                                )?;
-                                return Ok(Some(frame));
-                            }
-                            
-                            Err(e) => {
-                                // frame creation failed, rollback plaintext
-                                *buf = rollback_buf;
-                                tracing::error!("failed to decode:\nBUF {:?}", buf.hex_dump());
-                                return Err(e);
-                            }
-                        }
-                    }
-                    Err(e) => return Err(e),
-                }
+            if clear_len < CLEAR_MIN_LEN {
+                return Ok(None);
             }
+
+            // if plaintext_len > PLAINTEXT_MIN_LEN {
+            if clear_len >= CLEAR_LARGE_MSG {
+                tracing::info!("\nLARGE MESSAGE {:?}", clear.hex_dump());
+            } else {
+                tracing::debug!("CLEAR TEXT INBOUND {:?}", clear.hex_dump());
+            }
+
+            let rollback = clear.clone();
+            self.bin_save.persist(&rollback, BinSave::ALL, None)?;
+
+            let inflight = Inflight::try_from(clear)?;
+            self.inflight = None;
+
+            return inflight.build_frame();
+
+            // match Inflight::try_from(plaintext_buf) {
+            //     Ok(inflight) => {
+            //         match Frame::try_from(inflight) {
+            //             Ok(frame) => {
+            //                 self.bin_save.persist(
+            //                     &rollback_buf,
+            //                     BinSave::IN,
+            //                     Some(frame.cseq),
+            //                 )?;
+            //                 return Ok(Some(frame));
+            //             }
+            //
+            //             Err(e) => {
+            //                 // frame creation failed, rollback plaintext
+            //                 *buf = rollback_buf;
+            //                 tracing::error!("failed to decode:\nBUF {:?}", buf.hex_dump());
+            //                 return Err(e);
+            //             }
+            //         }
+            //     }
+            //     Err(e) => return Err(e),
+            // }
         }
+        // }
 
         Ok(None)
     }
@@ -169,31 +167,21 @@ impl Encoder<Response> for Rtsp {
 
     fn encode(&mut self, item: Response, dst: &mut BytesMut) -> Result<()> {
         use std::fmt::Write;
-        use Body::{Bulk, Dict, Empty, OctetStream, Text};
 
         let status = item.status_code;
-        let cseq = item.headers.cseq.unwrap();
+        let cseq = item.cseq;
 
-        dst.write_fmt(format_args!("RTSP/1.0 {status}\r\n"))?;
-        dst.write_fmt(format_args!("CSeq: {cseq}\r\n"))?;
-        dst.write_str("Server: AirPierre/366.0\r\n")?;
+        write!(dst, "RTSP/1.0 {status}\r\n")?;
+        write!(dst, "CSeq: {cseq}\r\n")?;
+        write!(dst, "Server: AirPierre/366.0\r\n")?;
 
-        match &item.body {
-            Bulk(extend) | OctetStream(extend) => {
-                item.extend_with_content_info(dst)?;
-                dst.extend_from_slice(extend.as_slice());
-            }
-
-            Text(extend) => {
-                item.extend_with_content_info(dst)?;
-                dst.extend_from_slice(extend.as_bytes());
-            }
-
-            Dict(dict) => {
-                item.extend_with_content_info(dst)?;
-                plist::to_writer_binary(dst.writer(), &dict)?;
-            }
-            Empty => dst.write_str("\r\n")?,
+        if let Some(content) = item.content {
+            write!(dst, "Content-Kind: {}\r\r", content.kind)?;
+            write!(dst, "Content-Length: {}\r\n", content.len)?;
+            write!(dst, "\r\n")?;
+            dst.extend_from_slice(&content.data);
+        } else {
+            write!(dst, "\r\n")?;
         }
 
         tracing::debug!("\nOUTBOUND CLEAR TEXT {:?}", dst.hex_dump());

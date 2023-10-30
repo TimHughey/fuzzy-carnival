@@ -29,6 +29,7 @@ pub(crate) mod kit; // RTSP Receiver (via HomeKit)
 pub use kit::Context as Kit;
 
 pub mod asym;
-pub mod rtsp;
 pub mod serdis;
 pub(crate) mod util;
+
+pub(crate) use util::BytesWrite;
