@@ -45,8 +45,7 @@ use auth::verify::Context as VerifyCtx;
 pub use cipher::BlockLen;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
-pub(crate) use methods::info as Info;
-use methods::{fairplay as Fairplay, SetPeers, Setup as SetupMethod};
+use methods::{FairPlay, Info, SetPeers, Setup as SetupMethod};
 pub use msg::{Frame, Response};
 use states::Generic as GenericState;
 use states::Verify as VerifyState;
@@ -223,7 +222,7 @@ impl Kit {
         match (method.as_str(), path.as_str()) {
             (POST, "/feedback" | "/command") => Ok(Response::ok_simple(cseq)),
             (GET, "/info") => Info::make_response(frame),
-            (POST, "/fp-setup") => Fairplay::make_response(frame),
+            (POST, "/fp-setup") => FairPlay::make_response(frame),
             (SETUP, _) if routing.is_rtsp() => {
                 let setup = self
                     .setup

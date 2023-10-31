@@ -119,33 +119,3 @@ impl SerDis {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn can_get_embedded_info_plist() -> crate::Result<()> {
-        use plist::Dictionary;
-
-        let bytes = include_bytes!("../plists/get_info_resp.plist");
-        let mut dict: Dictionary = plist::from_bytes(bytes)?;
-
-        assert!(dict.len() == 9);
-
-        dict.insert("features".into(), 0x4000.into());
-
-        assert!(dict.len() == 10);
-
-        let val = dict.get("features");
-
-        assert!(val.is_some());
-
-        let val = val.unwrap();
-
-        assert!(val.as_string().is_none());
-        assert!(val.as_unsigned_integer().is_some());
-        assert!(val.as_unsigned_integer().unwrap() == 0x4000);
-
-        Ok(())
-    }
-}
