@@ -358,7 +358,7 @@ pub struct Response {
     pub content: Option<Content>,
 }
 
-#[allow(unused)]
+// #[allow(unused)]
 impl Response {
     pub fn bad_request(cseq: u32, content: Content) -> Self {
         Self {
@@ -366,22 +366,6 @@ impl Response {
             content: Some(content),
             cseq,
         }
-    }
-
-    pub fn encode_to(mut self, dst: &mut BytesMut) -> Result<()> {
-        use std::fmt::Write;
-
-        write!(dst, "RTSP/1.0 {}\r\n", self.status_code)?;
-        write!(dst, "CSeq: {}\r\n", self.cseq)?;
-        write!(dst, "Server: AirPierre/366.0\r\n")?;
-
-        if let Some(content) = self.content {
-            write!(dst, "{content:#}")?;
-        } else {
-            write!(dst, "\r\n")?;
-        }
-
-        Ok(())
     }
 
     pub fn internal_server_error(cseq: u32) -> Self {
@@ -439,38 +423,6 @@ impl Response {
             cseq,
         }
     }
-
-    // / # Errors
-    // /
-    // #[inline]
-    // pub fn extend_with_content_info(&self, dst: &mut BytesMut) -> Result<()> {
-    //     use std::fmt::Write;
-
-    //     let ctype = self.headers.content_type.as_ref();
-    //     let clen = self.headers.content_length.as_ref();
-
-    //     if let (Some(ctype), Some(clen)) = (ctype, clen) {
-    //         let avail = dst.capacity();
-    //         tracing::debug!("buf avail: {avail}");
-
-    //         let ctype_key = header::Key2::ContentType.as_str();
-    //         let ctype_val = ctype.as_str();
-    //         let clen_key = header::Key2::ContentLength.as_str();
-
-    //         let res = write!(
-    //             dst,
-    //             "\
-    //             {ctype_key}: {ctype_val}\r\n\
-    //             {clen_key}: {clen}\r\n\
-    //             \r\n\
-    //             "
-    //         );
-
-    //         return Ok(res?);
-    //     }
-
-    //     Err(anyhow!("no content type or length"))
-    // }
 }
 
 impl Default for Response {

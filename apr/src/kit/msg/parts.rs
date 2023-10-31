@@ -136,7 +136,7 @@ impl Content {
     pub fn new_text(cseq: u32, src: &str) -> Self {
         Self {
             cseq,
-            kind: "application/text".into(),
+            kind: "text/parameters".into(),
             len: src.len(),
             data: BytesMut::from(src),
         }
@@ -348,7 +348,7 @@ impl TryFrom<&[u8]> for Routing {
             .trim();
 
         Ok(Self {
-            method: method.to_str()?.to_string(),
+            method: method.to_str()?.into(),
             path: path.to_str()?.into(),
         })
     }
