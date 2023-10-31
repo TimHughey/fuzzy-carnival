@@ -19,6 +19,8 @@ use anyhow::anyhow;
 use bytes::BytesMut;
 use futures::SinkExt;
 use once_cell::sync::Lazy;
+#[allow(unused_imports)]
+use pretty_hex::PrettyHex;
 use std::fmt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{self, Duration};
@@ -45,7 +47,7 @@ use auth::verify::Context as VerifyCtx;
 pub use cipher::BlockLen;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
-use methods::{FairPlay, Info, SetPeers, Setup as SetupMethod};
+use methods::{FairPlay, Info, SetPeers, Setup};
 pub use msg::{Frame, Response};
 use states::Generic as GenericState;
 use states::Verify as VerifyState;
@@ -78,7 +80,7 @@ pub struct Context {
     pub device_id: Vec<u8>,
     pair: Lazy<Pair>,
     pub cipher: Option<CipherCtx>,
-    setup: Option<SetupMethod>,
+    setup: Option<Setup>,
     setpeers: Option<SetPeers>,
     listener_ports: ListenerPorts,
 }
@@ -171,7 +173,7 @@ impl Kit {
                         Ok((socket, remote_addr)) => {
                             let port = event_listener.local_addr()?.port();
                             tracing::info!(
-                                "ACCEPTED EVENT 0.0.0.0:{port} <= {remote_addr}"
+                                "ACCEPTED EVENT connection 0.0.0.0:{port} <= {remote_addr}"
                             );
                             event_socket = Some(socket);
                         },
@@ -201,15 +203,12 @@ impl Kit {
         framed.send(response).await
     }
 
-    /// .
-    ///
-    /// # Panics
-    ///
-    /// Panics if .
+    /// Creates and returns a [`Response`] by handling the routing (method and path)
+    /// included in the [`Frame`].  
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if there is a logic error or defect.
     pub fn respond_to(&mut self, frame: Frame) -> Result<Response> {
         use msg::method::{
             GET, GET_PARAMETER, POST, RECORD, SETUP, SET_PARAMETER, SET_PEERS, SET_PEERSX, TEARDOWN,
@@ -220,15 +219,32 @@ impl Kit {
         let (method, path) = routing.parts_tuple();
 
         match (method.as_str(), path.as_str()) {
-            (POST, "/feedback" | "/command") => Ok(Response::ok_simple(cseq)),
+            (POST, "/feedback" | "/command") => {
+                if let Some(content) = frame.content {
+                    use plist::Value as Val;
+                    let pval: plist::Value = plist::from_bytes(&content.data)?;
+
+                    if let Some(arr) = pval
+                        .as_dictionary()
+                        .and_then(|dict| dict.get("params").and_then(Val::as_dictionary))
+                        .and_then(|dict| dict.get("mrSupportedCommandsFromSender"))
+                        .and_then(Val::as_array)
+                    {
+                        for a in arr {
+                            if let Some(data) = a.as_data() {
+                                let sub_val: Val = plist::from_bytes(data)?;
+
+                                tracing::debug!("\n{sub_val:?}");
+                            }
+                        }
+                    }
+                }
+
+                Ok(Response::ok_simple(cseq))
+            }
             (GET, "/info") => Info::make_response(frame),
             (POST, "/fp-setup") => FairPlay::make_response(frame),
-            (SETUP, _) if routing.is_rtsp() => {
-                let setup = self
-                    .setup
-                    .get_or_insert_with(|| SetupMethod::build(self.listener_ports));
-                setup.make_response(frame)
-            }
+            (SETUP, _) if routing.is_rtsp() => self.setup_mut().make_response(frame),
             (GET_PARAMETER, _path) if routing.is_rtsp() => {
                 Ok(Response::ok_text(cseq, "\r\nvolume: 0.0\r\n"))
             }
@@ -236,7 +252,7 @@ impl Kit {
             (GET | POST, "/pair-verify") => {
                 use VerifyState::{Msg01, Msg02, Msg03, Msg04};
 
-                let t_in = Tags::try_from(frame.content.unwrap().data)?;
+                let t_in = Tags::try_from(frame.content)?;
                 let state = VerifyState::try_from(t_in.get_state()?)?;
 
                 match state {
@@ -246,7 +262,12 @@ impl Kit {
 
                         Ok(Response::ok_octet_stream(cseq, &tags.encode()))
                     }
-                    Msg02 | Msg03 | Msg04 => Err(anyhow!("{path}: got state {state:?}")),
+                    Msg02 | Msg03 | Msg04 => {
+                        let error = "bad state";
+                        tracing::error!("{error}: {routing} bad state={state:?}");
+
+                        Err(anyhow!(error))
+                    }
                 }
             }
             (GET | POST, "/pair-setup") => {
@@ -255,7 +276,7 @@ impl Kit {
                 const M1: State = State(1);
                 const M3: State = State(3);
 
-                let t_in = Tags::try_from(frame.content.unwrap().data)?;
+                let t_in = Tags::try_from(frame.content)?;
                 let state = t_in.get_state()?;
 
                 match state {
@@ -299,6 +320,11 @@ impl Kit {
                 Ok(Response::internal_server_error(cseq))
             }
         }
+    }
+
+    fn setup_mut(&mut self) -> &mut Setup {
+        self.setup
+            .get_or_insert_with(|| Setup::build(self.listener_ports))
     }
 }
 

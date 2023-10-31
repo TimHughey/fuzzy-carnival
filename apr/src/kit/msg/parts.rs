@@ -98,9 +98,19 @@ impl Content {
         if content_len == data_len {
             Ok(true)
         } else {
-            tracing::info!("length mismatch: content={content_len} != data={data_len}");
+            tracing::debug!("length mismatch: content={content_len} != data={data_len}");
             Ok(false)
         }
+    }
+
+    pub fn get_dict(&self) -> Result<Option<plist::Dictionary>> {
+        if self.kind.ends_with("binary-plist") {
+            if let Some(dict) = plist::from_bytes::<plist::Value>(&self.data)?.as_dictionary() {
+                return Ok(Some(dict.clone()));
+            }
+        }
+
+        Ok(None)
     }
 
     pub fn into_data(self) -> BytesMut {

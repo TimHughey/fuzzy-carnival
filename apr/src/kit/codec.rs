@@ -145,7 +145,7 @@ impl Decoder for Rtsp {
                     return Ok(Some(frame));
                 }
                 Ok(false) => {
-                    tracing::info!("incomplete clear text, saving inflight");
+                    tracing::debug!("incomplete clear text, saving inflight");
                     self.inflight = Some(inflight);
 
                     return Ok(None);

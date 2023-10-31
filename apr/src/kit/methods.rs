@@ -119,16 +119,41 @@ pub(crate) struct Info {
 impl Info {
     #[allow(clippy::no_effect_underscore_binding)]
     pub fn make_response(frame: Frame) -> Result<Response> {
+        use plist::Value;
+
+        let cseq = frame.cseq;
+        let routing = frame.routing;
+        if let Some(content) = frame.content {
+            // apparently the client is OK with a 500 for the qualifier GET /info request.
+            //
+            // later in the initial connection sequence GET /info is requested again
+            // without content and we can send the typical response
+            if let Some(dict) = content.get_dict()? {
+                if let Some(arr) = dict.get("qualifier").and_then(Value::as_array) {
+                    if let Some("txtAirPlay") = arr.get(0).and_then(Value::as_string) {
+                        tracing::debug!("{routing} qualifier=txtAirPlay");
+                        return Ok(Response::internal_server_error(cseq));
+                    }
+                }
+
+                // in the event we did get content that was not the qualifier log it
+                tracing::warn!("\n{routing} CONTENT {:?}", content.data.hex_dump());
+            }
+        } else {
+            tracing::debug!("{routing} EMPTY CONTENT");
+            return Self::handle_qualifier(cseq);
+        }
+
+        Ok(Response::internal_server_error(cseq))
+    }
+
+    fn handle_qualifier(cseq: u32) -> Result<Response> {
         use plist::{
             Dictionary as Dict,
             Value::{Integer as ValInt, String as ValString},
         };
-        use static_data::INFO_RESP;
 
-        let cseq = frame.cseq;
-        let _content = frame.content;
-
-        let mut dict: Dict = plist::from_bytes(INFO_RESP.as_slice())?;
+        let mut dict: Dict = plist::from_bytes(static_data::INFO_RESP.as_slice())?;
 
         for (k, v) in [
             ("features", ValInt(FlagsCalc::features_as_u64().into())),
@@ -151,6 +176,7 @@ impl Info {
 #[derive(Debug, Default)]
 pub struct SetPeers {
     peers: Vec<String>,
+    clock_id: i64,
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -172,13 +198,21 @@ impl SetPeers {
                     }
 
                     if let Val::Dictionary(dict) = &arr[0] {
-                        tracing::info!("\nSETPEERS {dict:#?}");
+                        tracing::debug!("\nSETPEERS {dict:#?}");
 
                         if let Some(Val::Array(addrs)) = dict.get("Addresses") {
                             for addr in addrs.iter() {
                                 if let Val::String(addr) = addr {
                                     self.peers.push(addr.clone());
                                 }
+                            }
+                        }
+
+                        if let Some(Val::Integer(clock_id)) = dict.get("ClockID") {
+                            if let Some(clock_id) = clock_id.as_signed() {
+                                self.clock_id = clock_id;
+                            } else {
+                                tracing::error!("failed to convert {clock_id:?}");
                             }
                         }
                     }

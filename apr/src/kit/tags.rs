@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{states, GenericState};
+use super::{msg::Content, states, GenericState};
 use crate::Result;
 use anyhow::anyhow;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -306,6 +306,20 @@ impl TryFrom<Bytes> for Map {
 
     fn try_from(bytes: Bytes) -> Result<Self> {
         Map::try_from(BytesMut::from(&bytes[..]))
+    }
+}
+
+impl TryFrom<Option<Content>> for Map {
+    type Error = anyhow::Error;
+
+    fn try_from(maybe_content: Option<Content>) -> std::result::Result<Self, Self::Error> {
+        if let Some(content) = maybe_content {
+            return Self::try_from(content.data);
+        }
+
+        let error = "content data is requied to create tags map";
+        tracing::error!(error);
+        Err(anyhow!(error))
     }
 }
 
