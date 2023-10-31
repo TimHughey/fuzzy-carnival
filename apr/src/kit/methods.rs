@@ -14,22 +14,70 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{
+use crate::kit::{
     msg::{Frame, Response},
-    ListenerPorts,
+    HostInfo, ListenerPorts, Result,
 };
-use crate::{HostInfo, Result};
 use anyhow::anyhow;
 
+pub(crate) mod fairplay;
+pub(crate) mod info;
+
 #[derive(Debug, Default)]
-#[allow(unused)]
-pub struct Method {
+pub struct SetPeers {
+    peers: Vec<String>,
+}
+
+#[allow(clippy::unnecessary_wraps)]
+impl SetPeers {
+    pub fn make_response(&mut self, frame: Frame) -> Result<Response> {
+        use plist::Value as Val;
+
+        let cseq = frame.cseq;
+
+        if let Some(content) = frame.content {
+            let val: plist::Value = content.try_into()?;
+
+            match val {
+                Val::Array(arr) => {
+                    // the array provided appears to only contain a single row
+                    // so let's warn if different
+                    if arr.len() > 1 {
+                        tracing::warn!("peers array suspect: len > 1");
+                    }
+
+                    if let Val::Dictionary(dict) = &arr[0] {
+                        tracing::info!("\nSETPEERS {dict:#?}");
+
+                        if let Some(Val::Array(addrs)) = dict.get("Addresses") {
+                            for addr in addrs.iter() {
+                                if let Val::String(addr) = addr {
+                                    self.peers.push(addr.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                val => {
+                    let error = "invalid plist variant";
+                    tracing::error!("{error}\n{val:?}");
+                    return Err(anyhow!(error));
+                }
+            }
+        }
+
+        Ok(Response::ok_simple(cseq))
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Setup {
     group_uuid: Option<String>,
     has_group_leader: Option<bool>,
     listener_ports: ListenerPorts,
 }
 
-impl Method {
+impl Setup {
     pub fn build(listener_ports: ListenerPorts) -> Self {
         Self {
             group_uuid: None,

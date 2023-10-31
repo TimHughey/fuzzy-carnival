@@ -48,7 +48,6 @@ pub struct Data {
     pub write_key: Vec<u8>,     // after HKDF expand/extract
     pub alice: String,          // first chapter of Alice in Wonderland
     pub msgs: BytesMut,         // all inbound saved messages
-    pub setpeersx: BytesMut,    // unique SETPEERSX message
 }
 
 impl Data {
@@ -79,10 +78,6 @@ impl Data {
             .ok_or_else(|| anyhow!("could not find message end"))?;
 
         Ok(msg.split_to(at))
-    }
-
-    pub fn get_setpeersx() -> BytesMut {
-        TEST_DATA.setpeersx.clone()
     }
 }
 
@@ -143,7 +138,6 @@ impl Default for Data {
             write_key: read_bin("write_key"),
             alice: read_txt("alice"),
             msgs: read_msgs("all"),
-            setpeersx: read_msgs("setpeersx"),
         }
     }
 }
@@ -168,7 +162,6 @@ impl fmt::Debug for Data {
         writeln!(f, "write_key {:?}\n", self.write_key.hex_dump())?;
         writeln!(f, "alice {:?}\n", self.alice.hex_dump())?;
         writeln!(f, "msgs {:?}\n", self.msgs.hex_dump())?;
-        writeln!(f, "setpeersx {:?}\n", self.setpeersx.hex_dump())?;
 
         Ok(())
     }
@@ -223,7 +216,4 @@ fn can_load_test_data() {
 
     let msgs = &td.msgs;
     assert!(msgs.len() > 4096);
-
-    let setpeersx: &BytesMut = &td.setpeersx;
-    assert!(setpeersx.len() >= 490);
 }

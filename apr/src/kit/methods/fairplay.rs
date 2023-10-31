@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::msg::{Frame, Response};
+use super::super::msg::{Frame, Response};
 use crate::Result;
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
@@ -28,11 +28,11 @@ const SETUP2_SUFFIX_LEN: usize = 20;
 const SETUP1_SEQ: u8 = 1;
 const SETUP2_SEQ: u8 = 3;
 
-static HEADER_BIN: Lazy<Vec<u8>> = Lazy::new(|| include_bytes!("fairplay/header.bin").to_vec());
-static REPLY1: Lazy<Vec<u8>> = Lazy::new(|| include_bytes!("fairplay/reply1.bin").to_vec());
-static REPLY2: Lazy<Vec<u8>> = Lazy::new(|| include_bytes!("fairplay/reply2.bin").to_vec());
+static HEADER_BIN: Lazy<Vec<u8>> = Lazy::new(|| include_bytes!("fairplay_bin/header.bin").to_vec());
+static REPLY1: Lazy<Vec<u8>> = Lazy::new(|| include_bytes!("fairplay_bin/reply1.bin").to_vec());
+static REPLY2: Lazy<Vec<u8>> = Lazy::new(|| include_bytes!("fairplay_bin/reply2.bin").to_vec());
 static SETUP2_MSG_SEQ: Lazy<Vec<u8>> =
-    Lazy::new(|| include_bytes!("fairplay/setup2_msg_seq.bin").to_vec());
+    Lazy::new(|| include_bytes!("fairplay_bin/setup2_msg_seq.bin").to_vec());
 
 #[allow(clippy::similar_names)]
 pub fn make_response(frame: Frame) -> Result<Response> {

@@ -18,6 +18,7 @@ use crate::Result;
 use anyhow::anyhow;
 use bstr::ByteSlice;
 use bytes::BytesMut;
+use num_traits::clamp_max;
 use once_cell::sync::Lazy;
 use plist::Dictionary;
 use pretty_hex::PrettyHex;
@@ -75,7 +76,7 @@ static CONTENT_MATCH: Lazy<ContentMatch> = Lazy::new(|| {
     }
 });
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Content {
     pub cseq: u32,
     pub kind: String,
@@ -84,25 +85,22 @@ pub struct Content {
 }
 
 impl Content {
-    pub fn confirm_valid(maybe_content: &Option<Content>) -> Result<()> {
-        if let Some(content) = maybe_content.as_ref() {
-            let content_len = content.len;
-            let data_len = content.data.len();
-
-            if content_len != data_len {
-                let error = "content len does not match data len";
-                tracing::error!("{error}: content={content_len} buf={data_len}");
-                return Err(anyhow!("{error}"));
-            }
-
-            if content.kind.is_empty() {
-                let error = "content kind is empty";
-                tracing::error!("{error}");
-                return Err(anyhow!("{error}"));
-            }
+    pub fn check_complete(&self) -> Result<bool> {
+        if self.kind.is_empty() {
+            let error = "content kind is empty";
+            tracing::error!("{error}");
+            return Err(anyhow!("{error}"));
         }
 
-        Ok(())
+        let content_len = self.len;
+        let data_len: usize = self.data.len();
+
+        if content_len == data_len {
+            Ok(true)
+        } else {
+            tracing::info!("length mismatch: content={content_len} != data={data_len}");
+            Ok(false)
+        }
     }
 
     pub fn into_data(self) -> BytesMut {
@@ -143,6 +141,22 @@ impl Content {
             data: BytesMut::from(src),
         }
     }
+
+    pub fn want_bytes(&self, avail: usize) -> Option<usize> {
+        if avail > 0 {
+            let need_len = self.len;
+            let have_len = self.data.len();
+
+            if let Some(needed) = need_len.checked_sub(have_len) {
+                let take = clamp_max(needed, avail);
+
+                return Some(take);
+            }
+        }
+
+        // either we don't need anymore buyes or there aren't
+        None
+    }
 }
 
 impl AsRef<[u8]> for Content {
@@ -177,7 +191,31 @@ impl TryFrom<Option<u32>> for Content {
     }
 }
 
+impl TryInto<plist::Value> for Content {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> std::result::Result<plist::Value, Self::Error> {
+        const HDR: &[u8] = b"bplist00";
+
+        if self.data.starts_with(HDR) {
+            let parsed: plist::Value = plist::from_bytes(&self.data)?;
+
+            return Ok(parsed);
+        }
+
+        let error = "unable to convert content to plist";
+        tracing::error!("{error}\nDATA {:?}", self.data.hex_dump());
+        Err(anyhow!(error))
+    }
+}
+
 impl std::fmt::Display for Content {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "\nCONTENT {} {:?}", self.kind, self.data.hex_dump())
+    }
+}
+
+impl std::fmt::Debug for Content {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "\nCONTENT {} {:?}", self.kind, self.data.hex_dump())
     }
@@ -271,20 +309,24 @@ impl std::fmt::Display for MetaData {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Routing {
     method: String,
     path: String,
 }
 
 impl Routing {
+    pub fn is_rtsp(&self) -> bool {
+        self.path.starts_with("rtsp")
+    }
+
     #[allow(unused)]
     pub fn parts_tuple(&self) -> (String, String) {
         (self.method.clone(), self.path.clone())
     }
 
-    pub fn is_rtsp(path: &str) -> bool {
-        path.starts_with("rtsp")
+    pub fn please_log(&self) -> bool {
+        !self.path.ends_with("feedback")
     }
 }
 

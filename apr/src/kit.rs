@@ -31,11 +31,9 @@ use tokio_util::{
 mod auth;
 pub mod cipher;
 pub mod codec;
-mod fairplay;
 pub mod helper;
-pub mod info;
+pub(crate) mod methods;
 pub mod msg;
-pub mod setup;
 pub mod states;
 pub mod tags;
 
@@ -47,9 +45,9 @@ use auth::verify::Context as VerifyCtx;
 pub use cipher::BlockLen;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
-use fairplay as Fairplay;
+pub(crate) use methods::info as Info;
+use methods::{fairplay as Fairplay, SetPeers, Setup as SetupMethod};
 pub use msg::{Frame, Response};
-use setup::Method as SetupMethod;
 use states::Generic as GenericState;
 use states::Verify as VerifyState;
 use tags::Idx as TagIdx;
@@ -82,18 +80,12 @@ pub struct Context {
     pair: Lazy<Pair>,
     pub cipher: Option<CipherCtx>,
     setup: Option<SetupMethod>,
+    setpeers: Option<SetPeers>,
     listener_ports: ListenerPorts,
 }
 
 pub use Context as Kit;
-
 unsafe impl Send for Kit {}
-
-impl fmt::Debug for Kit {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Kit")
-    }
-}
 
 impl Kit {
     /// .
@@ -115,6 +107,7 @@ impl Kit {
             pair: Lazy::new(Pair::default),
             cipher: None,
             setup: None,
+            setpeers: None,
             listener_ports: ListenerPorts::default(),
         }
     }
@@ -197,7 +190,9 @@ impl Kit {
     }
 
     async fn handle_frame(&mut self, framed: &mut Codec, frame: Frame) -> Result<()> {
-        tracing::info!("{frame}");
+        if frame.routing.please_log() {
+            tracing::info!("{frame}");
+        }
 
         let response = self.respond_to(frame)?;
         if let Some(cipher) = self.pair.setup.cipher.take() {
@@ -217,26 +212,28 @@ impl Kit {
     ///
     /// This function will return an error if .
     pub fn respond_to(&mut self, frame: Frame) -> Result<Response> {
-        use msg::{
-            method::{GET, GET_PARAMETER, POST, RECORD, SETUP, SET_PEERS, SET_PEERSX},
-            Routing,
+        use msg::method::{
+            GET, GET_PARAMETER, POST, RECORD, SETUP, SET_PARAMETER, SET_PEERS, SET_PEERSX, TEARDOWN,
         };
 
-        let (method, path) = frame.routing.parts_tuple();
+        let cseq = frame.cseq;
+        let routing = &frame.routing;
+        let (method, path) = routing.parts_tuple();
 
         match (method.as_str(), path.as_str()) {
-            (GET, "/info") => info::make_response(frame),
+            (POST, "/feedback" | "/command") => Ok(Response::ok_simple(cseq)),
+            (GET, "/info") => Info::make_response(frame),
             (POST, "/fp-setup") => Fairplay::make_response(frame),
-            (SETUP, path) if Routing::is_rtsp(path) => {
+            (SETUP, _) if routing.is_rtsp() => {
                 let setup = self
                     .setup
                     .get_or_insert_with(|| SetupMethod::build(self.listener_ports));
                 setup.make_response(frame)
             }
-            (GET_PARAMETER, path) if path.starts_with("rtsp") => {
-                Ok(Response::ok_text(frame.cseq, "\r\nvolume: 0.0\r\n"))
+            (GET_PARAMETER, _path) if routing.is_rtsp() => {
+                Ok(Response::ok_text(cseq, "\r\nvolume: 0.0\r\n"))
             }
-            (RECORD, path) if Routing::is_rtsp(path) => Ok(Response::ok_simple(frame.cseq)),
+            (RECORD, _path) if routing.is_rtsp() => Ok(Response::ok_simple(cseq)),
             (GET | POST, "/pair-verify") => {
                 use VerifyState::{Msg01, Msg02, Msg03, Msg04};
 
@@ -248,7 +245,7 @@ impl Kit {
                         tracing::debug!("{path} {state:?}");
                         let tags = self.pair.verify.m1_m2(t_in.get_public_key()?)?;
 
-                        Ok(Response::ok_octet_stream(frame.cseq, &tags.encode()))
+                        Ok(Response::ok_octet_stream(cseq, &tags.encode()))
                     }
                     Msg02 | Msg03 | Msg04 => Err(anyhow!("{path}: got state {state:?}")),
                 }
@@ -267,39 +264,48 @@ impl Kit {
                         tracing::debug!("{path} M1");
 
                         let t_out = self.pair.setup.m1_m2(&t_in);
-                        Ok(Response::ok_octet_stream(frame.cseq, &t_out.encode()))
+                        Ok(Response::ok_octet_stream(cseq, &t_out.encode()))
                     }
 
                     M3 => {
                         tracing::debug!("{path} M3");
 
                         let t_out = self.pair.setup.m3_m4(&t_in)?;
-                        Ok(Response::ok_octet_stream(frame.cseq, &t_out.encode()))
+                        Ok(Response::ok_octet_stream(cseq, &t_out.encode()))
                     }
 
                     _state => {
                         tracing::warn!("Setup UNKNOWN  {t_in:?}");
-                        Ok(Response::internal_server_error(frame.cseq))
+                        Ok(Response::internal_server_error(cseq))
                     }
                 }
             }
 
-            (SET_PEERS, path) if Routing::is_rtsp(path) => {
-                tracing::error!("implement {}", SET_PEERS);
-
-                Ok(Response::internal_server_error(frame.cseq))
+            (SET_PEERS | SET_PEERSX, _path) if routing.is_rtsp() => {
+                let setpeers = self.setpeers.get_or_insert(SetPeers::default());
+                setpeers.make_response(frame)
             }
-            (SET_PEERSX, path) if Routing::is_rtsp(path) => {
+            (SET_PEERSX, _path) if routing.is_rtsp() => {
                 tracing::error!("implement {}", SET_PEERSX);
 
-                Ok(Response::internal_server_error(frame.cseq))
+                Ok(Response::internal_server_error(cseq))
             }
+            (SET_PARAMETER, _path) if routing.is_rtsp() => Ok(Response::ok_simple(cseq)),
+
+            (TEARDOWN, _path) if routing.is_rtsp() => Ok(Response::ok_simple(cseq)),
+
             (method, path) => {
                 tracing::warn!("UNHANDLED {method} {path}");
 
-                Ok(Response::internal_server_error(frame.cseq))
+                Ok(Response::internal_server_error(cseq))
             }
         }
+    }
+}
+
+impl fmt::Debug for Kit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Kit")
     }
 }
 

@@ -22,6 +22,7 @@ use crate::{
     util::BinSave,
     Result,
 };
+use anyhow::anyhow;
 use bytes::BytesMut;
 use pretty_hex::PrettyHex;
 use std::sync::{Arc, RwLock};
@@ -72,7 +73,7 @@ impl Decoder for Rtsp {
 
                 // now, do we have enough bytes in the buffer to decrypt this block?
                 if block_len.need_more(buf.len()) {
-                    // nope, signal to caller to send us more when ready
+                    // nope, signal to caller to send additional data
                     return Ok(None);
                 }
 
@@ -108,7 +109,7 @@ impl Decoder for Rtsp {
 
         if let Some(clear) = self.clear.as_mut() {
             const CLEAR_MIN_LEN: usize = 50;
-            const CLEAR_LARGE_MSG: usize = 2048;
+            const CLEAR_LARGE_MSG: usize = 3 * 1024;
 
             let clear_len = clear.len();
 
@@ -123,40 +124,52 @@ impl Decoder for Rtsp {
                 tracing::debug!("CLEAR TEXT INBOUND {:?}", clear.hex_dump());
             }
 
-            let rollback = clear.clone();
-            self.bin_save.persist(&rollback, BinSave::ALL, None)?;
+            // let rollback = clear.clone();
+            self.bin_save.persist(clear, BinSave::ALL, None)?;
 
-            let inflight = Inflight::try_from(clear)?;
-            self.inflight = None;
+            let mut persist_buf = clear.clone();
 
-            return inflight.build_frame();
+            let mut inflight = self.inflight.take().unwrap_or_default();
+            inflight.absorb_buf(clear)?;
+            inflight.absorb_content(clear);
 
-            // match Inflight::try_from(plaintext_buf) {
-            //     Ok(inflight) => {
-            //         match Frame::try_from(inflight) {
-            //             Ok(frame) => {
-            //                 self.bin_save.persist(
-            //                     &rollback_buf,
-            //                     BinSave::IN,
-            //                     Some(frame.cseq),
-            //                 )?;
-            //                 return Ok(Some(frame));
-            //             }
-            //
-            //             Err(e) => {
-            //                 // frame creation failed, rollback plaintext
-            //                 *buf = rollback_buf;
-            //                 tracing::error!("failed to decode:\nBUF {:?}", buf.hex_dump());
-            //                 return Err(e);
-            //             }
-            //         }
-            //     }
-            //     Err(e) => return Err(e),
-            // }
+            match inflight.check_complete() {
+                Ok(true) => {
+                    let frame = Frame::try_from(inflight)?;
+                    self.inflight = None;
+
+                    self.bin_save
+                        .persist(&persist_buf, BinSave::IN, Some(frame.cseq))?;
+                    persist_buf.clear();
+
+                    return Ok(Some(frame));
+                }
+                Ok(false) => {
+                    tracing::info!("incomplete clear text, saving inflight");
+                    self.inflight = Some(inflight);
+
+                    return Ok(None);
+                }
+                Err(e) => return Err(e),
+            }
         }
-        // }
 
         Ok(None)
+    }
+
+    fn decode_eof(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>> {
+        tracing::warn!("decode eof invoked");
+
+        match self.decode(buf)? {
+            Some(frame) => Ok(Some(frame)),
+            None => {
+                if buf.is_empty() {
+                    Err(anyhow!("session closed"))
+                } else {
+                    Err(anyhow!("bytes remaining on stream"))
+                }
+            }
+        }
     }
 }
 

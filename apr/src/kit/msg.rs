@@ -33,6 +33,7 @@ const STATUS_INTERNAL_SERVER_ERROR: u16 = 500;
 #[derive(Debug, Default)]
 pub struct Inflight {
     pub block_len: Option<BlockLen>,
+    pub clear_bytes_needed: Option<usize>,
     pub routing: Option<Routing>,
     pub cseq: Option<u32>,
     pub content: Option<Content>,
@@ -40,30 +41,65 @@ pub struct Inflight {
 }
 
 impl Inflight {
-    fn absorb_content_data(mut self, buf: &mut BytesMut) -> Result<Self> {
-        if buf.is_empty() {
-            return Ok(self);
-        } else if let Some(content) = self.content.as_mut() {
-            // trim spurious seperators
-            for sep in b"\r\n" {
-                if buf[0] == *sep {
-                    buf.advance(1);
-                }
-            }
-            let len = content.len;
+    pub fn absorb_buf(&mut self, buf: &mut BytesMut) -> Result<()> {
+        const SEP: &[u8] = b"\x0d\x0a";
 
-            if buf.len() >= len {
-                content.data = buf.split_to(len);
+        // for creating the lines interator
+        let msg = buf.clone();
+
+        // part 1:
+        // handle the prelude, headers (meta data)
+        'lines: for (line_num, line) in msg.lines_with_terminator().enumerate() {
+            // tracing::info!("\nLINE {line_num:03} {:?}\n", line.hex_dump());
+
+            // capture the line length before modifications, this intial length
+            // is used later to advance the buf
+            let line_len = line.len();
+
+            // delimiter between headers and body
+            if line_len <= SEP.len() && line.iter().all(|b| SEP.contains(b)) {
+                buf.advance(line_len);
+                break 'lines;
             }
 
-            if !buf.is_empty() {
-                tracing::warn!("\nBUF RESIDUAL: {:?}", buf.hex_dump());
+            if line.is_empty() || !line.is_ascii() {
+                // tracing::info!("\nSKIPPED LINE {line_num:03} {:?}\n", line.hex_dump());
+                continue 'lines; // NOTE: do not advance the cursor
             }
 
-            return Ok(self);
+            let line = line.trim();
+
+            // line 0 is always method, path and protocol
+            if line_num == 0 {
+                self.absorb_routing(line)?;
+
+                buf.advance(line_len);
+            } else if let Some(mid) = line.find_byte(b':') {
+                self.absorb_desc_and_field(line, mid)?;
+
+                buf.advance(line_len); // the line is consumed, move the cursor
+            }
         }
 
-        Err(anyhow!("data available however content metadata unknown"))
+        Ok(())
+    }
+    // NOTE:  this function assumes message metadata (headers), where content
+    //        kind and length are located, have already been absorbed
+    pub fn absorb_content(&mut self, buf: &mut BytesMut) {
+        let avail = buf.len();
+
+        match (avail, self.content.as_mut()) {
+            (0, None) => (),
+            (avail, None) => {
+                tracing::warn!("buf contains {avail} bytes but no content metadata, buf unchanged");
+            }
+            (avail, Some(content)) => {
+                if let Some(want_bytes) = content.want_bytes(avail) {
+                    let take = buf.split_to(want_bytes);
+                    content.data.extend_from_slice(&take);
+                }
+            }
+        }
     }
 
     fn absorb_desc_and_field(&mut self, line: &[u8], delim_at: usize) -> Result<()> {
@@ -102,25 +138,44 @@ impl Inflight {
         Ok(())
     }
 
-    pub fn build_frame(mut self) -> Result<Option<Frame>> {
-        if self.block_len.is_none()
-            && self.routing.is_some()
-            && self.cseq.is_some()
-            && self.metadata.is_some()
+    pub fn check_complete(&self) -> Result<bool> {
+        if let Self {
+            block_len: None,
+            routing: Some(_),
+            cseq: Some(_),
+            metadata: Some(_),
+            content: Some(content),
+            .. // ignore rest
+        } = self
         {
-            Content::confirm_valid(&self.content)?;
-
-            let frame = Some(Frame {
-                routing: self.routing.unwrap(),
-                cseq: self.cseq.unwrap(),
-                content: self.content.take(),
-                metadata: self.metadata.unwrap(),
-            });
-
-            return Ok(frame);
+            return content.check_complete();
         }
 
-        Ok(None)
+        Ok(true)
+    }
+
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        self.routing.is_some() && self.metadata.is_some()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        if let Self {
+            block_len: None,
+            clear_bytes_needed: None,
+            routing: None,
+            cseq: None,
+            content: None,
+            metadata: None,
+        } = self
+        {
+            return true;
+        }
+
+        false
     }
 
     fn get_content_mut(&mut self) -> &mut Content {
@@ -185,10 +240,14 @@ impl TryFrom<&mut BytesMut> for Inflight {
                 inflight.absorb_desc_and_field(line, mid)?;
 
                 buf.advance(line_len); // the line is consumed, move the cursor
+            } else if line == b"\r\n" {
+                buf.advance(2);
+            } else if line == b"\r" {
+                buf.advance(1);
             }
         }
 
-        inflight.absorb_content_data(buf)
+        Ok(inflight)
     }
 }
 
@@ -240,8 +299,6 @@ impl TryFrom<Inflight> for Frame {
             return Err(anyhow!("pending block_len"));
         }
 
-        Content::confirm_valid(&inflight.content)?;
-
         let routing = inflight.routing.ok_or_else(|| anyhow!("routing missing"))?;
         let cseq = inflight.cseq.ok_or_else(|| anyhow!("cseq missing"))?;
         let metadata = inflight
@@ -259,7 +316,7 @@ impl TryFrom<Inflight> for Frame {
 
 impl std::fmt::Display for Frame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FRAME {}", self.routing)?;
+        write!(f, "FRAME-{:03} {}", self.cseq, self.routing)?;
 
         if f.alternate() {
             f.write_str("\n")?;
@@ -284,13 +341,15 @@ impl std::fmt::Display for Frame {
 }
 
 pub mod method {
+    pub const GET_PARAMETER: &str = "GET_PARAMETER";
     pub const GET: &str = "GET";
     pub const POST: &str = "POST";
-    pub const SETUP: &str = "SETUP";
-    pub const GET_PARAMETER: &str = "GET_PARAMETER";
     pub const RECORD: &str = "RECORD";
+    pub const SET_PARAMETER: &str = "SET_PARAMETER";
     pub const SET_PEERS: &str = "SETPEERS";
     pub const SET_PEERSX: &str = "SETPEERSX";
+    pub const SETUP: &str = "SETUP";
+    pub const TEARDOWN: &str = "TEARDOWN";
 }
 
 pub struct Response {

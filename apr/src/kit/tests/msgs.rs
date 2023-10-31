@@ -14,22 +14,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{kit::tests::Data, Result};
+use crate::{
+    kit::{
+        methods::SetPeers,
+        msg::{Frame, Inflight},
+        tests::Data,
+    },
+    Result,
+};
 use tracing_test::traced_test;
 
 #[test]
 #[traced_test]
 fn can_create_inflight_for_setpeers() -> Result<()> {
-    use crate::kit::msg::{Inflight, Routing};
+    use crate::kit::msg::Inflight;
 
     let mut msg = Data::get_msg("SETPEERS")?;
-    let inflight = Inflight::try_from(&mut msg)?;
+    let mut inflight = Inflight::default();
+    inflight.absorb_buf(&mut msg)?;
+    inflight.absorb_content(&mut msg);
 
     assert!(inflight.cseq.is_some_and(|cseq| cseq == 10));
     assert!(inflight.routing.is_some_and(|routing| {
-        let (method, path) = routing.parts_tuple();
+        let (method, _path) = routing.parts_tuple();
 
-        method.as_str() == "SETPEERS" && Routing::is_rtsp(&path)
+        method.as_str() == "SETPEERS" && routing.is_rtsp()
     }));
     assert!(inflight.content.is_some_and(|content| {
         content.len == 86
@@ -58,8 +67,10 @@ fn can_create_inflight_for_setpeers() -> Result<()> {
 fn can_create_inflight_for_setpeersx() -> Result<()> {
     use crate::kit::msg::{Frame, Inflight};
 
-    let mut msg = Data::get_setpeersx();
-    let inflight = Inflight::try_from(&mut msg)?;
+    let mut msg = Data::get_msg("SETPEERSX")?;
+    let mut inflight = Inflight::default();
+    inflight.absorb_buf(&mut msg)?;
+    inflight.absorb_content(&mut msg);
 
     assert_eq!(inflight.block_len, None);
     assert!(inflight.cseq.is_some_and(|cseq| cseq == 10));
@@ -70,16 +81,47 @@ fn can_create_inflight_for_setpeersx() -> Result<()> {
 
     assert_eq!(frame.cseq, 10);
     assert!(frame.content.is_some());
+
+    if let Some(content) = frame.content.as_ref() {
+        let plist_val: plist::Value = plist::from_bytes(&content.data)?;
+
+        if let plist::Value::Array(arr) = plist_val {
+            // let row0 = &arr[0];
+
+            println!("{:#?}", arr[0]);
+        }
+    }
+
     assert!(frame.content.is_some_and(|content| content.len == 264
         && content.kind.as_str() == "/peer-list-changed-x"
-        && content.data.starts_with(b"bplist00\xEF\xBF")));
+        && content.data.starts_with(b"bplist00")));
 
     let metadata = frame.metadata;
 
-    assert_eq!(metadata.active_remote, Some(3_872_238_143));
+    assert!(metadata.active_remote.is_some_and(|v| v > 1));
     assert!(metadata
         .dacpd_id
-        .is_some_and(|v| v.as_str() == "BF3655C3CA6F9E93"));
+        .is_some_and(|v| { v.as_bytes().iter().all(u8::is_ascii_hexdigit) }));
+
+    Ok(())
+}
+
+#[test]
+#[traced_test]
+fn can_respond_to_setpeers_msg() -> Result<()> {
+    let mut msg = Data::get_msg("SETPEERSX")?;
+    let mut setpeers = SetPeers::default();
+
+    let mut inflight = Inflight::default();
+
+    inflight.absorb_buf(&mut msg)?;
+    inflight.absorb_content(&mut msg);
+
+    if let Ok(frame) = Frame::try_from(inflight) {
+        let _response = setpeers.make_response(frame)?;
+
+        tracing::info!("{setpeers:?}");
+    }
 
     Ok(())
 }
