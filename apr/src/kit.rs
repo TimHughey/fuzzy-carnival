@@ -47,7 +47,7 @@ use auth::verify::Context as VerifyCtx;
 pub use cipher::BlockLen;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
-use methods::{FairPlay, Info, SetPeers, Setup};
+use methods::{Command, FairPlay, Info, SetPeers, Setup};
 pub use msg::{Frame, Response};
 use states::Generic as GenericState;
 use states::Verify as VerifyState;
@@ -71,9 +71,23 @@ impl Default for Pair {
     }
 }
 
-#[derive(Debug, Default, Copy, Clone)]
+#[allow(unused)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct ListenerPorts {
     event: Option<u16>,
+    audio: Option<u16>,
+    control: Option<u16>,
+}
+
+#[cfg(test)]
+impl ListenerPorts {
+    pub fn new(event_port: u16) -> Self {
+        Self {
+            event: Some(event_port),
+            audio: None,
+            control: None,
+        }
+    }
 }
 
 pub struct Context {
@@ -126,6 +140,8 @@ impl Kit {
 
         kit.listener_ports = ListenerPorts {
             event: Some(event_listener.local_addr()?.port()),
+            audio: None,
+            control: None,
         };
 
         let cancel_token = cancel_token.clone();
@@ -162,7 +178,8 @@ impl Kit {
                             kit.handle_frame(&mut framed, frame).await?;
                         },
                         Some(Err(e)) => {
-                            tracing::error!("framed error: {e}");
+
+                            tracing::error!("framimg error: {e}");
                             break;
                         },
                         None => ()
@@ -203,8 +220,8 @@ impl Kit {
         framed.send(response).await
     }
 
-    /// Creates and returns a [`Response`] by handling the routing (method and path)
-    /// included in the [`Frame`].  
+    /// Creates and returns a [`Response`] using the routing (method and path)
+    /// included in the [`Frame`] to invoke the required method implementation.
     ///
     /// # Errors
     ///
@@ -219,32 +236,14 @@ impl Kit {
         let (method, path) = routing.parts_tuple();
 
         match (method.as_str(), path.as_str()) {
-            (POST, "/feedback" | "/command") => {
-                if let Some(content) = frame.content {
-                    use plist::Value as Val;
-                    let pval: plist::Value = plist::from_bytes(&content.data)?;
+            (POST, "/feedback") => Ok(Response::ok_simple(cseq)),
 
-                    if let Some(arr) = pval
-                        .as_dictionary()
-                        .and_then(|dict| dict.get("params").and_then(Val::as_dictionary))
-                        .and_then(|dict| dict.get("mrSupportedCommandsFromSender"))
-                        .and_then(Val::as_array)
-                    {
-                        for a in arr {
-                            if let Some(data) = a.as_data() {
-                                let sub_val: Val = plist::from_bytes(data)?;
-
-                                tracing::debug!("\n{sub_val:?}");
-                            }
-                        }
-                    }
-                }
-
-                Ok(Response::ok_simple(cseq))
-            }
             (GET, "/info") => Info::make_response(frame),
             (POST, "/fp-setup") => FairPlay::make_response(frame),
-            (SETUP, _) if routing.is_rtsp() => self.setup_mut().make_response(frame),
+            (SETUP, _) if routing.is_rtsp() => {
+                let setup = self.setup_mut();
+                setup.make_response(frame)
+            }
             (GET_PARAMETER, _path) if routing.is_rtsp() => {
                 Ok(Response::ok_text(cseq, "\r\nvolume: 0.0\r\n"))
             }
@@ -258,7 +257,8 @@ impl Kit {
                 match state {
                     Msg01 => {
                         tracing::debug!("{path} {state:?}");
-                        let tags = self.pair.verify.m1_m2(t_in.get_public_key()?)?;
+                        let accessory_client_pub = t_in.get_public_key()?;
+                        let tags = self.pair.verify.m1_m2(accessory_client_pub)?;
 
                         Ok(Response::ok_octet_stream(cseq, &tags.encode()))
                     }
@@ -302,15 +302,18 @@ impl Kit {
             }
 
             (SET_PEERS | SET_PEERSX, _path) if routing.is_rtsp() => {
-                let setpeers = self.setpeers.get_or_insert(SetPeers::default());
+                let setpeers = self.setpeers_mut();
                 setpeers.make_response(frame)
             }
+
             (SET_PEERSX, _path) if routing.is_rtsp() => {
                 tracing::error!("implement {}", SET_PEERSX);
 
                 Ok(Response::internal_server_error(cseq))
             }
             (SET_PARAMETER, _path) if routing.is_rtsp() => Ok(Response::ok_simple(cseq)),
+
+            (POST, "/command") => Command::make_response(frame),
 
             (TEARDOWN, _path) if routing.is_rtsp() => Ok(Response::ok_simple(cseq)),
 
@@ -320,6 +323,10 @@ impl Kit {
                 Ok(Response::internal_server_error(cseq))
             }
         }
+    }
+
+    fn setpeers_mut(&mut self) -> &mut SetPeers {
+        self.setpeers.get_or_insert_with(SetPeers::default)
     }
 
     fn setup_mut(&mut self) -> &mut Setup {

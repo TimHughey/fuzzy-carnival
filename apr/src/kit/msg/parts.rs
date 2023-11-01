@@ -330,6 +330,10 @@ impl Routing {
         self.path.starts_with("rtsp")
     }
 
+    pub fn method_cloned(&self) -> String {
+        self.method.clone()
+    }
+
     #[allow(unused)]
     pub fn parts_tuple(&self) -> (String, String) {
         (self.method.clone(), self.path.clone())
@@ -340,7 +344,6 @@ impl Routing {
     }
 }
 
-#[allow(non_snake_case)]
 impl TryFrom<&[u8]> for Routing {
     type Error = anyhow::Error;
 

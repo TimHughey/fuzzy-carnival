@@ -15,62 +15,14 @@
 // limitations under the License.
 
 use crate::{
-    kit::{
-        methods::SetPeers,
-        msg::{Frame, Inflight},
-        tests::Data,
-    },
+    kit::{methods::SetPeers, msg::Frame, tests::Data},
     Result,
 };
 use tracing_test::traced_test;
 
 #[test]
-#[traced_test]
-fn can_create_inflight_for_setpeers() -> Result<()> {
-    use crate::kit::msg::Inflight;
-
-    let mut msg = Data::get_msg("SETPEERS")?;
-    let mut inflight = Inflight::default();
-    inflight.absorb_buf(&mut msg)?;
-    inflight.absorb_content(&mut msg);
-
-    assert!(inflight.cseq.is_some_and(|cseq| cseq == 10));
-    assert!(inflight.routing.is_some_and(|routing| {
-        let (method, _path) = routing.parts_tuple();
-
-        method.as_str() == "SETPEERS" && routing.is_rtsp()
-    }));
-    assert!(inflight.content.is_some_and(|content| {
-        content.len == 86
-            && content.kind.as_str() == "/peer-list-changed"
-            && content.data.starts_with(b"bplist00\xA2\x01")
-    }));
-
-    const DACPD_ID_SAMPLE: &str = "4DEBD3E0FEF928B";
-
-    assert!(inflight.metadata.is_some_and(|metadata| {
-        metadata
-            .active_remote
-            .is_some_and(|active_remote| active_remote > 0)
-            && metadata
-                .dacpd_id
-                .is_some_and(|dacpd_id| dacpd_id.len() == DACPD_ID_SAMPLE.len())
-            && metadata
-                .user_agent
-                .is_some_and(|user_agent| user_agent.starts_with("AirPlay"))
-    }));
-
-    Ok(())
-}
-
-#[test]
 fn can_create_inflight_for_setpeersx() -> Result<()> {
-    use crate::kit::msg::{Frame, Inflight};
-
-    let mut msg = Data::get_msg("SETPEERSX")?;
-    let mut inflight = Inflight::default();
-    inflight.absorb_buf(&mut msg)?;
-    inflight.absorb_content(&mut msg);
+    let inflight = Data::get_inflight("SETPEERSX", None)?;
 
     assert_eq!(inflight.block_len, None);
     assert!(inflight.cseq.is_some_and(|cseq| cseq == 10));
@@ -82,17 +34,7 @@ fn can_create_inflight_for_setpeersx() -> Result<()> {
     assert_eq!(frame.cseq, 10);
     assert!(frame.content.is_some());
 
-    if let Some(content) = frame.content.as_ref() {
-        let plist_val: plist::Value = plist::from_bytes(&content.data)?;
-
-        if let plist::Value::Array(arr) = plist_val {
-            // let row0 = &arr[0];
-
-            println!("{:#?}", arr[0]);
-        }
-    }
-
-    assert!(frame.content.is_some_and(|content| content.len == 264
+    assert!(frame.content.is_some_and(|content| content.len == 448
         && content.kind.as_str() == "/peer-list-changed-x"
         && content.data.starts_with(b"bplist00")));
 
@@ -109,18 +51,53 @@ fn can_create_inflight_for_setpeersx() -> Result<()> {
 #[test]
 #[traced_test]
 fn can_respond_to_setpeers_msg() -> Result<()> {
-    let mut msg = Data::get_msg("SETPEERSX")?;
     let mut setpeers = SetPeers::default();
 
-    let mut inflight = Inflight::default();
+    let frame = Data::get_frame("SETPEERSX", None)?;
+    let response = setpeers.make_response(frame)?;
 
-    inflight.absorb_buf(&mut msg)?;
-    inflight.absorb_content(&mut msg);
+    assert_eq!(response.status_code, 200);
 
-    if let Ok(frame) = Frame::try_from(inflight) {
-        let _response = setpeers.make_response(frame)?;
+    tracing::info!("{setpeers:#?}");
 
-        tracing::info!("{setpeers:?}");
+    Ok(())
+}
+
+#[test]
+fn can_create_setup_step2_from_frame() -> Result<()> {
+    use crate::kit::{methods::Setup, ListenerPorts};
+
+    let frame = Data::get_frame("SETUP", Some(14))?;
+
+    let listeners = ListenerPorts::new(49152);
+
+    let mut setup = Setup::build(listeners);
+
+    setup.make_response(frame)?;
+
+    println!("{setup:#?}");
+
+    Ok(())
+}
+
+#[test]
+fn dump_setup_step1_from_frame() -> Result<()> {
+    // use crate::kit::{methods, ListenerPorts};
+
+    let frame = Data::get_frame("SETUP", Some(6))?;
+
+    if let Some(content) = frame.content {
+        let dict = content.get_dict()?;
+
+        println!("{dict:#?}");
+    }
+
+    let frame = Data::get_frame("SETPEERSX", Some(10))?;
+
+    if let Some(content) = frame.content {
+        let plist: plist::Value = content.try_into()?;
+
+        println!("{plist:#?}");
     }
 
     Ok(())

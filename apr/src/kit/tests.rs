@@ -14,10 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Result;
+#[cfg(test)]
+use crate::{
+    kit::msg::{Frame, Inflight},
+    Result,
+};
 use anyhow::anyhow;
 use bstr::ByteSlice;
-use bytes::BytesMut;
+use bytes::{Buf, BytesMut};
 use once_cell::sync::Lazy;
 use pretty_hex::PrettyHex;
 use std::fmt;
@@ -65,6 +69,7 @@ impl Data {
         TEST_DATA.shared_secret.as_ref()
     }
 
+    #[allow(unused)]
     pub fn get_msg(method: &str) -> Result<BytesMut> {
         let mut buf = TEST_DATA.msgs.clone();
 
@@ -78,6 +83,57 @@ impl Data {
             .ok_or_else(|| anyhow!("could not find message end"))?;
 
         Ok(msg.split_to(at))
+    }
+
+    pub fn get_inflight(method: &str, cseq: Option<u32>) -> Result<Inflight> {
+        let needle_eom = b"\x00!*!*!*\x00";
+        let mut buf: BytesMut = TEST_DATA.msgs.clone();
+
+        let needle = [method.to_string(), " ".to_string()].concat();
+
+        'all_msgs: loop {
+            if let Some(msg_at) = buf.find(needle.as_bytes()) {
+                buf.advance(msg_at); // ignore everything prior to this message
+
+                // now find the end of the message
+                if let Some(eom_at) = buf.find(needle_eom) {
+                    let mut maybe_raw_msg = buf.split_to(eom_at);
+
+                    let mut inflight = Inflight::default();
+                    inflight.absorb_buf(&mut maybe_raw_msg)?;
+                    inflight.absorb_content(&mut maybe_raw_msg);
+
+                    if inflight.check_complete()? && cseq.is_none()
+                        || (cseq.is_some() && inflight.cseq == cseq)
+                    {
+                        return Ok(inflight);
+                    }
+
+                    // not the frame we're looking for, skip EOM and continue
+                    buf.advance(needle_eom.len());
+                }
+            } else {
+                break 'all_msgs;
+            }
+
+            if buf.is_empty() {
+                break 'all_msgs;
+            }
+        }
+
+        let mut error = format!("message not available: {method}");
+
+        if let Some(cseq) = cseq {
+            error = [error, format!(" {cseq:03}")].concat();
+        }
+
+        Err(anyhow!(error))
+    }
+
+    pub fn get_frame(method: &str, cseq: Option<u32>) -> Result<Frame> {
+        let inflight = Self::get_inflight(method, cseq)?;
+
+        Frame::try_from(inflight)
     }
 }
 
@@ -170,6 +226,7 @@ impl fmt::Debug for Data {
 #[cfg(test)]
 use num_bigint::BigUint;
 use num_traits::FromBytes;
+use tracing_test::traced_test;
 
 #[test]
 fn can_load_test_data() {
@@ -216,4 +273,18 @@ fn can_load_test_data() {
 
     let msgs = &td.msgs;
     assert!(msgs.len() > 4096);
+}
+
+#[test]
+#[traced_test]
+fn can_get_frame_by_cseq() -> Result<()> {
+    let frame = Data::get_frame("SETUP", Some(14))?;
+    let method = frame.routing.method_cloned();
+
+    assert_eq!(method.as_str(), "SETUP");
+    assert!(frame.routing.is_rtsp());
+    assert_eq!(frame.cseq, 14);
+    assert!(frame.content.is_some());
+
+    Ok(())
 }
