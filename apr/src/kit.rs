@@ -36,7 +36,6 @@ pub mod codec;
 pub mod helper;
 pub(crate) mod methods;
 pub mod msg;
-pub mod states;
 pub mod tags;
 
 #[cfg(test)]
@@ -49,8 +48,6 @@ pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
 use methods::{Command, FairPlay, Info, SetPeers, Setup};
 pub use msg::{Frame, Response};
-use states::Generic as GenericState;
-use states::Verify as VerifyState;
 use tags::Idx as TagIdx;
 use tags::Map as Tags;
 use tags::Val as TagVal;
@@ -249,32 +246,30 @@ impl Kit {
             }
             (RECORD, _path) if routing.is_rtsp() => Ok(Response::ok_simple(cseq)),
             (GET | POST, "/pair-verify") => {
-                use VerifyState::{Msg01, Msg02, Msg03, Msg04};
+                use tags::M1;
 
                 let t_in = Tags::try_from(frame.content)?;
-                let state = VerifyState::try_from(t_in.get_state()?)?;
+                let state = t_in.get_state()?;
 
                 match state {
-                    Msg01 => {
+                    M1 => {
                         tracing::debug!("{path} {state:?}");
                         let accessory_client_pub = t_in.get_public_key()?;
                         let tags = self.pair.verify.m1_m2(accessory_client_pub)?;
 
                         Ok(Response::ok_octet_stream(cseq, &tags.encode()))
                     }
-                    Msg02 | Msg03 | Msg04 => {
+                    state => {
                         let error = "bad state";
-                        tracing::error!("{error}: {routing} bad state={state:?}");
+                        tracing::error!("{error}: {routing} bad state={state}");
 
                         Err(anyhow!(error))
                     }
                 }
             }
             (GET | POST, "/pair-setup") => {
-                use states::Generic as State;
-
-                const M1: State = State(1);
-                const M3: State = State(3);
+                const M1: TagVal = TagVal::State(1);
+                const M3: TagVal = TagVal::State(3);
 
                 let t_in = Tags::try_from(frame.content)?;
                 let state = t_in.get_state()?;

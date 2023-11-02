@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{msg::Content, states, GenericState};
+use super::msg::Content;
 use crate::Result;
 use anyhow::anyhow;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -66,7 +66,7 @@ pub enum Val {
     PublicKey(Vec<u8>) = 3,
     Proof(Vec<u8>) = 4,
     EncryptedData(Vec<u8>) = 5,
-    State(GenericState) = 6,
+    State(u8) = 6,
     Error(u8) = 7,
     RetryDelay(u32) = 8,
     Certificate(Vec<u8>) = 9,
@@ -173,7 +173,7 @@ impl Val {
         let tag_len = self.len();
 
         match self {
-            Method(n) | State(GenericState(n)) if tag_len == 1 => tsb(tag_id, n),
+            Method(n) | State(n) if tag_len == 1 => tsb(tag_id, n),
             EncryptedData(data) | Signature(data) | Identifier(data) | PublicKey(data)
             | Salt(data) | Proof(data) => tvb(tag_id, data),
 
@@ -216,7 +216,7 @@ impl Val {
     }
 
     pub fn make_state(val: u8) -> Val {
-        Val::State(states::Generic(val))
+        Val::State(val)
     }
 
     /// Returns the tag id of this [`Val`].
@@ -226,21 +226,42 @@ impl Val {
     }
 }
 
+pub const M1: Val = Val::State(1);
+
 impl fmt::Debug for Val {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let desc = self.desc();
 
+        write!(f, "{desc}")?;
+
         match self {
             Identifier(x) | Signature(x) | Salt(x) | Proof(x) | EncryptedData(x)
             | FragmentData(x) | FragmentLast(x) | Certificate(x) => {
-                f.write_fmt(format_args!("{desc} {:?}", x.hex_dump()))
+                write!(f, " {:?}", x.hex_dump())
             }
-            RetryDelay(x) | Permissions(x) => f.write_fmt(format_args!("{desc}: {x}")),
-            Method(x) | Error(x) => f.write_fmt(format_args!("{desc} {x}")),
-            PublicKey(pk) => f.write_fmt(format_args!("{desc} {:?}", pk.hex_dump())),
-            State(s) => f.write_fmt(format_args!("{desc} {s:?}")),
-            Flags(x) => f.write_fmt(format_args!("{desc}: {x}")),
-            Separator => f.write_str(desc),
+            RetryDelay(x) | Permissions(x) => write!(f, " {x}"),
+            Method(x) | Error(x) | State(x) | Flags(x) => write!(f, " {x}"),
+            PublicKey(pk) => write!(f, " {:?}", pk.hex_dump()),
+            Separator => Ok(()),
+        }
+    }
+}
+
+impl fmt::Display for Val {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let desc = self.desc();
+
+        write!(f, "{desc}")?;
+
+        match self {
+            Identifier(x) | Signature(x) | Salt(x) | Proof(x) | EncryptedData(x)
+            | FragmentData(x) | FragmentLast(x) | Certificate(x) => {
+                write!(f, " {:?}", x.hex_dump())
+            }
+            RetryDelay(x) | Permissions(x) => write!(f, " {x}"),
+            Method(x) | Error(x) | State(x) | Flags(x) => write!(f, " {x}"),
+            PublicKey(pk) => write!(f, " {:?}", pk.hex_dump()),
+            Separator => Ok(()),
         }
     }
 }
@@ -284,12 +305,11 @@ impl Map {
         Ok(val?.clone())
     }
 
-    pub fn get_state(&self) -> Result<GenericState> {
-        if let Some(Val::State(s)) = self.0.get(&Idx::STATE) {
-            return Ok(*s);
-        }
-
-        Err(anyhow!("state not present"))
+    pub fn get_state(&self) -> Result<Val> {
+        self.0
+            .get(&Idx::STATE)
+            .cloned()
+            .ok_or_else(|| anyhow!("state not found"))
     }
 
     pub fn get_public_key(&self) -> Result<&Vec<u8>> {
@@ -359,7 +379,7 @@ impl TryFrom<BytesMut> for Map {
                     Val::Proof(bytes.to_vec())
                 }
 
-                (Idx::STATE, 1) => Val::State(GenericState::try_from(buf.get_u8())?),
+                (Idx::STATE, 1) => Val::State(buf.get_u8()),
 
                 (Idx::ERROR, 1) => Val::Error(buf.get_u8()),
 
@@ -489,7 +509,7 @@ mod tests {
         let mut data = BytesMut::zeroed(512);
         data.fill(0xb0u8);
 
-        list.push(State(crate::kit::GenericState(0x10u8)));
+        list.push(State(0x10u8));
         list.push(Identifier(ident.into()));
         list.push(EncryptedData(data.into()));
 

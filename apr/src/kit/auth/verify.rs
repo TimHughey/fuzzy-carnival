@@ -32,7 +32,7 @@ impl Context {
     }
 
     pub fn m1_m2(&self, accessory_client_pub: &[u8]) -> Result<Tags> {
-        use crate::kit::{states, TagVal};
+        use crate::kit::TagVal;
         use bytes::BytesMut;
         #[allow(unused)]
         use chacha20poly1305::{
@@ -80,7 +80,7 @@ impl Context {
 
         let mut tags = Tags::default();
 
-        tags.push(TagVal::State(states::Generic(0x02)));
+        tags.push(TagVal::State(0x02));
         tags.push(TagVal::PublicKey(accessory.public.as_bytes().to_vec()));
         tags.push(TagVal::EncryptedData(data.to_vec()));
 

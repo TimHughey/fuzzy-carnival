@@ -16,7 +16,7 @@
 
 use super::srp::{Server as SrpServer, Verifier};
 use crate::{
-    kit::{states, CipherCtx, TagIdx, TagVal, Tags},
+    kit::{CipherCtx, TagIdx, TagVal, Tags},
     Result,
 };
 use once_cell::sync::Lazy;
@@ -57,7 +57,7 @@ impl Context {
             (Ok(PAIR_SETUP), Ok(TRANSIENT)) => {
                 self.transient = true;
 
-                tags.push(State(states::Generic(2)));
+                tags.push(State(2));
                 tags.push(self.server.get_salt());
                 tags.push(self.server.get_pk());
             }
