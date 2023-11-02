@@ -54,7 +54,7 @@ mod static_data {
     });
 }
 
-mod consts {
+pub(crate) mod consts {
     pub(crate) const FP_MODE_IDX: usize = 14;
     pub(crate) const FP_SEQ_IDX: usize = 6;
     // const TYPE_IDX: usize = 5;
@@ -62,6 +62,16 @@ mod consts {
 
     pub(crate) const FP_SETUP1_SEQ: u8 = 1;
     pub(crate) const FP_SETUP2_SEQ: u8 = 3;
+
+    pub(crate) const GET_PARAMETER: &str = "GET_PARAMETER";
+    pub(crate) const GET: &str = "GET";
+    pub(crate) const POST: &str = "POST";
+    pub(crate) const RECORD: &str = "RECORD";
+    pub(crate) const SET_PARAMETER: &str = "SET_PARAMETER";
+    pub(crate) const SET_PEERS: &str = "SETPEERS";
+    pub(crate) const SET_PEERSX: &str = "SETPEERSX";
+    pub(crate) const SETUP: &str = "SETUP";
+    pub(crate) const TEARDOWN: &str = "TEARDOWN";
 }
 
 #[derive(Debug, Default)]
@@ -210,8 +220,6 @@ impl Info {
 pub struct SetPeers {
     peers: Vec<plist::Dictionary>,
 }
-
-#[allow(clippy::unnecessary_wraps)]
 
 impl SetPeers {
     pub fn make_response(&mut self, frame: Frame) -> Result<Response> {

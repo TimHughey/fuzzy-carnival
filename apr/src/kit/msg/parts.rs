@@ -326,6 +326,10 @@ pub struct Routing {
 }
 
 impl Routing {
+    pub fn ends_with(&self, pat: &str) -> bool {
+        self.path.ends_with(pat)
+    }
+
     pub fn is_rtsp(&self) -> bool {
         self.path.starts_with("rtsp")
     }
@@ -339,8 +343,16 @@ impl Routing {
         (self.method.clone(), self.path.clone())
     }
 
+    pub fn path_cloned(&self) -> String {
+        self.path.clone()
+    }
+
     pub fn please_log(&self) -> bool {
         !self.path.ends_with("feedback")
+    }
+
+    pub fn starts_with(&self, pat: &str) -> bool {
+        self.path.starts_with(pat)
     }
 }
 

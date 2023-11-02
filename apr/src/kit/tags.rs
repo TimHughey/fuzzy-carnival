@@ -226,8 +226,6 @@ impl Val {
     }
 }
 
-pub const M1: Val = Val::State(1);
-
 impl fmt::Debug for Val {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let desc = self.desc();

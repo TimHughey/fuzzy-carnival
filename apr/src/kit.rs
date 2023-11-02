@@ -41,8 +41,9 @@ pub mod tags;
 #[cfg(test)]
 pub(crate) mod tests;
 
-use auth::setup::Context as SetupCtx;
-use auth::verify::Context as VerifyCtx;
+// use auth::setup::Context as SetupCtx;
+// use auth::verify::Context as VerifyCtx;
+pub use auth::Pair;
 pub use cipher::BlockLen;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
@@ -54,20 +55,6 @@ use tags::Val as TagVal;
 
 type Codec = Framed<TcpStream, codec::Rtsp>;
 
-struct Pair {
-    setup: Lazy<SetupCtx>,
-    verify: Lazy<VerifyCtx>,
-}
-
-impl Default for Pair {
-    fn default() -> Self {
-        Self {
-            setup: Lazy::new(SetupCtx::build),
-            verify: Lazy::new(VerifyCtx::build),
-        }
-    }
-}
-
 #[allow(unused)]
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct ListenerPorts {
@@ -76,7 +63,6 @@ pub struct ListenerPorts {
     control: Option<u16>,
 }
 
-#[cfg(test)]
 impl ListenerPorts {
     pub fn new(event_port: u16) -> Self {
         Self {
@@ -135,6 +121,8 @@ impl Kit {
         let addr = format!("{}:0", HostInfo::ip_as_str());
         let event_listener = TcpListener::bind(addr).await?;
 
+        kit.listener_ports = ListenerPorts::new(event_listener.local_addr()?.port());
+
         kit.listener_ports = ListenerPorts {
             event: Some(event_listener.local_addr()?.port()),
             audio: None,
@@ -164,7 +152,6 @@ impl Kit {
 
         // step 2: process inbound RTSP messages and run until
         //         client disconnects or the app is shutdown
-
         let mut event_socket = None;
 
         loop {
@@ -204,13 +191,21 @@ impl Kit {
         Ok(())
     }
 
+    /// Handles the framed received by [`Framed`] codec implementation.  The goal of
+    /// this function is to perform any pre/post side-effects associated withe
+    /// processing the [`Frame`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return any errors produced while creating the [`Response`] .
     async fn handle_frame(&mut self, framed: &mut Codec, frame: Frame) -> Result<()> {
         if frame.routing.please_log() {
             tracing::info!("{frame}");
         }
 
-        let response = self.respond_to(frame)?;
-        if let Some(cipher) = self.pair.setup.cipher.take() {
+        let response = self.response(frame)?;
+
+        if let Some(cipher) = self.pair.cipher_take() {
             framed.codec_mut().install_cipher(cipher);
         }
 
@@ -223,8 +218,8 @@ impl Kit {
     /// # Errors
     ///
     /// This function will return an error if there is a logic error or defect.
-    pub fn respond_to(&mut self, frame: Frame) -> Result<Response> {
-        use msg::method::{
+    pub fn response(&mut self, frame: Frame) -> Result<Response> {
+        use methods::consts::{
             GET, GET_PARAMETER, POST, RECORD, SETUP, SET_PARAMETER, SET_PEERS, SET_PEERSX, TEARDOWN,
         };
 
@@ -245,56 +240,7 @@ impl Kit {
                 Ok(Response::ok_text(cseq, "\r\nvolume: 0.0\r\n"))
             }
             (RECORD, _path) if routing.is_rtsp() => Ok(Response::ok_simple(cseq)),
-            (GET | POST, "/pair-verify") => {
-                use tags::M1;
-
-                let t_in = Tags::try_from(frame.content)?;
-                let state = t_in.get_state()?;
-
-                match state {
-                    M1 => {
-                        tracing::debug!("{path} {state:?}");
-                        let accessory_client_pub = t_in.get_public_key()?;
-                        let tags = self.pair.verify.m1_m2(accessory_client_pub)?;
-
-                        Ok(Response::ok_octet_stream(cseq, &tags.encode()))
-                    }
-                    state => {
-                        let error = "bad state";
-                        tracing::error!("{error}: {routing} bad state={state}");
-
-                        Err(anyhow!(error))
-                    }
-                }
-            }
-            (GET | POST, "/pair-setup") => {
-                const M1: TagVal = TagVal::State(1);
-                const M3: TagVal = TagVal::State(3);
-
-                let t_in = Tags::try_from(frame.content)?;
-                let state = t_in.get_state()?;
-
-                match state {
-                    M1 => {
-                        tracing::debug!("{path} M1");
-
-                        let t_out = self.pair.setup.m1_m2(&t_in);
-                        Ok(Response::ok_octet_stream(cseq, &t_out.encode()))
-                    }
-
-                    M3 => {
-                        tracing::debug!("{path} M3");
-
-                        let t_out = self.pair.setup.m3_m4(&t_in)?;
-                        Ok(Response::ok_octet_stream(cseq, &t_out.encode()))
-                    }
-
-                    _state => {
-                        tracing::warn!("Setup UNKNOWN  {t_in:?}");
-                        Ok(Response::internal_server_error(cseq))
-                    }
-                }
-            }
+            (GET | POST, path) if routing.starts_with("/pair-") => self.pair.response(path, frame),
 
             (SET_PEERS | SET_PEERSX, _path) if routing.is_rtsp() => {
                 let setpeers = self.setpeers_mut();

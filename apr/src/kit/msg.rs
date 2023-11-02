@@ -340,18 +340,6 @@ impl std::fmt::Display for Frame {
     }
 }
 
-pub mod method {
-    pub const GET_PARAMETER: &str = "GET_PARAMETER";
-    pub const GET: &str = "GET";
-    pub const POST: &str = "POST";
-    pub const RECORD: &str = "RECORD";
-    pub const SET_PARAMETER: &str = "SET_PARAMETER";
-    pub const SET_PEERS: &str = "SETPEERS";
-    pub const SET_PEERSX: &str = "SETPEERSX";
-    pub const SETUP: &str = "SETUP";
-    pub const TEARDOWN: &str = "TEARDOWN";
-}
-
 pub struct Response {
     pub status_code: u16,
     pub cseq: u32,

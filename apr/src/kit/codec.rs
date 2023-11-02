@@ -28,10 +28,12 @@ use pretty_hex::PrettyHex;
 use std::sync::{Arc, RwLock};
 use tokio_util::codec::{Decoder, Encoder};
 
-/// A simple [`Decoder`] and [`Encoder`] implementation that splits up data into lines.
+/// A [`Decoder`] and [`Encoder`] implementation that assembles incoming packets
+/// into [`Inflight`] messages to accomodate fragmented messages.  Complete
+/// [`Inflight`] messages are then converted to a [`Frame`] and returned.
 ///
-/// [`Decoder`]: crate::codec::Decoder
-/// [`Encoder`]: crate::codec::Encoder
+/// [`Decoder`]: tokio_util::codec::Decoder
+/// [`Encoder`]: tokio_util::codec::Encoder
 #[derive(Debug, Default)]
 pub struct Rtsp {
     cipher: CipherLock,
