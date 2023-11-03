@@ -111,7 +111,7 @@ impl Decoder for Rtsp {
 
         if let Some(clear) = self.clear.as_mut() {
             const CLEAR_MIN_LEN: usize = 50;
-            const CLEAR_LARGE_MSG: usize = 3 * 1024;
+            const CLEAR_LARGE_MSG: usize = 65 * 1024;
 
             let clear_len = clear.len();
 
@@ -121,7 +121,16 @@ impl Decoder for Rtsp {
 
             // if plaintext_len > PLAINTEXT_MIN_LEN {
             if clear_len >= CLEAR_LARGE_MSG {
-                tracing::info!("\nLARGE MESSAGE {:?}", clear.hex_dump());
+                let cfg = pretty_hex::HexConfig {
+                    title: true,
+                    width: 32,
+                    group: 4,
+                    chunk: 4,
+                    max_bytes: 256,
+                    ..pretty_hex::HexConfig::default()
+                };
+
+                tracing::debug!("\nLARGE MESSAGE {:?}", clear.hex_conf(cfg));
             } else {
                 tracing::debug!("CLEAR TEXT INBOUND {:?}", clear.hex_dump());
             }

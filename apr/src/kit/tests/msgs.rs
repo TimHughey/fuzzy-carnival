@@ -54,7 +54,7 @@ fn can_respond_to_setpeers_msg() -> Result<()> {
     let mut setpeers = SetPeers::default();
 
     let frame = Data::get_frame("SETPEERSX", None)?;
-    let response = setpeers.make_response(frame)?;
+    let response = setpeers.response(frame)?;
 
     assert_eq!(response.status_code, 200);
 
@@ -63,42 +63,42 @@ fn can_respond_to_setpeers_msg() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn can_create_setup_step2_from_frame() -> Result<()> {
+#[traced_test]
+#[tokio::test]
+async fn can_create_setup_step1_from_frame() -> Result<()> {
     use crate::kit::{methods::Setup, ListenerPorts};
 
-    let frame = Data::get_frame("SETUP", Some(14))?;
+    let frame = Data::get_frame("SETUP", Some(6))?;
+    let mut listener_ports = ListenerPorts::new().await?;
 
-    let listeners = ListenerPorts::new(49152);
+    println!("{listener_ports:#?}");
 
-    let mut setup = Setup::build(listeners);
+    let ports = listener_ports.take_ports();
 
-    setup.make_response(frame)?;
+    let mut setup = Setup::default();
+    let _response = setup.response(frame, ports)?;
 
     println!("{setup:#?}");
 
     Ok(())
 }
 
-#[test]
-fn dump_setup_step1_from_frame() -> Result<()> {
-    // use crate::kit::{methods, ListenerPorts};
+#[traced_test]
+#[tokio::test]
+async fn can_create_setup_step2_from_frame() -> Result<()> {
+    use crate::kit::{methods::Setup, ListenerPorts};
 
-    let frame = Data::get_frame("SETUP", Some(6))?;
+    let frame1 = Data::get_frame("SETUP", Some(6))?;
+    let frame2 = Data::get_frame("SETUP", Some(14))?;
 
-    if let Some(content) = frame.content {
-        let dict = content.get_dict()?;
+    let mut listener_ports = ListenerPorts::new().await?;
+    let ports = listener_ports.take_ports();
 
-        println!("{dict:#?}");
-    }
+    let mut setup = Setup::default();
 
-    let frame = Data::get_frame("SETPEERSX", Some(10))?;
-
-    if let Some(content) = frame.content {
-        let plist: plist::Value = content.try_into()?;
-
-        println!("{plist:#?}");
-    }
+    let _response = setup.response(frame1, ports)?;
+    let _response = setup.response(frame2, ports)?;
+    println!("{setup:#?}");
 
     Ok(())
 }

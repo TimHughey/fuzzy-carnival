@@ -76,7 +76,7 @@ static CONTENT_MATCH: Lazy<ContentMatch> = Lazy::new(|| {
     }
 });
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Content {
     pub cseq: u32,
     pub kind: String,
@@ -233,7 +233,7 @@ impl std::fmt::Debug for Content {
 
 const META_ACTIVE_REMOTE: &str = "Active-Remote";
 const META_DACPD_ID: &str = "DACP-ID";
-const META_RTP_INFO: &str = "RTP-INFO";
+const META_RTP_INFO: &str = "RTP-Info";
 const META_USER_AGENT: &str = "User-Agent";
 
 #[derive(Debug, Default)]
@@ -381,6 +381,12 @@ impl TryFrom<&[u8]> for Routing {
 
 impl std::fmt::Display for Routing {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.method.as_str(), self.path)
+        write!(f, "{}", self.method.as_str())?;
+
+        if !self.path.starts_with("rtsp") {
+            write!(f, " {}", self.path)?;
+        }
+
+        Ok(())
     }
 }
