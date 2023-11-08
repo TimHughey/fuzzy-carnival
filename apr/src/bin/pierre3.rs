@@ -28,7 +28,7 @@ use tokio_util::sync::CancellationToken;
 /// Returns errors for any failure related to establishing
 /// the base app runtime information (e.g. hostname) or setup
 /// of the networking socket.
-#[tokio::main(worker_threads = 3)]
+#[tokio::main(worker_threads = 4)]
 pub async fn main() -> crate::Result<()> {
     setup_logging()?;
     let cancel_token = CancellationToken::new();

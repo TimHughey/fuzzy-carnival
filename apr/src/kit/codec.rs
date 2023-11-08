@@ -19,11 +19,12 @@ use crate::{
         msg::{Frame, Inflight, Response},
         BlockLen, CipherCtx, CipherLock,
     },
-    util::BinSave,
+    util::{BinSave, BinSaveCat},
     Result,
 };
 use anyhow::anyhow;
 use bytes::BytesMut;
+use once_cell::sync::Lazy;
 use pretty_hex::PrettyHex;
 use std::sync::{Arc, RwLock};
 use tokio_util::codec::{Decoder, Encoder};
@@ -34,12 +35,23 @@ use tokio_util::codec::{Decoder, Encoder};
 ///
 /// [`Decoder`]: tokio_util::codec::Decoder
 /// [`Encoder`]: tokio_util::codec::Encoder
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Rtsp {
     cipher: CipherLock,
     clear: Option<BytesMut>,
     inflight: Option<Inflight>,
-    bin_save: BinSave,
+    binsave: Lazy<BinSave>,
+}
+
+impl Default for Rtsp {
+    fn default() -> Self {
+        Self {
+            cipher: None,
+            clear: None,
+            inflight: None,
+            binsave: Lazy::new(|| BinSave::new(BinSaveCat::Rtsp).expect("bin save init failure")),
+        }
+    }
 }
 
 impl Rtsp {
@@ -135,8 +147,8 @@ impl Decoder for Rtsp {
                 tracing::debug!("CLEAR TEXT INBOUND {:?}", clear.hex_dump());
             }
 
-            // let rollback = clear.clone();
-            self.bin_save.persist(clear, BinSave::ALL, None)?;
+            let binsave = &self.binsave;
+            binsave.persist(clear, BinSave::ALL, None)?;
 
             let mut persist_buf = clear.clone();
 
@@ -149,8 +161,7 @@ impl Decoder for Rtsp {
                     let frame = Frame::try_from(inflight)?;
                     self.inflight = None;
 
-                    self.bin_save
-                        .persist(&persist_buf, BinSave::IN, Some(frame.cseq))?;
+                    binsave.persist(&persist_buf, BinSave::IN, Some(frame.cseq))?;
                     persist_buf.clear();
 
                     return Ok(Some(frame));
@@ -210,8 +221,9 @@ impl Encoder<Response> for Rtsp {
 
         tracing::debug!("\nOUTBOUND CLEAR TEXT {:?}", dst.hex_dump());
 
-        self.bin_save
-            .persist(dst.as_ref(), BinSave::OUT, Some(cseq))?;
+        let binsave = &self.binsave;
+
+        binsave.persist(dst.as_ref(), BinSave::OUT, Some(cseq))?;
 
         if let Some(cipher) = self.cipher.as_ref() {
             let cleartext = dst.split();
@@ -224,7 +236,7 @@ impl Encoder<Response> for Rtsp {
 
         tracing::debug!("\nOUTBOUND BUF {:?}", dst.hex_dump());
 
-        self.bin_save.persist(dst.as_ref(), BinSave::ALL, None)?;
+        binsave.persist(dst.as_ref(), BinSave::ALL, None)?;
 
         Ok(())
     }

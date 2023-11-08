@@ -21,13 +21,13 @@ use crate::{
 use anyhow::anyhow;
 use bytes::BytesMut;
 use pretty_hex::PrettyHex;
-use serde::Deserialize;
-// use serde_derive::{self, Deserialize};
 
+// Method
+pub(crate) mod rateanchor;
+pub(crate) use rateanchor::Set as SetRateAnchorTime;
 // Method: SETPEERS(X)
 pub(crate) mod peers;
 pub(crate) use peers::Set as SetPeers;
-
 // Method: SETUP
 pub(crate) mod setup;
 pub(crate) use setup::Setup;
@@ -222,17 +222,4 @@ impl Info {
 
         Ok(Response::ok_octet_stream(cseq, &binary))
     }
-}
-
-#[allow(unused)]
-#[derive(Default, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetRateAnchorTime {
-    rate: u64,
-    #[serde(alias = "networkTimeTimelineID")]
-    network_time_timeline_id: Option<i64>,
-    network_time_secs: Option<i64>,
-    network_time_frac: Option<i64>,
-    network_time_flags: Option<u8>,
-    rtp_time: Option<u32>,
 }

@@ -32,26 +32,72 @@ pub(crate) mod srp;
 
 static TEST_DATA: Lazy<Data> = Lazy::new(Data::default);
 
+enum Kind {
+    Rtsp,
+    Text,
+    Ptp,
+    Pairing,
+}
+
+impl Kind {
+    pub fn filename(self, f: &str) -> String {
+        let extension = match self {
+            Kind::Rtsp | Kind::Ptp | Kind::Pairing => "bin",
+            Kind::Text => "txt",
+        };
+
+        format!("{f}.{extension}")
+    }
+}
+
+impl AsRef<str> for Kind {
+    fn as_ref(&self) -> &str {
+        match self {
+            Kind::Rtsp => "rtsp",
+            Kind::Text => "text",
+            Kind::Ptp => "ptp",
+            Kind::Pairing => "pairing",
+        }
+    }
+}
+
+fn read(kind: Kind, f: &str) -> BytesMut {
+    use std::{fs, path::Path};
+
+    let base = std::env::var("CARGO_MANIFEST_DIR").expect("CARFO_MANIFEST_DIR missing");
+
+    let file = Path::new(&base)
+        .parent()
+        .unwrap()
+        .join("extra")
+        .join("test-data")
+        .join(kind.as_ref())
+        .join(kind.filename(f));
+
+    BytesMut::from(fs::read(file).unwrap().as_slice())
+}
+
 #[derive(Clone)]
 #[allow(unused, non_snake_case)]
 pub struct Data {
-    pub A: Vec<u8>,
-    pub B: Vec<u8>,
-    pub b: Vec<u8>,
-    pub client_M1: Vec<u8>,
-    pub H_AMK: Vec<u8>,
-    pub s: Vec<u8>,
-    pub server_M: Vec<u8>,
-    pub server_M2: Vec<u8>,
-    pub session_key: Vec<u8>,
-    pub u: Vec<u8>,
-    pub user_M: Vec<u8>,
-    pub v: Vec<u8>,
-    pub shared_secret: Vec<u8>, // should match session key
-    pub read_key: Vec<u8>,      // after HKDF expand/extract
-    pub write_key: Vec<u8>,     // after HKDF expand/extract
-    pub alice: String,          // first chapter of Alice in Wonderland
-    pub msgs: BytesMut,         // all inbound saved messages
+    pub A: BytesMut,
+    pub B: BytesMut,
+    pub b: BytesMut,
+    pub client_M1: BytesMut,
+    pub H_AMK: BytesMut,
+    pub s: BytesMut,
+    pub server_M: BytesMut,
+    pub server_M2: BytesMut,
+    pub session_key: BytesMut,
+    pub u: BytesMut,
+    pub user_M: BytesMut,
+    pub v: BytesMut,
+    pub shared_secret: BytesMut, // should match session key
+    pub read_key: BytesMut,      // after HKDF expand/extract
+    pub write_key: BytesMut,     // after HKDF expand/extract
+    pub alice: BytesMut,         // first chapter of Alice in Wonderland
+    pub msgs: BytesMut,          // all inbound saved rtsp messages
+    pub ptp: BytesMut,           // all inbound saved ptp messages
 }
 
 impl Data {
@@ -62,11 +108,6 @@ impl Data {
     #[allow(unused)]
     pub fn get_ref() -> &'static Self {
         &TEST_DATA
-    }
-
-    #[allow(unused)]
-    pub fn shared_secret_as_ref() -> &'static Vec<u8> {
-        TEST_DATA.shared_secret.as_ref()
     }
 
     #[allow(unused)]
@@ -139,61 +180,25 @@ impl Data {
 
 impl Default for Data {
     fn default() -> Self {
-        use std::{fs, path::Path};
-
-        let base = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-
-        let data_dir = Path::new(&base)
-            .parent()
-            .unwrap()
-            .join("extra")
-            .join("test-data");
-
-        let pairing_dir = data_dir.clone().join("pairing");
-        let text_dir = data_dir.clone().join("text");
-        let msgs_dir = data_dir.clone().join("msgs");
-
-        let read_bin = |f: &str| {
-            let mut file = pairing_dir.clone().join(f);
-
-            file.set_extension("bin");
-
-            fs::read(&file).unwrap()
-        };
-
-        let read_txt = |f: &str| {
-            let mut file = text_dir.clone().join(f);
-
-            file.set_extension("txt");
-
-            fs::read(&file).unwrap().as_bstr().to_string()
-        };
-
-        let read_msgs = |f: &str| {
-            let mut file = msgs_dir.clone().join(f);
-            file.set_extension("bin");
-
-            BytesMut::from(fs::read(&file).unwrap().as_slice())
-        };
-
         Self {
-            A: read_bin("A"),
-            B: read_bin("B"),
-            b: read_bin("b"),
-            client_M1: read_bin("client_M1"),
-            H_AMK: read_bin("H_AMK"),
-            s: read_bin("s"),
-            server_M: read_bin("server_M"),
-            server_M2: read_bin("server_M2"),
-            session_key: read_bin("session_key"),
-            u: read_bin("u"),
-            user_M: read_bin("user_M"),
-            v: read_bin("v"),
-            shared_secret: read_bin("shared_secret"),
-            read_key: read_bin("read_key"),
-            write_key: read_bin("write_key"),
-            alice: read_txt("alice"),
-            msgs: read_msgs("all"),
+            A: read(Kind::Pairing, "A"),
+            B: read(Kind::Pairing, "B"),
+            b: read(Kind::Pairing, "b"),
+            client_M1: read(Kind::Pairing, "client_M1"),
+            H_AMK: read(Kind::Pairing, "H_AMK"),
+            s: read(Kind::Pairing, "s"),
+            server_M: read(Kind::Pairing, "server_M"),
+            server_M2: read(Kind::Pairing, "server_M2"),
+            session_key: read(Kind::Pairing, "session_key"),
+            u: read(Kind::Pairing, "u"),
+            user_M: read(Kind::Pairing, "user_M"),
+            v: read(Kind::Pairing, "v"),
+            shared_secret: read(Kind::Pairing, "shared_secret"),
+            read_key: read(Kind::Pairing, "read_key"),
+            write_key: read(Kind::Pairing, "write_key"),
+            alice: read(Kind::Text, "alice"),
+            msgs: read(Kind::Rtsp, "all"),
+            ptp: read(Kind::Ptp, "all"),
         }
     }
 }
@@ -217,7 +222,8 @@ impl fmt::Debug for Data {
         writeln!(f, "read_key {:?}\n", self.read_key.hex_dump())?;
         writeln!(f, "write_key {:?}\n", self.write_key.hex_dump())?;
         writeln!(f, "alice {:?}\n", self.alice.hex_dump())?;
-        writeln!(f, "msgs {:?}\n", self.msgs.hex_dump())?;
+        writeln!(f, "rtsp msgs {:?}\n", self.msgs.hex_dump())?;
+        writeln!(f, "ptp msgs {:?}\n", self.ptp.hex_dump())?;
 
         Ok(())
     }
@@ -239,7 +245,7 @@ fn can_load_test_data() {
 
     let td = Data::get();
 
-    let members: Vec<(&Vec<u8>, usize)> = vec![
+    let members: Vec<(&BytesMut, usize)> = vec![
         (&td.A, PUB_KEY_LEN),
         (&td.B, PUB_KEY_LEN),
         (&td.b, SEC_KEY_LEN),
@@ -271,8 +277,11 @@ fn can_load_test_data() {
     let alice = &td.alice;
     assert!(alice.len() > 2048);
 
-    let msgs = &td.msgs;
-    assert!(msgs.len() > 4096);
+    let rtsp_msgs = &td.msgs;
+    assert!(rtsp_msgs.len() > 4096);
+
+    let ptp_msgs = &td.ptp;
+    assert!(ptp_msgs.len() > 1024);
 }
 
 #[test]

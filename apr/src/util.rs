@@ -15,20 +15,48 @@
 // limitations under the License.
 
 use crate::Result;
-use anyhow::anyhow;
 use bytes::BytesMut;
 use chrono::Local;
 use std::{io, path::PathBuf};
 
+pub mod bin_save {
+    use crate::Result;
+    use anyhow::anyhow;
+    use std::path::PathBuf;
+
+    pub enum Cat {
+        Rtsp,
+        Ptp,
+    }
+
+    impl Cat {
+        pub fn base(self) -> Result<PathBuf> {
+            use Cat::{Ptp, Rtsp};
+
+            const RTSP_KEY: &str = "APR_RTSP_BIN_SAVE";
+            const PTP_KEY: &str = "APR_PTP_BIN_SAVE";
+
+            let base = match self {
+                Rtsp => Self::get_var(RTSP_KEY)?.into(),
+                Ptp => Self::get_var(PTP_KEY)?.into(),
+            };
+
+            Ok(base)
+        }
+
+        fn get_var(key: &str) -> Result<String> {
+            use std::env::var;
+
+            var(key).map_err(|e| anyhow!("{key}: {e}"))
+        }
+    }
+}
+
+pub(crate) use bin_save::Cat as BinSaveCat;
+
 #[derive(Debug)]
 pub(crate) struct BinSave {
     path_base: PathBuf,
-}
-
-impl Default for BinSave {
-    fn default() -> Self {
-        BinSave::new().expect("BinSave new failed")
-    }
 }
 
 #[allow(unused)]
@@ -38,15 +66,11 @@ impl BinSave {
     pub const IN: &str = "in";
     pub const OUT: &str = "out";
 
-    pub fn new() -> Result<Self> {
+    pub fn new(cat: bin_save::Cat) -> Result<Self> {
         use std::env::var;
 
-        const KEY: &str = "CARGO_MANIFEST_DIR";
-
         let now = Local::now();
-        let base: PathBuf = var(KEY).map_err(|e| anyhow!(e))?.into();
-        let mut base = base.parent().unwrap().to_path_buf();
-        base.push("extra/run");
+        let mut base = cat.base()?;
         base.push(format!("{}", now.format("%s")));
 
         std::fs::create_dir_all(&base)?;

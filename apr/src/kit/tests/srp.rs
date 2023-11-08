@@ -46,13 +46,17 @@ fn can_generate_same_proof() -> Result<()> {
 
     let verifier = Verifier::new(&server, &td.A, &td.client_M1)?;
 
-    assert_eq!(n_to_bytes(&server.v), td.v.as_slice());
-    assert_eq!(n_to_bytes(&verifier.A), td.A.as_slice());
-    assert_eq!(n_to_bytes(&server.B), td.B.as_slice());
-    assert_eq!(n_to_bytes(&verifier.u), td.u.as_slice());
+    assert_eq!(n_to_bytes(&server.v), td.v);
+    assert_eq!(n_to_bytes(&verifier.A), td.A);
+    assert_eq!(n_to_bytes(&server.B), td.B);
+    assert_eq!(n_to_bytes(&verifier.u), td.u);
 
-    hash_cmp("M (server", &verifier.M_bytes, &td.server_M);
-    hash_cmp("session_key", &verifier.session_key, &td.session_key);
+    hash_cmp("M (server", &verifier.M_bytes, &td.server_M.to_vec());
+    hash_cmp(
+        "session_key",
+        &verifier.session_key,
+        &td.session_key.to_vec(),
+    );
 
     Ok(())
 }
@@ -86,7 +90,7 @@ fn can_authenticate() -> Result<()> {
 
     assert!(res);
 
-    assert!(hash_cmp("H_AMK", &verifier.H_AMK, &td.H_AMK));
+    assert!(hash_cmp("H_AMK", &verifier.H_AMK, &td.H_AMK.to_vec()));
 
     Ok(())
 }
@@ -102,12 +106,12 @@ fn can_generate_same_read_write_keys() -> Result<()> {
     let mut key = vec![];
     key.extend_from_slice(&cipher.encrypt_key[..]);
 
-    hash_cmp("encrypt key", &td.write_key, &key);
+    hash_cmp("encrypt key", &td.write_key.to_vec(), &key);
 
     let mut key = vec![];
     key.extend_from_slice(&cipher.decrypt_key[..]);
 
-    hash_cmp("decrypt key", &td.read_key, &key);
+    hash_cmp("decrypt key", &td.read_key.to_vec(), &key);
 
     Ok(())
 }
@@ -155,7 +159,7 @@ fn can_compute_known_v() {
     assert!(v.bits() >= 3070);
 
     let v_bytes = v.to_bytes_be();
-    assert_eq!(v_bytes.as_slice(), td.v.as_slice());
+    assert_eq!(v_bytes.as_slice(), td.v);
 }
 
 #[test]

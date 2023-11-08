@@ -22,17 +22,22 @@ use once_cell::sync::Lazy;
 #[allow(unused_imports)]
 use pretty_hex::PrettyHex;
 use std::fmt;
-use tokio::net::TcpListener;
-use tokio::time::{self, Duration};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    task::JoinSet,
+    time::{self, Duration},
+};
 use tokio_stream::StreamExt;
 use tokio_util::{codec::Decoder, sync::CancellationToken};
 
 mod auth;
 pub mod cipher;
-pub mod codec;
+pub(crate) mod codec;
+pub(crate) mod conn;
 pub mod helper;
 pub(crate) mod methods;
 pub mod msg;
+mod ptp;
 pub mod tags;
 
 #[cfg(test)]
@@ -42,97 +47,14 @@ pub use auth::Pair;
 pub use cipher::BlockLen;
 pub use cipher::Context as CipherCtx;
 pub use cipher::Lock as CipherLock;
-use methods::{Command, FairPlay, Info, SetPeers, Setup};
+use conn::{ListenersAndPorts, Ports};
+use methods::{Command, FairPlay, Info, SetPeers, SetRateAnchorTime, Setup};
 pub use msg::{Frame, Response};
 use tags::Idx as TagIdx;
 use tags::Map as Tags;
 use tags::Val as TagVal;
 
 // type Codec = Framed<TcpStream, codec::Rtsp>;
-
-#[derive(Debug, Default, Copy, Clone, PartialEq, PartialOrd)]
-pub struct Ports {
-    pub event: u16,
-    pub data: u16,
-    pub control: u16,
-}
-
-/*impl Ports {
-    pub fn control_as_val(&self) -> Result<plist::Value> {
-        if let Some(ports) = self.ports.as_ref() {
-            return Ok(plist::Value::try_from(ports.control)?);
-        }
-
-        let error = "control port is None";
-        tracing::error!(error);
-        Err(anyhow!(error))
-    }
-
-    pub fn data_as_val(&self) -> Result<plist::Value> {
-        if let Some(ports) = self.ports.as_ref() {
-            return Ok(plist::Value::try_from(ports.data)?);
-        }
-
-        let error = "data port is None";
-        tracing::error!(error);
-        Err(anyhow!(error))
-    }
-
-    pub fn event_as_val(&self) -> Result<plist::Value> {
-        if let Some(ports) = self.ports.as_ref() {
-            return Ok(plist::Value::try_from(ports.event)?);
-        }
-
-        let error = "event port is None";
-        tracing::error!(error);
-        Err(anyhow!(error))
-    }
-}*/
-
-#[derive(Debug)]
-pub struct Listeners {
-    pub event: TcpListener,
-    pub data: TcpListener,
-    pub control: TcpListener,
-}
-
-#[allow(unused)]
-#[derive(Debug, Default)]
-pub struct ListenerPorts {
-    ports: Option<Ports>,
-    listeners: Option<Listeners>,
-}
-
-impl ListenerPorts {
-    pub async fn new() -> Result<Self> {
-        let addr = format!("{}:0", HostInfo::ip_as_str());
-
-        let listeners = Listeners {
-            event: TcpListener::bind(&addr).await?,
-            data: TcpListener::bind(&addr).await?,
-            control: TcpListener::bind(&addr).await?,
-        };
-
-        let ports = Ports {
-            event: listeners.event.local_addr()?.port(),
-            data: listeners.data.local_addr()?.port(),
-            control: listeners.control.local_addr()?.port(),
-        };
-
-        Ok(Self {
-            listeners: Some(listeners),
-            ports: Some(ports),
-        })
-    }
-
-    pub fn take_listeners(&mut self) -> Option<Listeners> {
-        self.listeners.take()
-    }
-
-    pub fn take_ports(&mut self) -> Option<Ports> {
-        self.ports.take()
-    }
-}
 
 type MaybeFrame = Option<Result<Frame>>;
 type MaybeResponse = Option<Result<Response>>;
@@ -144,6 +66,7 @@ pub struct Context {
     setup: Option<Setup>,
     setpeers: Option<SetPeers>,
     ports: Option<Ports>,
+    anchor: Option<SetRateAnchorTime>,
 }
 
 pub use Context as Kit;
@@ -171,6 +94,7 @@ impl Kit {
             setup: None,
             setpeers: None,
             ports: None,
+            anchor: None,
         }
     }
 
@@ -179,54 +103,36 @@ impl Kit {
     /// # Errors
     ///
     /// This function will return an error if .
+    #[allow(clippy::too_many_lines)]
     pub async fn run(listener: TcpListener, cancel_token: CancellationToken) -> Result<()> {
         let mut kit = Kit::build();
 
-        // let addr = format!("{}:0", HostInfo::ip_as_str());
-        // let event_listener = TcpListener::bind(&addr).await?;
-        // let data_listener = TcpListener::bind(&addr).await?;
-        // let ctrl_listener = TcpListener::bind(addr).await?;
+        // step 1: wait for a RTSP receiver connection in a new scope
+        //         so temporary resources are freed
+        let framed = accept_rtsp(&listener, &cancel_token).await?;
+        tokio::pin!(framed);
 
-        let mut listener_ports = ListenerPorts::new().await?;
+        let mut listener_ports = ListenersAndPorts::new().await?;
 
-        // SAFETY
-        // ListenerPorts::new() would have errored
+        kit.ports = listener_ports.take_ports();
+
         let listeners = listener_ports
             .take_listeners()
             .ok_or_else(|| anyhow!("listener ports are None"))?;
-        kit.ports = listener_ports.take_ports();
 
-        let cancel_token = cancel_token.clone();
-        tokio::pin!(cancel_token);
+        let mut js_ptp = JoinSet::new();
 
-        // step 1: wait for a RTSP receiver connection in a new scope
-        //         so temporary resources are freed
-        let framed = {
-            let sleep = time::sleep(Duration::from_secs(60 * 5));
-            tokio::pin!(sleep);
+        let ptp_ct = cancel_token.clone();
+        js_ptp.spawn(async move { ptp::run_loop(ptp_ct).await });
 
-            tokio::select! {
-                Ok((socket, _remote_addr)) = listener.accept() => {
-                   codec::Rtsp::default().framed(socket)
-                },
+        // let mut js_conn = JoinSet::new();
 
-                _ = &mut sleep => return Err(anyhow!("timeout")),
-                _ = cancel_token.cancelled() => return Ok(()),
-            }
-        };
-
-        tokio::pin!(framed);
-        tokio::pin!(listeners);
-
-        // step 2: process inbound RTSP messages and run until
-        //         client disconnects or the app is shutdown
-        let mut event_socket = None;
-        let mut data_socket = None;
-        let mut ctrl_socket = None;
+        let conn_ct = cancel_token.clone();
+        js_ptp.spawn(async move { conn::run(listeners, conn_ct).await });
 
         loop {
             tokio::select! {
-                maybe_frame = framed.next() => {
+                maybe_frame = framed.next(), if !js_ptp.is_empty() => {
                     match kit.handle_frame(maybe_frame) {
                         Some(Ok(response)) => {
                             if let Some(cipher) = kit.pair.cipher_take() {
@@ -242,54 +148,52 @@ impl Kit {
                         None => ()
                     }
                 },
-                event = listeners.event.accept(), if event_socket.is_none() => {
-                    match event {
-                        Ok((socket, remote_addr)) => {
-                            let port = socket.local_addr()?.port();
-                            tracing::info!(
-                                "ACCEPTED EVENT *:{port} <= {remote_addr}"
-                            );
-                            event_socket = Some(socket);
-                        },
-                        Err(e) => {
-                            tracing::error!("event connection failed: {e}");
-                            break;
-                        },
-                    }
-                },
-                data = listeners.data.accept(), if data_socket.is_none() => {
-                    match data {
-                        Ok((socket, remote_addr)) => {
-                            let port = socket.local_addr()?.port();
-                            tracing::info!(
-                                "ACCEPTED DATA 0.0.0.0:{port} <= {remote_addr}"
-                            );
 
-                            data_socket = Some(socket);
+                maybe_joined = js_ptp.join_next() => {
+                    match maybe_joined {
+                        None => break,
+                        Some(Ok(jh)) => {
+                            tracing::info!("task joined: {jh:#?}");
                         },
-                        Err(e) => {
-                            tracing::error!("data connection failed: {e}");
+                        Some(Err(e)) => {
+                            tracing::error!("join failed: {e}");
                             break;
                         }
+
                     }
                 },
 
-                ctrl = listeners.control.accept(), if ctrl_socket.is_none() => {
-                    match ctrl {
-                        Ok((socket, remote_addr)) => {
-                            let port = socket.local_addr()?.port();
-                            tracing::info!(
-                                "ACCEPTED CONTROL 0.0.0.0:{port} <= {remote_addr}"
-                            );
+                // maybe_joined = js_conn.join_next() => {
+                //     match maybe_joined {
+                //         None => break,
+                //         Some(Ok(jh)) => {
+                //             let res = jh.await;
+                //             tracing::info!("task joined: {res:#?}");
+                //         },
+                //         Some(Err(e)) => {
+                //             tracing::error!("join failed: {e}");
+                //             break;
+                //         }
+                //     }
+                // },
 
-                            ctrl_socket = Some(socket);
-                        },
-                        Err(e) => {
-                            tracing::error!("control connection failed: {e}");
-                            break;
-                        }
-                    }
-                },
+
+
+
+                // res = &mut ptp_join => {
+                //     if let Err(e) = res {
+                //         tracing::error!("ptp task error: {e}");
+                //         break;
+                //     }
+                // },
+
+                // res = &mut conn_join => {
+                //     if let Err(e) = res {
+                //         tracing::error!("connection task error: {e}");
+                //         break;
+                //     }
+                // }
+
                 _ = cancel_token.cancelled() => {
                     tracing::warn!("kit task cancelled");
                     return Ok(());
@@ -326,6 +230,12 @@ impl Kit {
 
     fn invoke_pair(&mut self, path: &str, frame: Frame) -> Result<Response> {
         self.pair.response(path, frame)
+    }
+
+    fn invoke_anchor(&mut self, frame: Frame) -> Result<Response> {
+        self.anchor
+            .get_or_insert(SetRateAnchorTime::default())
+            .response(frame)
     }
 
     fn invoke_setpeers(&mut self, frame: Frame) -> Result<Response> {
@@ -365,17 +275,7 @@ impl Kit {
             (SET_PEERS | SET_PEERSX, _path) => self.invoke_setpeers(frame)?,
             (SET_PARAMETER, _path) => Response::ok_simple(cseq),
             (POST, "/command") => Command::response(frame)?,
-            (SETRATEANCHORTIME, _path) => {
-                use methods::SetRateAnchorTime;
-
-                if let Some(content) = frame.content {
-                    let anchor_time: SetRateAnchorTime = plist::from_bytes(&content.data)?;
-
-                    tracing::info!("{routing} CONTENT {anchor_time:#?}");
-                }
-
-                Response::ok_simple(cseq)
-            }
+            (SETRATEANCHORTIME, _path) => self.invoke_anchor(frame)?,
             (GET, "/info") => Info::response(frame)?,
             (POST, "/fp-setup") => FairPlay::response(frame)?,
             (GET | POST, "/pair-setup" | "/pair-verify") => self.invoke_pair(&path, frame)?,
@@ -387,6 +287,26 @@ impl Kit {
     fn unknown(method: &str, path: &str, cseq: u32) -> Response {
         tracing::warn!("UNHANDLED {method} {path}");
         Response::internal_server_error(cseq)
+    }
+}
+
+async fn accept_rtsp(
+    listener: &TcpListener,
+    cancel_token: &CancellationToken,
+) -> Result<tokio_util::codec::Framed<TcpStream, codec::Rtsp>> {
+    let cancel_token = cancel_token.clone();
+
+    tokio::pin!(cancel_token);
+    let sleep = time::sleep(Duration::from_secs(60 * 5));
+    tokio::pin!(sleep);
+
+    tokio::select! {
+        Ok((socket, _remote_addr)) = listener.accept() => {
+           Ok(codec::Rtsp::default().framed(socket))
+        },
+
+        _ = &mut sleep =>  Err(anyhow!("timeout")),
+        _ = cancel_token.cancelled() =>  Err(anyhow!("cancel requested")),
     }
 }
 

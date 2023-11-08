@@ -290,9 +290,11 @@ mod tests {
         use hmac_sha512::HMAC;
         use pretty_hex::PrettyHex;
 
-        let shared_secret = Data::shared_secret_as_ref();
+        let td = Data::get();
 
-        let alkali_auth = alkali_authenticate(shared_secret, &SALT2)?;
+        let shared_secret = td.shared_secret;
+
+        let alkali_auth = alkali_authenticate(&shared_secret, &SALT2)?;
 
         let hmac_auth = HMAC::mac(shared_secret, **SALT2);
 

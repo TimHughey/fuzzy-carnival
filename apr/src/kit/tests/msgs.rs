@@ -66,10 +66,10 @@ fn can_respond_to_setpeers_msg() -> Result<()> {
 #[traced_test]
 #[tokio::test]
 async fn can_create_setup_step1_from_frame() -> Result<()> {
-    use crate::kit::{methods::Setup, ListenerPorts};
+    use crate::kit::{methods::Setup, ListenersAndPorts};
 
     let frame = Data::get_frame("SETUP", Some(6))?;
-    let mut listener_ports = ListenerPorts::new().await?;
+    let mut listener_ports = ListenersAndPorts::new().await?;
 
     println!("{listener_ports:#?}");
 
@@ -86,12 +86,12 @@ async fn can_create_setup_step1_from_frame() -> Result<()> {
 #[traced_test]
 #[tokio::test]
 async fn can_create_setup_step2_from_frame() -> Result<()> {
-    use crate::kit::{methods::Setup, ListenerPorts};
+    use crate::kit::{methods::Setup, ListenersAndPorts};
 
     let frame1 = Data::get_frame("SETUP", Some(6))?;
     let frame2 = Data::get_frame("SETUP", Some(14))?;
 
-    let mut listener_ports = ListenerPorts::new().await?;
+    let mut listener_ports = ListenersAndPorts::new().await?;
     let ports = listener_ports.take_ports();
 
     let mut setup = Setup::default();
@@ -99,6 +99,23 @@ async fn can_create_setup_step2_from_frame() -> Result<()> {
     let _response = setup.response(frame1, ports)?;
     let _response = setup.response(frame2, ports)?;
     println!("{setup:#?}");
+
+    Ok(())
+}
+
+#[test]
+fn can_handle_set_rate_and_anchor() -> Result<()> {
+    let frame = Data::get_frame("SETRATEANCHORTIME", None)?;
+
+    if let Frame {
+        content: Some(content),
+        ..
+    } = frame
+    {
+        let val: plist::Value = content.try_into()?;
+
+        println!("{val:#?}");
+    }
 
     Ok(())
 }
