@@ -16,50 +16,35 @@
 use super::{message::Core as Message, MetaData};
 use crate::{kit::tests::Data, Result};
 use anyhow::anyhow;
-use bstr::ByteSlice;
-// use bytes::BytesMut;
 use tracing_test::traced_test;
 
 #[test]
 #[traced_test]
 fn can_replay_messages() -> Result<()> {
-    const EOM: &[u8] = b"\x00!*!*!*\x00";
     const MAX_MSGS: usize = 50;
 
-    let mut msgs = Data::get().ptp;
+    let mut src = Data::get().ptp;
     let mut cnt: usize = 0;
 
-    while cnt < MAX_MSGS {
+    while !src.is_empty() && cnt < MAX_MSGS {
         cnt += 1;
 
-        if let Some(eom_at) = msgs.find(EOM) {
-            // found the EOM, split into a buffer including EOM
-            let mut buf_with_eom = msgs.split_to(eom_at + EOM.len());
+        match MetaData::new_from_slice(&src)? {
+            Some(metadata) if metadata.is_src_ready(&src) => {
+                // creation of the metadata successful and src contains enough bytes
+                // to continue with message creation
 
-            // now get just the actual message
-            let mut src = buf_with_eom.split_to(eom_at);
+                // any error during message creation is considered a hard-failure
+                // so we can use split_to() to consume the bytes from src
+                let buf = src.split_to(metadata.split_bytes());
 
-            match MetaData::new_from_slice(&src)? {
-                Some(metadata) if metadata.is_src_ready(&src) => {
-                    // creation of the metadata successful and src contains enough bytes
-                    // to continue with message creation
-
-                    // any error during message creation is considered a hard-failure
-                    // so we can use split_to() to consume the bytes from src
-                    let buf = src.split_to(metadata.split_bytes());
-
-                    // pass the newly split BytesMut to Message
-                    let message = Message::new_from_buf(metadata, buf);
-                    println!("{message:#?}\n");
-                }
-                Some(_) | None => {
-                    return Err(anyhow!("failed to create metadata"));
-                }
+                // pass the newly split BytesMut to Message
+                let message = Message::new_from_buf(metadata, buf);
+                println!("{message:#?}\n");
             }
-        }
-
-        if msgs.is_empty() {
-            return Ok(());
+            Some(_) | None => {
+                return Err(anyhow!("failed to create metadata"));
+            }
         }
     }
 
