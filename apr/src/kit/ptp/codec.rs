@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{header::Channel, message::Core as Message};
+use super::{header::Channel, Message, MetaData};
 use crate::{
     util::{BinSave, BinSaveCat},
     Result,
@@ -75,19 +75,25 @@ impl Decoder for Context {
     type Error = anyhow::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
-        //   let channel = self.channel;
+        // attempt to create metadata from an immutable slice of source buffer
+        match MetaData::new_from_slice(src)? {
+            Some(metadata) if metadata.is_src_ready(src) => {
+                // creation of the metadata successful and src contains enough bytes
+                // to continue with message creation
 
-        if src.is_empty() {
-            return Ok(None);
+                // any error during message creation is considered a hard-failure
+                // we use split_to() to consume the message from src and pass
+                // the buffer to Message
+                let buf = src.split_to(metadata.split_bytes());
+
+                // for debug purposes persist the complete message
+                self.binsave.persist(&buf, "all", None)?;
+
+                let message = Message::new_from_buf(metadata, buf);
+                Ok(Some(message))
+            }
+            Some(_) | None => Ok(None),
         }
-
-        let mut buf = src.split();
-
-        let message = Message::new(&mut buf)?;
-
-        src.unsplit(buf);
-
-        Ok(Some(message))
     }
 }
 

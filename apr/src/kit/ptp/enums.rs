@@ -18,10 +18,9 @@ pub(super) mod tlv {
     use crate::kit::ptp::anyhow;
 
     #[repr(u16)]
-    #[derive(Debug, Default)]
+    #[derive(Debug)]
     pub enum TypeValue {
-        #[default]
-        Reserved = 0,
+        Reserved(u16),
         // Standard TLVs
         Management = 1,
         ManagementErrorstatus = 2,
@@ -38,18 +37,10 @@ pub(super) mod tlv {
         // there are more, but not needed yet
     }
 
-    impl TypeValue {
-        #[allow(unused)]
-        fn discriminant(&self) -> *const u16 {
-            (self as *const Self).cast::<u16>()
-        }
-    }
-
     impl TryFrom<u16> for TypeValue {
         type Error = anyhow::Error;
         fn try_from(value: u16) -> Result<Self, Self::Error> {
             Ok(match value {
-                0 => Self::Reserved,
                 1 => Self::Management,
                 2 => Self::ManagementErrorstatus,
                 3 => Self::OrganizationExtension,
@@ -61,7 +52,7 @@ pub(super) mod tlv {
                 9 => Self::AlternateTimeOffsetIndicator,
                 v if (0x000a..0x1fff).contains(&v) => {
                     // tracing::debug!("found reserved value: {v}");
-                    Self::Reserved
+                    Self::Reserved(v)
                 }
                 v => {
                     let error = "unknown tlv type";
@@ -69,6 +60,12 @@ pub(super) mod tlv {
                     Err(anyhow!(error))?
                 }
             })
+        }
+    }
+
+    impl std::default::Default for TypeValue {
+        fn default() -> Self {
+            Self::Reserved(0)
         }
     }
 

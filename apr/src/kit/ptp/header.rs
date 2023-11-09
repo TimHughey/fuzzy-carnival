@@ -14,9 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{consts, metadata::Data as MetaData, Buf, BytesMut, ClockIdentity};
-use crate::Result;
-use anyhow::anyhow;
+use super::{Buf, BytesMut, ClockIdentity, MetaData};
 
 #[allow(unused)]
 #[derive(Default)]
@@ -36,36 +34,22 @@ pub(super) struct Common {
 
 impl Common {
     #[allow(unused)]
-    pub fn new(src: &mut BytesMut) -> Result<Self> {
-        let mut buf = src.split();
+    pub fn new_with_metadata(metadata: MetaData, buf: &mut BytesMut) -> Self {
+        // NOTE:  this function assumes the buf has available bytes to create the header
 
-        if buf.len() >= Self::size_of() {
-            // we have enough bytes to build the header without an error
-
-            let item = Self {
-                metadata: MetaData::new2(&mut buf)?,
-                domain_num: buf.get_u8(),
-                reserved_b: buf.get_u8(),
-                flags: buf.get_u16(),
-                correction_field: buf.get_u64(),
-                reserved_l: buf.get_u32(),
-                clock_identity: ClockIdentity::new(&mut buf.split_to(ClockIdentity::size_of()))?,
-                source_port_id: buf.get_u16(),
-                sequence_id: buf.get_u16(),
-                control_field: buf.get_u8(),
-                log_message_period: buf.get_u8(),
-            };
-
-            src.unsplit(buf);
-
-            return Ok(item);
+        Self {
+            metadata,
+            domain_num: buf.get_u8(),
+            reserved_b: buf.get_u8(),
+            flags: buf.get_u16(),
+            correction_field: buf.get_u64(),
+            reserved_l: buf.get_u32(),
+            clock_identity: ClockIdentity::new(buf.copy_to_bytes(ClockIdentity::size_of())),
+            source_port_id: buf.get_u16(),
+            sequence_id: buf.get_u16(),
+            control_field: buf.get_u8(),
+            log_message_period: buf.get_u8(),
         }
-
-        Err(anyhow!("failed to build header"))
-    }
-
-    pub fn size_of() -> usize {
-        *consts::HEADER_LEN
     }
 }
 
@@ -85,7 +69,10 @@ impl std::fmt::Debug for Common {
                 "control_field",
                 &format_args!("{:#04x?}", &self.control_field),
             )
-            .field("log_message_period", &self.log_message_period)
+            .field(
+                "log_message_period",
+                &format_args!("0x{:02x}", &self.log_message_period),
+            )
             .field("correction_field", &self.correction_field)
             .finish_non_exhaustive()
     }

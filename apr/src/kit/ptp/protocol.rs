@@ -15,14 +15,14 @@
 // limitations under the License.
 
 use super::{
-    clock::GrandMaster, enums::tlv::TypeValue as TlvTypeVal, metadata::Id, Buf, Bytes, BytesMut,
+    clock::{GrandMaster, Timestamp},
+    enums::tlv::TypeValue as TlvTypeVal,
+    metadata::Id,
+    Buf, Bytes, BytesMut,
 };
-use crate::Result;
-use hex::ToHex;
-use num_bigint::BigUint;
+
 use pretty_hex::{HexConfig, PrettyHex};
 
-#[allow(unused)]
 #[derive(Default)]
 pub(super) struct PathTrace {
     tlv_type: TlvTypeVal,
@@ -51,17 +51,6 @@ impl std::fmt::Debug for PathTrace {
     }
 }
 
-impl std::fmt::Display for PathTrace {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "PathTrace {}\n{:?}",
-            self.tlv_type,
-            self.sequence.encode_hex::<String>().hex_dump()
-        )
-    }
-}
-
 #[allow(unused)]
 #[derive(Debug, Default)]
 pub(super) struct Tlv {
@@ -73,22 +62,21 @@ pub(super) struct Tlv {
 }
 
 #[derive(Default)]
-#[allow(unused)]
 pub(super) enum Payload {
     Announce {
-        origin_timestamp: BigUint,
+        origin_timestamp: Timestamp,
         current_utc_offset: u16,
-        reserved1: u8,
+        _reserved1: u8,
         grandmaster: GrandMaster,
         steps_removed: u16,
         time_source: u8,
         path_trace: PathTrace,
     },
     Sync {
-        origin_timestamp: BigUint,
+        origin_timestamp: Timestamp,
     },
     FollowUp {
-        precise_origin_timestamp: BigUint,
+        precise_origin_timestamp: Timestamp,
     },
 
     #[default]
@@ -96,32 +84,28 @@ pub(super) enum Payload {
 }
 
 impl Payload {
-    pub fn new2(id: Id, buf: &mut BytesMut) -> Result<Self> {
+    pub fn new(id: Id, mut buf: BytesMut) -> Self {
         use super::enums::tlv::TypeValue;
         use super::metadata::Id::{Announce, FollowUp, Sync};
 
-        Ok(match id {
+        // by splitting src we are able to pass buf mutable references
+        // to the creators of the various struct members. once the entire
+        // struct is built (wihtout errors) we then merge (unsplit) buf
+        // back to src to advance the cursor.
+        // let mut buf = src.split();
+
+        match id {
             Announce => Payload::Announce {
-                origin_timestamp: BigUint::from_bytes_be(&buf.split_to(10)),
+                // origin_timestamp: BigUint::from_bytes_be(&buf.split_to(10)),
+                origin_timestamp: Timestamp::new(&mut buf),
                 current_utc_offset: buf.get_u16(),
-                reserved1: buf.get_u8(),
-                grandmaster: {
-                    let mut gm_buf = buf.split();
-
-                    let gm = GrandMaster::new(&mut gm_buf)?;
-
-                    buf.unsplit(gm_buf);
-
-                    gm
-                },
-                //  grandmaster: GrandMaster::new(&mut buf)?,
+                _reserved1: buf.get_u8(),
+                grandmaster: GrandMaster::new_from_buf(&mut buf),
                 steps_removed: buf.get_u16(),
                 time_source: buf.get_u8(),
                 path_trace: {
                     let tlv_type = buf.get_u16();
                     let len = buf.get_u16();
-
-                    // tracing::debug!("found tlv_type={tlv_type} len={len}");
 
                     if let Ok(ttv) = TypeValue::try_from(tlv_type) {
                         let sequence = buf.copy_to_bytes(len as usize);
@@ -137,14 +121,14 @@ impl Payload {
                 },
             },
             Sync => Payload::Sync {
-                origin_timestamp: BigUint::from_bytes_be(&buf.copy_to_bytes(10)),
+                origin_timestamp: Timestamp::new(&mut buf),
             },
             FollowUp => Payload::FollowUp {
-                precise_origin_timestamp: BigUint::from_bytes_be(&buf.copy_to_bytes(10)),
+                precise_origin_timestamp: Timestamp::new(&mut buf),
             },
 
-            id => todo!("implement {id:#?}"),
-        })
+            _id => Payload::Empty,
+        }
     }
 }
 
@@ -160,15 +144,15 @@ impl std::fmt::Display for Payload {
                 path_trace,
                 ..
             } => {
-                write!(f, "\n{grandmaster:#?}\norigin_ts={origin_timestamp} utc_offset={current_utc_offset} steps_removed={steps_removed} time_source={time_source} {path_trace}")?;
+                write!(f, "\n{grandmaster:#?}\norigin_ts={origin_timestamp:?} utc_offset={current_utc_offset} steps_removed={steps_removed} time_source={time_source} {path_trace:?}")?;
             }
             Self::Sync { origin_timestamp } => {
-                write!(f, "origin_timestamp={origin_timestamp}")?;
+                write!(f, "origin_timestamp={origin_timestamp:?}")?;
             }
             Self::FollowUp {
                 precise_origin_timestamp,
             } => {
-                write!(f, "precise_origin_timestamp={precise_origin_timestamp}")?;
+                write!(f, "precise_origin_timestamp={precise_origin_timestamp:?}")?;
             }
             Self::Empty => write!(f, "<< EMPTY >>")?,
         }

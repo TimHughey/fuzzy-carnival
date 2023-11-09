@@ -24,24 +24,28 @@ pub mod bin_save {
     use anyhow::anyhow;
     use std::path::PathBuf;
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub enum Cat {
         Rtsp,
         Ptp,
     }
 
     impl Cat {
-        pub fn base(self) -> Result<PathBuf> {
+        pub fn base(self) -> PathBuf {
             use Cat::{Ptp, Rtsp};
 
+            const FALLBACK: &str = "/tmp/pierre/run";
             const RTSP_KEY: &str = "APR_RTSP_BIN_SAVE";
             const PTP_KEY: &str = "APR_PTP_BIN_SAVE";
 
-            let base = match self {
-                Rtsp => Self::get_var(RTSP_KEY)?.into(),
-                Ptp => Self::get_var(PTP_KEY)?.into(),
-            };
-
-            Ok(base)
+            match self {
+                Rtsp => Self::get_var(RTSP_KEY)
+                    .unwrap_or_else(|_x| format!("{FALLBACK}/rtsp"))
+                    .into(),
+                Ptp => Self::get_var(PTP_KEY)
+                    .unwrap_or_else(|_x| format!("{FALLBACK}/ptp"))
+                    .into(),
+            }
         }
 
         fn get_var(key: &str) -> Result<String> {
@@ -56,6 +60,7 @@ pub(crate) use bin_save::Cat as BinSaveCat;
 
 #[derive(Debug)]
 pub(crate) struct BinSave {
+    cat: bin_save::Cat,
     path_base: PathBuf,
 }
 
@@ -70,12 +75,15 @@ impl BinSave {
         use std::env::var;
 
         let now = Local::now();
-        let mut base = cat.base()?;
+        let mut base = cat.base();
         base.push(format!("{}", now.format("%s")));
 
         std::fs::create_dir_all(&base)?;
 
-        Ok(Self { path_base: base })
+        Ok(Self {
+            cat,
+            path_base: base,
+        })
     }
 
     pub fn persist(&self, buf: &[u8], kind: &str, cseq: Option<u32>) -> Result<()> {
@@ -97,7 +105,7 @@ impl BinSave {
 
         file.write_all(buf)?;
 
-        if kind == Self::ALL {
+        if kind == Self::ALL && self.cat != bin_save::Cat::Ptp {
             let sep = b"\x00!*!*!*\x00";
             file.write_all(sep)?;
         }

@@ -14,11 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{consts::IDENTITY_LEN, util, Buf, BytesMut};
-use crate::Result;
-use anyhow::anyhow;
-// use hex::ToHex;
+use super::{util, Buf, Bytes, BytesMut};
+use num_bigint::BigUint;
 use pretty_hex::{HexConfig, PrettyHex};
+
+const IDENTITY_LEN: usize = 8;
 
 #[derive(Default)]
 pub(super) struct Identity {
@@ -26,13 +26,10 @@ pub(super) struct Identity {
 }
 
 impl Identity {
-    pub fn new(src: &mut BytesMut) -> Result<Self> {
-        let mut buf = src.split();
-        let inner = util::make_array_n::<8>(&mut buf)?;
-
-        src.unsplit(buf);
-
-        Ok(Self { inner })
+    pub fn new(mut buf: Bytes) -> Self {
+        Self {
+            inner: util::make_array_n::<8>(buf.copy_to_bytes(8)),
+        }
     }
 
     pub fn size_of() -> usize {
@@ -49,8 +46,6 @@ impl std::fmt::Debug for Identity {
             group: 0,
             ..HexConfig::default()
         };
-
-        // let hex: String = self.inner.encode_hex_upper();
 
         write!(f, "{}", self.inner.hex_conf(cfg))
     }
@@ -96,33 +91,14 @@ pub(super) struct GrandMaster {
 }
 
 impl GrandMaster {
-    pub fn new(src: &mut BytesMut) -> Result<Self> {
-        const WANT_LEN: usize = std::mem::size_of::<GrandMaster>();
-
-        if src.len() >= WANT_LEN {
-            let mut buf = src.split_to(WANT_LEN);
-
-            let item = Self {
-                priority_one: buf.get_u8(),
-                quality: Quality::new(&mut buf),
-                priority_two: buf.get_u8(),
-                identity: Identity::new(&mut buf)?,
-            };
-
-            src.unsplit(buf);
-
-            return Ok(item);
+    pub fn new_from_buf(buf: &mut BytesMut) -> Self {
+        Self {
+            priority_one: buf.get_u8(),
+            quality: Quality::new(buf),
+            priority_two: buf.get_u8(),
+            identity: Identity::new(buf.copy_to_bytes(8)),
         }
-
-        Err(anyhow!(
-            "GrandMaster: insufficient bytes: {} < {WANT_LEN}",
-            src.len()
-        ))
     }
-
-    // pub(super) fn size_of() -> usize {
-    //     *GRANDMASTER_SIZEOF + Identity::size_of()
-    // }
 }
 
 impl std::fmt::Debug for GrandMaster {
@@ -132,6 +108,37 @@ impl std::fmt::Debug for GrandMaster {
             .field("pri_1", &self.priority_one)
             .field("pri_2", &self.priority_two)
             .field("quality", &self.quality)
+            .finish()
+    }
+}
+
+#[derive(Default)]
+pub(super) struct Timestamp {
+    pub seconds_field: BigUint,
+    pub nanos_field: BigUint,
+}
+
+impl Timestamp {
+    pub fn new(buf: &mut BytesMut) -> Self {
+        // combination of:
+        //  - seconds (48 bits)
+        //  - nanoseconds (32 bits)
+        // is guaranteed to fit within an 80 bit number
+        //
+        // nanos will never exceed a 2^9 value
+
+        Self {
+            seconds_field: BigUint::from_bytes_be(&buf.split_to(6)), // 48 bits
+            nanos_field: BigUint::from_bytes_be(&buf.split_to(4)),   // 32 bits
+        }
+    }
+}
+
+impl std::fmt::Debug for Timestamp {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt.debug_struct("Timestamp")
+            .field("secs", &self.seconds_field)
+            .field("nanos", &self.nanos_field)
             .finish()
     }
 }

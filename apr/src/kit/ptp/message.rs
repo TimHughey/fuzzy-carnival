@@ -14,19 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Result;
-use bytes::BytesMut;
+pub(super) use super::{header::Common, protocol::Payload, MetaData};
+use bytes::{Buf, BytesMut};
 
-pub(super) use super::{header::Common, protocol::Payload};
-
-#[allow(unused)]
-#[derive(Default, Debug)]
-pub struct Inflight {
-    header: Option<Common>,
-    payload: Option<Payload>,
-}
-
-#[allow(unused)]
 #[derive(Default)]
 pub struct Core {
     header: Common,
@@ -34,43 +24,27 @@ pub struct Core {
 }
 
 impl Core {
-    #[allow(unused)]
-    pub fn new(src: &mut BytesMut) -> Result<Self> {
-        let mut buf = src.split();
+    /// Creates [Core] from a [``MetaData``] and a [``BytesMut``] containing previously
+    /// confirmed available bytes.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if [Payload] creation fails.
+    pub(super) fn new_from_buf(metadata: MetaData, mut buf: BytesMut) -> Self {
+        // NOTE: metadata previously created, skip those bytes
+        buf.advance(MetaData::buf_size_of());
 
-        let header = Common::new(&mut buf)?;
-        let payload = Payload::new2(header.metadata.msg_id, &mut buf)?;
-
-        src.unsplit(buf);
-
-        Ok(Self { header, payload })
+        Self {
+            header: Common::new_with_metadata(metadata, &mut buf),
+            // consume the remaining bytes via split() and pass a
+            // BytesMut to Payload to avoid additional splits downstream
+            payload: Payload::new(metadata.msg_id, buf.split()),
+        }
     }
 
     #[allow(unused)]
     pub fn get_type(&self) -> super::metadata::Id {
         self.header.metadata.msg_id
-    }
-
-    #[cfg(test)]
-    pub fn min_bytes() -> usize {
-        Common::size_of()
-    }
-
-    #[cfg(test)]
-    pub fn len(&self) -> usize {
-        self.header.metadata.len as usize
-    }
-}
-
-impl std::fmt::Display for Core {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MESSAGE ")?;
-
-        write!(f, "\n{:#?}", self.header)?;
-
-        write!(f, "\n{}", self.payload)?;
-
-        Ok(())
     }
 }
 

@@ -70,7 +70,7 @@ impl TryFrom<u8> for Id {
     }
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Data {
     pub(super) transport_specific: u8, // high four bits of byte 0
     pub(super) msg_id: Id,             // low four bits of byte 0
@@ -82,54 +82,68 @@ pub(super) struct Data {
 #[allow(unused)]
 impl Data {
     #[inline]
+    pub fn buf_size_of() -> usize {
+        use std::mem::size_of;
+
+        size_of::<u8>() * 2 + size_of::<u16>()
+    }
+
+    #[inline]
     fn check_version(self) -> bool {
         self.version == 2u8
     }
 
-    pub(super) fn confirm_version(self) -> Result<Self> {
-        if !self.check_version() {
-            let error = "message version invalid";
-            tracing::error!("{error} {}", self.version);
-            return Err(anyhow!(error));
-        }
-
-        Ok(self)
+    #[inline]
+    pub fn is_src_ready(self, src: &BytesMut) -> bool {
+        src.len() >= (self.len as usize)
     }
 
-    pub fn new(buf: &BytesMut) -> Result<Self> {
-        let mut buf = buf.clone();
+    /// Attempt to create [Data] from an immutable slice.
+    ///
+    /// Return Ok(None) to signal additional bytes are required.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the message id (aka type)
+    /// isn't recognized.
+    pub fn new_from_slice(src: &[u8]) -> Result<Option<Self>> {
+        use std::io::Cursor;
 
-        let byte_0 = buf.get_u8();
-        let byte_1 = buf.get_u8();
-        let len = buf.get_u16();
+        // insufficient number of bytes to create metadata
+        if src.len() < Self::buf_size_of() {
+            return Ok(None);
+        }
 
-        Self {
+        // make a copy of the first four bytes to peek at
+        let mut cursor = Cursor::new(src);
+        let byte_0 = cursor.get_u8();
+        let byte_1 = cursor.get_u8();
+        let len = cursor.get_u16();
+
+        // construct Self with a possible Err for unknown msg_id (aka type)
+        let md = Self {
             transport_specific: (byte_0 & consts::MASK_HIGH).shr(4),
             msg_id: Id::try_from(byte_0)?,
             reserved: (byte_1 & consts::MASK_HIGH).shr(4),
             version: (byte_1 & consts::MASK_LOW),
             len,
+        };
+
+        // return the created metadata if the version is correct
+        if md.check_version() {
+            // consume the bytes we used to create the metadata
+            return Ok(Some(md));
         }
-        .confirm_version()
+
+        // version check failed, return Err
+        let error = "incorrect message version";
+        tracing::error!("{error}: {} != 0x02", md.version);
+        Err(anyhow!(error))
     }
 
-    pub fn new2(buf: &mut BytesMut) -> Result<Self> {
-        let byte_0 = buf.get_u8();
-        let byte_1 = buf.get_u8();
-        let len = buf.get_u16();
-
-        Self {
-            transport_specific: (byte_0 & consts::MASK_HIGH).shr(4),
-            msg_id: Id::try_from(byte_0)?,
-            reserved: (byte_1 & consts::MASK_HIGH).shr(4),
-            version: (byte_1 & consts::MASK_LOW),
-            len,
-        }
-        .confirm_version()
-    }
-
-    pub fn size_of() -> usize {
-        std::mem::size_of::<u8>() * 2 + std::mem::size_of::<u16>()
+    #[inline]
+    pub fn split_bytes(self) -> usize {
+        self.len as usize
     }
 }
 

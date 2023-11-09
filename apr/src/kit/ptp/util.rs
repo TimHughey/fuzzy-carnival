@@ -14,22 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{anyhow, Buf, BytesMut, Result};
+use super::{Buf, Bytes};
 
-pub fn make_array_n<const N: usize>(src: &mut BytesMut) -> Result<[u8; N]> {
-    if src.len() >= N {
-        let mut buf = src.split_to(N);
+pub fn make_array_n<const N: usize>(mut src: Bytes) -> [u8; N] {
+    let mut array = [0u8; N];
+    src.copy_to_slice(array.as_mut());
 
-        let mut array = [0u8; N];
-        buf.copy_to_slice(array.as_mut());
-
-        src.unsplit(buf);
-
-        return Ok(array);
-    }
-
-    let error = "insufficient bytes";
-    tracing::error!("{error}: {N} > {}", src.len());
-
-    Err(anyhow!(error))
+    array
 }

@@ -35,6 +35,7 @@ pub(super) mod tests;
 pub(self) use clock::Identity as ClockIdentity;
 pub(super) use codec::Context as Codec;
 pub(super) use header::Channel;
+pub(self) use message::Core as Message;
 pub(self) use metadata::Data as MetaData;
 
 pub(self) use anyhow::anyhow;
@@ -54,16 +55,23 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
 
     loop {
         tokio::select! {
+            // event frames should be processed as quickly as possible
+            // so we run 'biased' so the caess are prioritized by order
+            biased;
+
+            // always process cancellations
             _ = cancel_token.cancelled() => {
                 tracing::warn!("received cancel request");
                 break;
 
             },
+            // process event frames as they arrive, deprioritizing general frames
             res = event_framed.next() => {
                 event_framed.codec_mut().maybe_got_frame(res)
 
 
             },
+            // when no event frames are available proceed with general frames
             res = gen_framed.next() => {
                 gen_framed.codec_mut().maybe_got_frame(res)
 
