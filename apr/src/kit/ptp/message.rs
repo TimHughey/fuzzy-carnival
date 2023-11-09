@@ -14,13 +14,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(super) use super::{header::Common, protocol::Payload, MetaData};
+pub(super) use super::{
+    header::Common,
+    protocol::{Payload, Suffix},
+    MetaData,
+};
 use bytes::{Buf, BytesMut};
+use pretty_hex::PrettyHex;
 
-#[derive(Default)]
 pub struct Core {
     header: Common,
     payload: Payload,
+    suffix: Option<Suffix>,
 }
 
 impl Core {
@@ -34,11 +39,22 @@ impl Core {
         // NOTE: metadata previously created, skip those bytes
         buf.advance(MetaData::buf_size_of());
 
+        let header = Common::new_with_metadata(metadata, &mut buf);
+        let payload = Payload::new(metadata.msg_id, &mut buf);
+        let suffix = Suffix::new_from_buf(&mut buf);
+
+        if !buf.is_empty() {
+            tracing::warn!(
+                "{:?} incomplete buffer consumption\nUNUSED BUF {:?}",
+                metadata.msg_id,
+                buf.hex_dump()
+            );
+        }
+
         Self {
-            header: Common::new_with_metadata(metadata, &mut buf),
-            // consume the remaining bytes via split() and pass a
-            // BytesMut to Payload to avoid additional splits downstream
-            payload: Payload::new(metadata.msg_id, buf.split()),
+            header,
+            payload,
+            suffix,
         }
     }
 
@@ -53,6 +69,7 @@ impl std::fmt::Debug for Core {
         fmt.debug_struct("PTP MESSAGE")
             .field("HEADER", &self.header)
             .field("PAYLOAD", &self.payload)
+            .field("SUFFIX", &self.suffix)
             .finish()
     }
 }

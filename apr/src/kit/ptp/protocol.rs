@@ -15,50 +15,33 @@
 // limitations under the License.
 
 use super::{
-    clock::{GrandMaster, Timestamp},
-    enums::tlv::TypeValue as TlvTypeVal,
+    clock::{self, GrandMaster, Timestamp},
     metadata::Id,
-    Buf, Bytes, BytesMut,
+    tlv, Buf, BytesMut,
 };
 
-use pretty_hex::{HexConfig, PrettyHex};
-
 #[derive(Default)]
-pub(super) struct PathTrace {
-    tlv_type: TlvTypeVal,
-    len: u16,
-    sequence: Bytes,
+pub(super) struct PortIdentity {
+    clock_identity: clock::Identity,
+    port: u16,
 }
 
-impl std::fmt::Debug for PathTrace {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let cfg = HexConfig {
-            title: false,
-            ascii: false,
-            width: 8,
-            group: 0,
-            ..HexConfig::default()
-        };
-
-        f.debug_struct("PathTrace")
-            .field("type", &self.tlv_type)
-            .field("len", &self.len)
-            .field(
-                "sequence",
-                &format_args!("{}", &self.sequence.hex_conf(cfg)),
-            )
-            .finish()
+impl PortIdentity {
+    pub(super) fn new(buf: &mut BytesMut) -> Self {
+        Self {
+            clock_identity: clock::Identity::new(buf.copy_to_bytes(clock::Identity::size_of())),
+            port: buf.get_u16(),
+        }
     }
 }
 
-#[allow(unused)]
-#[derive(Debug, Default)]
-pub(super) struct Tlv {
-    tlv_type: u16,
-    len: u16,
-    organization_id: [u8; 3],
-    organization_sub_type: [u8; 3],
-    data: Bytes,
+impl std::fmt::Debug for PortIdentity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PortIdentity")
+            .field("clock_identity", &self.clock_identity)
+            .field("port", &self.port)
+            .finish()
+    }
 }
 
 #[derive(Default)]
@@ -66,11 +49,10 @@ pub(super) enum Payload {
     Announce {
         origin_timestamp: Timestamp,
         current_utc_offset: u16,
-        _reserved1: u8,
+        _reserved: u8,
         grandmaster: GrandMaster,
         steps_removed: u16,
         time_source: u8,
-        path_trace: PathTrace,
     },
     Sync {
         origin_timestamp: Timestamp,
@@ -78,53 +60,46 @@ pub(super) enum Payload {
     FollowUp {
         precise_origin_timestamp: Timestamp,
     },
-
+    Signaling {
+        target_port_identity: PortIdentity,
+    },
+    Management {
+        target_port_identity: PortIdentity,
+        starting_boundary_hops: u8,
+        boundary_hops: u8,
+        action_field: u8,
+        _reserved: u8,
+    },
     #[default]
     Empty,
 }
 
 impl Payload {
-    pub fn new(id: Id, mut buf: BytesMut) -> Self {
-        use super::enums::tlv::TypeValue;
-        use super::metadata::Id::{Announce, FollowUp, Sync};
-
-        // by splitting src we are able to pass buf mutable references
-        // to the creators of the various struct members. once the entire
-        // struct is built (wihtout errors) we then merge (unsplit) buf
-        // back to src to advance the cursor.
-        // let mut buf = src.split();
-
+    pub fn new(id: Id, buf: &mut BytesMut) -> Self {
         match id {
-            Announce => Payload::Announce {
-                // origin_timestamp: BigUint::from_bytes_be(&buf.split_to(10)),
-                origin_timestamp: Timestamp::new(&mut buf),
+            Id::Announce => Payload::Announce {
+                origin_timestamp: Timestamp::new(buf),
                 current_utc_offset: buf.get_u16(),
-                _reserved1: buf.get_u8(),
-                grandmaster: GrandMaster::new_from_buf(&mut buf),
+                _reserved: buf.get_u8(),
+                grandmaster: GrandMaster::new_from_buf(buf),
                 steps_removed: buf.get_u16(),
                 time_source: buf.get_u8(),
-                path_trace: {
-                    let tlv_type = buf.get_u16();
-                    let len = buf.get_u16();
-
-                    if let Ok(ttv) = TypeValue::try_from(tlv_type) {
-                        let sequence = buf.copy_to_bytes(len as usize);
-
-                        PathTrace {
-                            tlv_type: ttv,
-                            len,
-                            sequence,
-                        }
-                    } else {
-                        PathTrace::default()
-                    }
-                },
             },
-            Sync => Payload::Sync {
-                origin_timestamp: Timestamp::new(&mut buf),
+            Id::Sync => Payload::Sync {
+                origin_timestamp: Timestamp::new(buf),
             },
-            FollowUp => Payload::FollowUp {
-                precise_origin_timestamp: Timestamp::new(&mut buf),
+            Id::FollowUp => Payload::FollowUp {
+                precise_origin_timestamp: Timestamp::new(buf),
+            },
+            Id::Signaling => Payload::Signaling {
+                target_port_identity: PortIdentity::new(buf),
+            },
+            Id::Management => Payload::Management {
+                target_port_identity: PortIdentity::new(buf),
+                starting_boundary_hops: buf.get_u8(),
+                boundary_hops: buf.get_u8(),
+                action_field: buf.get_u8(),
+                _reserved: buf.get_u8(),
             },
 
             _id => Payload::Empty,
@@ -132,45 +107,15 @@ impl Payload {
     }
 }
 
-impl std::fmt::Display for Payload {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Announce {
-                origin_timestamp,
-                current_utc_offset,
-                grandmaster,
-                steps_removed,
-                time_source,
-                path_trace,
-                ..
-            } => {
-                write!(f, "\n{grandmaster:#?}\norigin_ts={origin_timestamp:?} utc_offset={current_utc_offset} steps_removed={steps_removed} time_source={time_source} {path_trace:?}")?;
-            }
-            Self::Sync { origin_timestamp } => {
-                write!(f, "origin_timestamp={origin_timestamp:?}")?;
-            }
-            Self::FollowUp {
-                precise_origin_timestamp,
-            } => {
-                write!(f, "precise_origin_timestamp={precise_origin_timestamp:?}")?;
-            }
-            Self::Empty => write!(f, "<< EMPTY >>")?,
-        }
-
-        Ok(())
-    }
-}
-
 impl std::fmt::Debug for Payload {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Announce {
+            Payload::Announce {
                 origin_timestamp,
                 current_utc_offset,
                 grandmaster,
                 steps_removed,
                 time_source,
-                path_trace,
                 ..
             } => fmt
                 .debug_struct("Announce")
@@ -179,22 +124,61 @@ impl std::fmt::Debug for Payload {
                 .field("grandmaster", grandmaster)
                 .field("steps_removed", steps_removed)
                 .field("time_source", time_source)
-                .field("path_trace", path_trace)
                 .finish(),
 
-            Self::Sync { origin_timestamp } => fmt
+            Payload::Sync { origin_timestamp } => fmt
                 .debug_struct("Sync")
                 .field("origin_timestamp", origin_timestamp)
                 .finish(),
 
-            Self::FollowUp {
+            Payload::FollowUp {
                 precise_origin_timestamp,
             } => fmt
                 .debug_struct("FollowUp")
                 .field("precise_origin_timestamp", precise_origin_timestamp)
                 .finish(),
 
+            Payload::Signaling {
+                target_port_identity,
+            } => fmt
+                .debug_struct("Signaling")
+                .field("target_port_identity", target_port_identity)
+                .finish(),
+            Self::Management {
+                target_port_identity,
+                starting_boundary_hops,
+                boundary_hops,
+                action_field,
+                _reserved,
+            } => fmt
+                .debug_struct("Management")
+                .field("target_port", target_port_identity)
+                .field("starting_boundary_hops", starting_boundary_hops)
+                .field("boundary_hops", boundary_hops)
+                .field("action_field", action_field)
+                .finish(),
+
             Self::Empty => fmt.debug_struct("Empty").finish(),
         }
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct Suffix {
+    _tlvs: Vec<tlv::Value>,
+}
+
+impl Suffix {
+    pub fn new_from_buf(buf: &mut BytesMut) -> Option<Self> {
+        if buf.len() <= 4 {
+            return None;
+        }
+
+        let mut tlvs: Vec<tlv::Value> = Vec::new();
+        while buf.len() >= 5 {
+            tlvs.push(tlv::Value::new_from_buf(buf));
+        }
+
+        Some(Suffix { _tlvs: tlvs })
     }
 }

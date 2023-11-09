@@ -16,15 +16,13 @@
 
 use super::{Buf, BytesMut, ClockIdentity, MetaData};
 
-#[allow(unused)]
-#[derive(Default)]
 pub(super) struct Common {
     pub metadata: MetaData,
-    pub domain_num: u8,
-    pub reserved_b: u8,
+    pub _domain_num: u8,
+    pub _reserved_b: u8,
     pub flags: u16,
     pub correction_field: u64,
-    pub reserved_l: u32,
+    pub _reserved_l: u32,
     pub clock_identity: ClockIdentity,
     pub source_port_id: u16,
     pub sequence_id: u16,
@@ -39,11 +37,11 @@ impl Common {
 
         Self {
             metadata,
-            domain_num: buf.get_u8(),
-            reserved_b: buf.get_u8(),
+            _domain_num: buf.get_u8(),
+            _reserved_b: buf.get_u8(),
             flags: buf.get_u16(),
             correction_field: buf.get_u64(),
-            reserved_l: buf.get_u32(),
+            _reserved_l: buf.get_u32(),
             clock_identity: ClockIdentity::new(buf.copy_to_bytes(ClockIdentity::size_of())),
             source_port_id: buf.get_u16(),
             sequence_id: buf.get_u16(),
@@ -55,8 +53,6 @@ impl Common {
 
 impl std::fmt::Debug for Common {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // use super::consts::{MASK_HIGH, MASK_LOW};
-
         let flags = self.flags.to_be_bytes();
 
         fmt.debug_struct("Common")
