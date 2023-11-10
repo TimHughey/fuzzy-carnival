@@ -14,11 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::consts;
+use super::{clock, util};
 use crate::Result;
 use anyhow::anyhow;
 use bytes::{Buf, BytesMut};
-use std::ops::Shr;
+use std::time;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(unused)]
@@ -38,7 +38,7 @@ pub enum Id {
 
 impl Id {
     pub fn new(id: u8) -> Self {
-        match id & consts::MASK_LOW {
+        match util::nibble_low(id) {
             0x0 => Id::Sync,
             0x1 => Id::DelayReq,
             0x2 => Id::PdelayReq,
@@ -55,21 +55,19 @@ impl Id {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) struct Data {
-    pub(super) transport_specific: u8, // high nibble of byte 0
-    pub(super) msg_id: Id,             // low nibble of byte 0
-    pub(super) reserved: u8,           // high nibble of byte 1
-    pub(super) version: u8,            // low nibble of byte 1
-    pub(super) len: u16,               // entire message length (header, payload, suffix)
+pub struct Data {
+    pub reception_time: time::Duration,
+    pub transport_specific: u8, // high nibble of byte 0
+    pub msg_id: Id,             // low nibble of byte 0
+    pub _reserved: u8,          // high nibble of byte 1
+    pub version: u8,            // low nibble of byte 1
+    pub len: u16,               // entire message length (header, payload, suffix)
 }
 
-#[allow(unused)]
 impl Data {
     #[inline]
     pub fn buf_size_of() -> usize {
-        use std::mem::size_of;
-
-        size_of::<u8>() * 2 + size_of::<u16>()
+        std::mem::size_of::<u8>() * 2 + std::mem::size_of::<u16>()
     }
 
     #[inline]
@@ -110,10 +108,11 @@ impl Data {
 
         // construct Self with a possible Err for unknown msg_id (aka type)
         let md = Self {
-            transport_specific: (byte_0 & consts::MASK_HIGH).shr(4),
+            reception_time: clock::Epoch::reception_time(),
+            transport_specific: util::nibble_high(byte_0),
             msg_id: Id::new(byte_0),
-            reserved: (byte_1 & consts::MASK_HIGH).shr(4),
-            version: (byte_1 & consts::MASK_LOW),
+            _reserved: util::nibble_high(byte_1),
+            version: util::nibble_low(byte_1),
             len,
         };
 
@@ -136,12 +135,9 @@ impl Data {
 
 impl std::fmt::Debug for Data {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#?} len={}", self.msg_id, self.len)?;
-
-        if !self.check_version() {
-            write!(f, " [INVALID VERSION={}]", self.version)?;
-        }
-
-        Ok(())
+        f.debug_struct("Data")
+            .field("type", &self.msg_id)
+            .field("reception_time", &self.reception_time)
+            .finish()
     }
 }

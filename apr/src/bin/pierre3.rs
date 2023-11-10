@@ -28,7 +28,7 @@ use tokio_util::sync::CancellationToken;
 /// Returns errors for any failure related to establishing
 /// the base app runtime information (e.g. hostname) or setup
 /// of the networking socket.
-#[tokio::main(worker_threads = 4)]
+#[tokio::main(worker_threads = 6)]
 pub async fn main() -> crate::Result<()> {
     setup_logging()?;
     let cancel_token = CancellationToken::new();
@@ -42,9 +42,6 @@ pub async fn main() -> crate::Result<()> {
     // Bind a TCP listener
     tracing::info!("starting up, binding to {}", bind_addr);
     let listener = TcpListener::bind(&bind_addr).await?;
-
-    // let ptp_sock1 = tokio::net::UdpSocket::bind("0.0.0.0:319").await?;
-    // tracing::info!("opened udp port {}", ptp_sock1.local_addr()?);
 
     let (main_tx, mut main_rx) = oneshot::channel();
 

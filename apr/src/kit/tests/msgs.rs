@@ -48,8 +48,8 @@ fn can_create_inflight_for_setpeersx() -> Result<()> {
     Ok(())
 }
 
-#[test]
 #[traced_test]
+#[test]
 fn can_respond_to_setpeers_msg() -> Result<()> {
     let mut setpeers = SetPeers::default();
 
@@ -103,9 +103,27 @@ async fn can_create_setup_step2_from_frame() -> Result<()> {
     Ok(())
 }
 
+#[traced_test]
 #[test]
-fn can_handle_set_rate_and_anchor() -> Result<()> {
+fn can_parse_set_rate_and_anchor() -> Result<()> {
     let frame = Data::get_frame("SETRATEANCHORTIME", None)?;
+
+    if let Frame {
+        content: Some(content),
+        ..
+    } = frame
+    {
+        let val: plist::Value = content.try_into()?;
+
+        println!("{val:#?}");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn can_parse_set_peersx() -> Result<()> {
+    let frame = Data::get_frame("SETPEERSX", None)?;
 
     if let Frame {
         content: Some(content),

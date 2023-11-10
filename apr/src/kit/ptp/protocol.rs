@@ -17,19 +17,20 @@
 use super::{
     clock::{self, GrandMaster, Timestamp},
     metadata::Id,
-    tlv, Buf, BytesMut,
+    tlv,
 };
+use bytes::{Buf, BytesMut};
 
 #[derive(Default)]
-pub(super) struct PortIdentity {
+pub struct PortIdentity {
     clock_identity: clock::Identity,
     port: u16,
 }
 
 impl PortIdentity {
-    pub(super) fn new(buf: &mut BytesMut) -> Self {
+    pub fn new(buf: &mut BytesMut) -> Self {
         Self {
-            clock_identity: clock::Identity::new(buf.copy_to_bytes(clock::Identity::size_of())),
+            clock_identity: clock::Identity::new_from_buf(buf),
             port: buf.get_u16(),
         }
     }
@@ -45,9 +46,9 @@ impl std::fmt::Debug for PortIdentity {
 }
 
 #[derive(Default)]
-pub(super) enum Payload {
+pub enum Payload {
     Announce {
-        origin_timestamp: Timestamp,
+        origin_timestamp: Option<Timestamp>,
         current_utc_offset: u16,
         _reserved: u8,
         grandmaster: GrandMaster,
@@ -55,10 +56,10 @@ pub(super) enum Payload {
         time_source: u8,
     },
     Sync {
-        origin_timestamp: Timestamp,
+        origin_timestamp: Option<Timestamp>,
     },
     FollowUp {
-        precise_origin_timestamp: Timestamp,
+        precise_origin_timestamp: Option<Timestamp>,
     },
     Signaling {
         target_port_identity: PortIdentity,
@@ -78,7 +79,7 @@ impl Payload {
     pub fn new(id: Id, buf: &mut BytesMut) -> Self {
         match id {
             Id::Announce => Payload::Announce {
-                origin_timestamp: Timestamp::new(buf),
+                origin_timestamp: Timestamp::new_from_buf(buf),
                 current_utc_offset: buf.get_u16(),
                 _reserved: buf.get_u8(),
                 grandmaster: GrandMaster::new_from_buf(buf),
@@ -86,10 +87,10 @@ impl Payload {
                 time_source: buf.get_u8(),
             },
             Id::Sync => Payload::Sync {
-                origin_timestamp: Timestamp::new(buf),
+                origin_timestamp: Timestamp::new_from_buf(buf),
             },
             Id::FollowUp => Payload::FollowUp {
-                precise_origin_timestamp: Timestamp::new(buf),
+                precise_origin_timestamp: Timestamp::new_from_buf(buf),
             },
             Id::Signaling => Payload::Signaling {
                 target_port_identity: PortIdentity::new(buf),
@@ -164,7 +165,7 @@ impl std::fmt::Debug for Payload {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Suffix {
+pub struct Suffix {
     _tlvs: Vec<tlv::Value>,
 }
 

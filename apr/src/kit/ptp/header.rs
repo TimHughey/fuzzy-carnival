@@ -14,14 +14,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Buf, BytesMut, ClockIdentity, MetaData};
+use super::{ClockIdentity, MetaData};
+use bitflags::bitflags;
+use bytes::{Buf, BytesMut};
+use std::time;
 
-pub(super) struct Common {
+bitflags! {
+    // NOTE: the bit order below is deliberately different
+    //       than the spec.  flags u16 is sent big-endian
+    //
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Flags: u16 {
+        // bit ordering exactly matches IEEE 1588-2019 (Table 37)
+        // MSB
+        const ALTERNATE_MASTER = 0b01 << 0;
+        const TWO_STEP = 0b01 << 1;
+        const UNICAST = 0b01 << 2;
+        const PROFILE_SPECIFIC_1 = 0b01 << 3;
+        const PROFILE_SPECIFIC_2 = 0b01 << 4;
+        const RESERVED = 0b01 << 5;
+
+        // LSB
+        const LEAP_61 = 0b01 << 8;
+        const LEAP_59 = 0b01 << 9;
+        const CURRENT_OFFSET_VALID =  0b01 << 10;
+        const PTP_TIMESCALE = 0b01 << 11;
+        const TIME_TRACEABLE = 0b01 << 12;
+        const FREQUENCY_TRACEABLE = 0b01 << 13;
+        const SYNCRONIZATON_UNCERTAIN = 0b01 << 14;
+        const UNASSIGNED = 0b01 << 15;
+
+        const _ = !0; // allow all bits to be set
+    }
+}
+
+pub struct Common {
     pub metadata: MetaData,
     pub _domain_num: u8,
     pub _reserved_b: u8,
-    pub flags: u16,
-    pub correction_field: u64,
+    pub flags: Flags,
+    pub correction_field: Option<time::Duration>,
     pub _reserved_l: u32,
     pub clock_identity: ClockIdentity,
     pub source_port_id: u16,
@@ -39,10 +71,21 @@ impl Common {
             metadata,
             _domain_num: buf.get_u8(),
             _reserved_b: buf.get_u8(),
-            flags: buf.get_u16(),
-            correction_field: buf.get_u64(),
+            // NOTE: must get as native-endian to match bitflags
+            //       haven't taken the time to decipher why... someday...
+            flags: Flags::from_bits_retain(buf.get_u16_ne()),
+            // NOTE: PTP value is multiplied by 2^16 (65536)
+            correction_field: {
+                let d = time::Duration::from_nanos(buf.get_u64() / 65536);
+
+                if d > time::Duration::ZERO {
+                    Some(d)
+                } else {
+                    None
+                }
+            },
             _reserved_l: buf.get_u32(),
-            clock_identity: ClockIdentity::new(buf.copy_to_bytes(ClockIdentity::size_of())),
+            clock_identity: ClockIdentity::new_from_buf(buf),
             source_port_id: buf.get_u16(),
             sequence_id: buf.get_u16(),
             control_field: buf.get_u8(),
@@ -53,14 +96,12 @@ impl Common {
 
 impl std::fmt::Debug for Common {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let flags = self.flags.to_be_bytes();
-
         fmt.debug_struct("Common")
-            .field("kind", &self.metadata)
+            .field("metadata", &self.metadata)
             .field("sequence_id", &self.sequence_id)
             .field("clock_identity", &self.clock_identity)
             .field("source_port", &self.source_port_id)
-            .field("flags", &format_args!("{:08b} {:08b}", flags[0], flags[1]))
+            .field("flags", &self.flags)
             .field(
                 "control_field",
                 &format_args!("{:#04x?}", &self.control_field),

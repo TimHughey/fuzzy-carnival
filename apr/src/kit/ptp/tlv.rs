@@ -14,8 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::kit::ptp::{Buf, Bytes, BytesMut};
-#[allow(unused)]
+use bytes::{Buf, Bytes, BytesMut};
 use pretty_hex::{HexConfig, PrettyHex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,7 +44,6 @@ pub enum Type {
     Authentication,
     Deprecated(u16),
     Experimental(u16),
-    // there are more, but not needed yet
 }
 
 impl Type {

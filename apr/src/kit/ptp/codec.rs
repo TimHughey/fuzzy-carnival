@@ -25,11 +25,6 @@ use std::net::SocketAddr;
 use tokio_util::codec::{Decoder, Encoder};
 
 #[derive(Debug, Default)]
-pub struct FrameIn {
-    _priv: (),
-}
-
-#[derive(Debug, Default)]
 pub struct FrameOut {
     _priv: (),
 }
@@ -46,16 +41,22 @@ impl Context {
     pub fn new_for_channel(channel: Channel) -> Self {
         Self {
             channel,
-            binsave: Lazy::new(|| BinSave::new(BinSaveCat::Ptp).expect("binsave init falure")),
+            binsave: Lazy::new(|| BinSave::new(BinSaveCat::Ptp).expect("binsave init failure")),
             _priv: (),
         }
     }
 
     pub fn maybe_got_frame(&mut self, res: Option<Result<(Message, SocketAddr)>>) -> Result<()> {
+        use super::MsgId;
+
         if let Some(res) = res {
             match res {
-                Ok((_message, addr)) => {
-                    tracing::info!("{:#} SRC={addr} MESSAGE", self.channel);
+                Ok((mut message, addr)) => {
+                    message.save_sockaddr(addr);
+
+                    if message.match_msg_id(MsgId::Sync) {
+                        tracing::info!("{:#} {message:#?}", self.channel);
+                    }
 
                     return Ok(());
                 }
@@ -76,7 +77,7 @@ impl Decoder for Context {
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
         // attempt to create metadata from an immutable slice of source buffer
-        match MetaData::new_from_slice(src)? {
+        Ok(match MetaData::new_from_slice(src)? {
             Some(metadata) if metadata.is_src_ready(src) => {
                 // creation of the metadata successful and src contains enough bytes
                 // to continue with message creation
@@ -89,11 +90,10 @@ impl Decoder for Context {
                 // for debug purposes persist the complete message
                 self.binsave.persist(&buf, "all", None)?;
 
-                let message = Message::new_from_buf(metadata, buf);
-                Ok(Some(message))
+                Some(Message::new_from_buf(metadata, buf))
             }
-            Some(_) | None => Ok(None),
-        }
+            Some(_) | None => None,
+        })
     }
 }
 

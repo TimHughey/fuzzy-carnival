@@ -14,28 +14,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(super) use super::{
+use super::{
     header::Common,
     protocol::{Payload, Suffix},
-    MetaData,
+    MetaData, MsgId,
 };
 use bytes::{Buf, BytesMut};
 use pretty_hex::PrettyHex;
+use std::net::SocketAddr;
 
 pub struct Core {
     header: Common,
     payload: Payload,
-    suffix: Option<Suffix>,
+    _suffix: Option<Suffix>, // captured for potential future needs
+    sock_addr: Option<SocketAddr>,
 }
 
 impl Core {
-    /// Creates [Core] from a [``MetaData``] and a [``BytesMut``] containing previously
-    /// confirmed available bytes.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if [Payload] creation fails.
-    pub(super) fn new_from_buf(metadata: MetaData, mut buf: BytesMut) -> Self {
+    /// Creates [Core] from a [``MetaData``] and a [``BytesMut``] containing
+    /// sufficient available bytes.
+
+    pub fn new_from_buf(metadata: MetaData, mut buf: BytesMut) -> Self {
         // NOTE: metadata previously created, skip those bytes
         buf.advance(MetaData::buf_size_of());
 
@@ -54,7 +53,8 @@ impl Core {
         Self {
             header,
             payload,
-            suffix,
+            _suffix: suffix,
+            sock_addr: None,
         }
     }
 
@@ -62,14 +62,23 @@ impl Core {
     pub fn get_type(&self) -> super::metadata::Id {
         self.header.metadata.msg_id
     }
+
+    pub fn match_msg_id(&self, msg_id: MsgId) -> bool {
+        self.header.metadata.msg_id == msg_id
+    }
+
+    pub fn save_sockaddr(&mut self, addr: SocketAddr) {
+        self.sock_addr.get_or_insert(addr);
+    }
 }
 
 impl std::fmt::Debug for Core {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt.debug_struct("PTP MESSAGE")
-            .field("HEADER", &self.header)
-            .field("PAYLOAD", &self.payload)
-            .field("SUFFIX", &self.suffix)
-            .finish()
+        fmt.debug_struct("PTP")
+            .field("header", &self.header)
+            .field("payload", &self.payload)
+            //.field("SUFFIX", &self.suffix)
+            .field("from_addr", &self.sock_addr)
+            .finish_non_exhaustive()
     }
 }

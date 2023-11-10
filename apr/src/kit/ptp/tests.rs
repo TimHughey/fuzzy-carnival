@@ -13,7 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific
 
-use super::{message::Core as Message, MetaData};
+use super::{Message, MetaData, MsgId};
 use crate::{kit::tests::Data, Result};
 use anyhow::anyhow;
 use tracing_test::traced_test;
@@ -40,7 +40,46 @@ fn can_replay_messages() -> Result<()> {
 
                 // pass the newly split BytesMut to Message
                 let message = Message::new_from_buf(metadata, buf);
+
                 println!("{message:#?}\n");
+            }
+            Some(_) | None => {
+                return Err(anyhow!("failed to create metadata"));
+            }
+        }
+    }
+
+    println!("msgs_replayed: {cnt}");
+
+    Ok(())
+}
+
+#[test]
+#[traced_test]
+fn can_replay_follow_up_messages() -> Result<()> {
+    const MAX_MSGS: usize = 50;
+
+    let mut src = Data::get().ptp;
+    let mut cnt: usize = 0;
+
+    while !src.is_empty() && cnt < MAX_MSGS {
+        cnt += 1;
+
+        match MetaData::new_from_slice(&src)? {
+            Some(metadata) if metadata.is_src_ready(&src) => {
+                // creation of the metadata successful and src contains enough bytes
+                // to continue with message creation
+
+                // any error during message creation is considered a hard-failure
+                // so we can use split_to() to consume the bytes from src
+                let buf = src.split_to(metadata.split_bytes());
+
+                // pass the newly split BytesMut to Message
+                let message = Message::new_from_buf(metadata, buf);
+
+                if message.match_msg_id(MsgId::FollowUp) {
+                    println!("{message:#?}\n");
+                }
             }
             Some(_) | None => {
                 return Err(anyhow!("failed to create metadata"));
