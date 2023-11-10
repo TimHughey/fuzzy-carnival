@@ -14,12 +14,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bytes::{Buf, Bytes};
+use bytes::{Buf, BytesMut};
 use std::ops::Shr;
 
-pub fn make_array_n<const N: usize>(mut src: Bytes) -> [u8; N] {
+pub fn make_array_n<const N: usize>(src: &mut BytesMut) -> [u8; N] {
     let mut array = [0u8; N];
-    src.copy_to_slice(array.as_mut());
+    src.copy_to_bytes(N).copy_to_slice(array.as_mut());
+
+    array
+}
+
+pub fn make_array_nlo<const N: usize, const L: usize, const O: usize>(
+    src: &mut BytesMut,
+) -> [u8; N] {
+    let mut array = [0u8; N];
+    src.copy_to_bytes(L).copy_to_slice(&mut array[O..]);
 
     array
 }

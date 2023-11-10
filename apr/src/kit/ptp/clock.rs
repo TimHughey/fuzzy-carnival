@@ -44,7 +44,7 @@ pub struct Identity {
 impl Identity {
     pub fn new_from_buf(buf: &mut BytesMut) -> Self {
         Self {
-            inner: util::make_array_n::<8>(buf.copy_to_bytes(IDENTITY_LEN)),
+            inner: util::make_array_n::<IDENTITY_LEN>(buf),
         }
     }
 }
@@ -126,13 +126,14 @@ impl std::fmt::Debug for GrandMaster {
 
 #[derive(Default)]
 pub struct Timestamp {
-    pub seconds_field: time::Duration,
-    pub nanos_field: time::Duration,
+    pub val: time::Duration,
+    // pub nanos_field: time::Duration,
 }
 
 impl Timestamp {
     pub fn new_from_buf(buf: &mut BytesMut) -> Option<Self> {
         use std::time::Duration;
+        use util::make_array_nlo;
         // combination of:
         //  - seconds (48 bits)
         //  - nanoseconds (32 bits)
@@ -143,23 +144,13 @@ impl Timestamp {
         // consume the vals from the buffer regardless of if this a non-zero timestamp
         // the field sizing for PTP doesn't fit "cleanly" into a Duration so we do
         // some hand rolled buf work
-        let mut secs_buf = [0u8; 8];
-        buf.copy_to_bytes(6).copy_to_slice(&mut secs_buf[2..]);
+        let secs = u64::from_be_bytes(make_array_nlo::<8, 6, 2>(buf));
+        let nanos = buf.get_u32();
 
-        let mut nanos_buf = [0u8; 8];
-        buf.copy_to_bytes(4).copy_to_slice(&mut nanos_buf[4..]);
+        let val = Duration::new(secs, nanos);
 
-        let seconds_field = Duration::from_secs(u64::from_be_bytes(secs_buf));
-        let nanos_field = Duration::from_nanos(u64::from_be_bytes(nanos_buf));
-        let total = seconds_field + nanos_field;
-
-        if total > Duration::ZERO {
-            //  tracing::info!("{seconds_field:?} {nanos_field:?}");
-
-            return Some(Self {
-                seconds_field, // 48 bits
-                nanos_field,   // 32 bits
-            });
+        if val > Duration::ZERO {
+            return Some(Self { val });
         }
 
         None
@@ -169,8 +160,8 @@ impl Timestamp {
 impl std::fmt::Debug for Timestamp {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fmt.debug_struct("Timestamp")
-            .field("secs", &self.seconds_field)
-            .field("nanos", &self.nanos_field)
+            .field("val", &self.val)
+            // .field("nanos", &self.nanos_field)
             .finish()
     }
 }
