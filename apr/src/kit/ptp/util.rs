@@ -17,6 +17,9 @@
 use bytes::{Buf, BytesMut};
 use std::ops::Shr;
 
+pub const MASK_HIGH: u8 = 0xf0;
+pub const MASK_LOW: u8 = 0x0f;
+
 pub fn make_array_n<const N: usize>(src: &mut BytesMut) -> [u8; N] {
     let mut array = [0u8; N];
     src.copy_to_bytes(N).copy_to_slice(array.as_mut());
@@ -32,9 +35,6 @@ pub fn make_array_nlo<const N: usize, const L: usize, const O: usize>(
 
     array
 }
-
-pub const MASK_HIGH: u8 = 0xf0;
-pub const MASK_LOW: u8 = 0x0f;
 
 pub fn nibble_high(byte: u8) -> u8 {
     (byte & MASK_HIGH).shr(4)
