@@ -105,7 +105,7 @@ impl BinSave {
 
         file.write_all(buf)?;
 
-        if kind == Self::ALL && self.cat != bin_save::Cat::Ptp {
+        if kind.contains(Self::ALL) && self.cat != bin_save::Cat::Ptp {
             let sep = b"\x00!*!*!*\x00";
             file.write_all(sep)?;
         }

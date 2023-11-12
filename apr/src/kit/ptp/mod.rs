@@ -14,66 +14,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{HostInfo, Result};
-use tokio::net::UdpSocket;
+use crate::Result;
 use tokio_stream::StreamExt;
-use tokio_util::{sync::CancellationToken, udp::UdpFramed};
+use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
 pub(super) mod tests;
 
 pub(super) mod clock;
 pub(super) mod codec;
-pub(super) mod header;
-pub(super) mod message;
-pub(super) mod metadata;
 pub(super) mod protocol;
 pub(super) mod tlv;
 
 mod util;
 
-pub(super) use clock::Identity as ClockIdentity;
+pub(super) use clock::{Epoch, Identity as ClockIdentity};
 pub(super) use codec::Context as Codec;
-pub(super) use header::Channel;
-pub(super) use message::Core as Message;
-pub(super) use metadata::{Data as MetaData, Id as MsgId};
+pub(super) use protocol::{Channel, Message, MetaData, PortIdentity};
 
 pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
-    let addr = format!("{}:319", HostInfo::ip_as_str());
-    let event_socket = UdpSocket::bind(&addr).await?;
-
-    let mut event_framed = UdpFramed::new(event_socket, Codec::new_for_channel(Channel::Event));
-
-    let addr = format!("{}:320", HostInfo::ip_as_str());
-    let gen_socket = UdpSocket::bind(&addr).await?;
-    let mut gen_framed = UdpFramed::new(gen_socket, Codec::new_for_channel(Channel::General));
-
-    tokio::pin!(cancel_token);
+    // create the two codecs
+    let mut event_codec = Codec::new(Channel::Event).await?;
+    let mut gen_codec = Codec::new(Channel::General).await?;
 
     loop {
-        tokio::select! {
+        let maybe_frame = tokio::select! {
             // event frames should be processed as quickly as possible
             // so we run 'biased' (prioritized by implementation order)
             biased;
 
             // always process cancellations
-            _ = cancel_token.cancelled() => {
-                tracing::warn!("received cancel request");
-                break;
-
-            },
+            _ = cancel_token.cancelled() => break,
             // process event frames as they arrive, deprioritizing general frames
-            res = event_framed.next() => {
-                event_framed.codec_mut().maybe_got_frame(res)
-
-
-            },
+            Some(res) = event_codec.next() => res,
             // when no event frames are available proceed with general frames
-            res = gen_framed.next() => {
-                gen_framed.codec_mut().maybe_got_frame(res)
+            Some(res) = gen_codec.next() => res,
 
+            //
+            // NOTE: if either of the codecs return None the select! is restarted
+            //
+        };
+
+        match maybe_frame {
+            Ok((message, sock_addr)) => {
+                tracing::info!("{sock_addr:?} {message:#?}");
             }
-        }?; // break from loop on Err
+            Err(e) => {
+                tracing::error!("framing error: {e}");
+                return Err(anyhow::anyhow!(e));
+            }
+        }
     }
+
+    // the only way we reach this point is when canceled.
+    tracing::warn!("received cancel request");
     Ok(())
 }

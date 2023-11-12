@@ -15,17 +15,20 @@
 // limitations under the License.
 
 use alkali::{asymmetric::sign, mem};
+use bytes::{BufMut, BytesMut};
 use ed25519_dalek::{SecretKey, SigningKey};
 use network_interface::{NetworkInterface, NetworkInterfaceConfig};
 use once_cell::sync::Lazy;
+#[allow(unused)]
+use pretty_hex::PrettyHex;
 use tracing::error;
 use uuid::Uuid;
 
-#[derive(Debug)]
 pub struct Info {
     pub name: String,
     pub ip: String,
     pub mac: String,
+    pub mac_bytes: [u8; 6],
     pub id: String,
     pub id2: Uuid,
     pub reeceiver_name: String,
@@ -48,6 +51,11 @@ static INFO: Lazy<Info> = Lazy::new(|| {
 
                 if let Some(addr) = ni.addr.into_iter().find(|a| a.ip().is_ipv4()) {
                     let id = mac.replace(':', "");
+
+                    // we'll need the mac in binary format, create it now
+                    let mut mac_bytes = [0u8; 6];
+                    hex::decode_to_slice(&id, &mut mac_bytes).unwrap();
+
                     seed[0..id.len()].clone_from_slice(id.as_bytes());
 
                     let mut secret_key = SecretKey::default();
@@ -59,6 +67,7 @@ static INFO: Lazy<Info> = Lazy::new(|| {
                         id,
                         id2: Uuid::new_v4(),
                         mac,
+                        mac_bytes,
                         reeceiver_name: "Alpha".into(),
                         sign_seed: seed,
                         accessory_sign_key: SigningKey::from_bytes(&secret_key),
@@ -105,7 +114,7 @@ impl Info {
 
     #[inline]
     #[must_use]
-    pub fn get() -> &'static Lazy<Info> {
+    pub fn get() -> &'static Info {
         &INFO
     }
 
@@ -153,9 +162,29 @@ impl Info {
         INFO.id.as_bytes()
     }
 
+    #[inline]
+    #[must_use]
+    pub fn id_padded(prefix_pad: Option<usize>, suffix_pad: Option<usize>) -> BytesMut {
+        let id = &INFO.mac_bytes[..];
+        let prefix_pad_len = prefix_pad.unwrap_or_default();
+        let suffix_pad_len = suffix_pad.unwrap_or_default();
+
+        let mut buf = BytesMut::with_capacity(id.len() + prefix_pad_len + suffix_pad_len);
+        buf.put_bytes(0x00, prefix_pad_len);
+        buf.put(id);
+        buf.put_bytes(0x00, suffix_pad_len);
+
+        buf
+    }
+
     #[must_use]
     pub fn name_as_str() -> &'static str {
         INFO.name.as_str()
+    }
+
+    #[must_use]
+    pub fn mac_as_byte_slice() -> &'static [u8] {
+        INFO.mac_bytes.as_slice()
     }
 
     #[must_use]
@@ -185,20 +214,33 @@ impl Info {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::INFO;
-    use crate::HostInfo;
+impl std::fmt::Debug for Info {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use pretty_hex::HexConfig;
 
-    #[test]
-    fn can_lazy_create_host_info() {
-        let name = HostInfo::name_as_str();
+        let cfg = HexConfig {
+            title: false,
+            ascii: false,
+            width: 8,
+            group: 0,
+            ..HexConfig::default()
+        };
 
-        println!("{:#?}", *INFO);
-
-        assert!(name.is_ascii());
-        assert!(!HostInfo::id_as_str().contains(':'));
-
-        assert_eq!(INFO.sign_seed.len(), 32);
+        f.debug_struct("HostInfo")
+            .field("name", &self.name)
+            .field("id", &self.id)
+            .field("ip", &self.ip)
+            .field("id2", &self.id2)
+            .field("receiver_name", &self.reeceiver_name)
+            .field(
+                "sign_seed",
+                &format_args!("{}", self.sign_seed.hex_conf(cfg)),
+            )
+            .field(
+                "accessory_secret_key",
+                &format_args!("{}", self.accessory_secret_key.hex_conf(cfg)),
+            )
+            // .field("accessory_sign_key", &self.accessory_sign_key)
+            .finish_non_exhaustive()
     }
 }

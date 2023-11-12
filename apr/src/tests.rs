@@ -2,7 +2,7 @@
 //
 // Copyright 2023 Tim Hughey
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License")
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -14,25 +14,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This is defined as a convenience.
-pub type Result<T> = anyhow::Result<T>;
+// #[test]
+// fn can_create_host_info() {
+//     use crate::HostInfo;
+// }
 
-pub(crate) mod flags;
-pub(crate) use flags::Calculated as FlagsCalc;
-
-pub(crate) mod host;
-pub use host::Info as HostInfo;
-
-pub(crate) mod keys;
-
-pub(crate) mod kit; // RTSP Receiver (via HomeKit)
-pub use kit::Context as Kit;
-
-pub mod asym;
-pub mod serdis;
-pub(crate) mod util;
-
-pub(crate) use util::BytesWrite;
+use tracing_test::traced_test;
 
 #[cfg(test)]
-pub(crate) mod tests;
+use crate::HostInfo;
+
+#[traced_test]
+#[test]
+fn can_lazy_create_host_info() {
+    let info = HostInfo::get();
+    let name = HostInfo::name_as_str();
+
+    println!("{info:#?}");
+
+    assert!(name.is_ascii());
+    assert!(!HostInfo::id_as_str().contains(':'));
+
+    assert_eq!(info.sign_seed.len(), 32);
+}

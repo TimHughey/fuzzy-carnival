@@ -14,14 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::util;
+use super::{util, PortIdentity};
 use bytes::{Buf, BytesMut};
 use once_cell::sync::Lazy;
 use pretty_hex::{HexConfig, PrettyHex};
 use std::time;
 
 const IDENTITY_LEN: usize = 8;
-
+#[derive(Copy, Clone)]
 pub struct Epoch {
     inner: time::Instant,
 }
@@ -36,6 +36,23 @@ static EPOCH: Lazy<Epoch> = Lazy::new(|| Epoch {
     inner: time::Instant::now(),
 });
 
+pub mod local {
+    use crate::{kit::ptp::PortIdentity, HostInfo};
+    use once_cell::sync::Lazy;
+
+    #[allow(unused)]
+    pub(super) static PORT_IDENTITY: Lazy<PortIdentity> = Lazy::new(|| {
+        let id = HostInfo::mac_as_byte_slice();
+
+        PortIdentity::new_local(id, None)
+    });
+}
+
+#[allow(unused)]
+pub fn get_local_port_identity() -> &'static PortIdentity {
+    &local::PORT_IDENTITY
+}
+
 #[derive(Default, PartialEq, Eq, Hash)]
 pub struct Identity {
     inner: [u8; IDENTITY_LEN],
@@ -49,52 +66,92 @@ impl Identity {
     }
 }
 
-impl std::fmt::Debug for Identity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let cfg = HexConfig {
-            title: false,
-            ascii: false,
-            width: 8,
-            group: 0,
-            ..HexConfig::default()
-        };
+impl AsRef<[u8]> for Identity {
+    fn as_ref(&self) -> &[u8] {
+        self.inner.as_slice()
+    }
+}
 
-        write!(f, "{}", self.inner.hex_conf(cfg))
+pub mod quality {
+    use bytes::{Buf, BytesMut};
+
+    #[derive(Debug, Default)]
+    pub enum Accuracy {
+        LessThan100ns(u8),
+        #[default]
+        Within100ns,
+        GreaterThan100ns(u8),
+        AlternateProfiles(u8),
+        Reserved(u8),
+        Unknown(u8),
+    }
+
+    impl Accuracy {
+        pub fn new_from_buf(buf: &mut BytesMut) -> Self {
+            const LESS_THAN_100_NS: std::ops::Range<u8> = 0x17..0x21;
+            const WITHIN_100_NS: u8 = 0x21;
+            const GREATER_THAN_100_NS: std::ops::Range<u8> = 0x22..0x32;
+            const ALT_PROFILES: std::ops::Range<u8> = 0x80..0xfe;
+            const UNKNOWN: std::ops::RangeInclusive<u8> = 0xfe..=0xff;
+
+            match buf.get_u8() {
+                WITHIN_100_NS => Accuracy::Within100ns,
+                v if LESS_THAN_100_NS.contains(&v) => Accuracy::LessThan100ns(v),
+                v if GREATER_THAN_100_NS.contains(&v) => Accuracy::GreaterThan100ns(v),
+                v if ALT_PROFILES.contains(&v) => Accuracy::AlternateProfiles(v),
+                v if UNKNOWN.contains(&v) => Accuracy::Unknown(v),
+                v => Accuracy::Reserved(v),
+            }
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub enum Class {
+        Reserved(u8),
+        Shall(u8),
+        DegradationAlternative(u8),
+        AlternateProfiles(u8),
+        #[default]
+        Default,
+    }
+
+    impl Class {
+        pub fn new_from_buf(buf: &mut BytesMut) -> Self {
+            const SHALL: &[u8] = &[6, 7, 13, 14];
+            const DEGRADATION: &[u8] = &[52, 58, 187, 193];
+            const ALT_PROFILES: std::ops::RangeInclusive<u8> = 133..=170;
+
+            match buf.get_u8() {
+                248 => Class::Default,
+                v if SHALL.contains(&v) => Class::Shall(v),
+                v if DEGRADATION.contains(&v) => Class::DegradationAlternative(v),
+                v if ALT_PROFILES.contains(&v) => Class::AlternateProfiles(v),
+                v => Class::Reserved(v),
+            }
+        }
     }
 }
 
 #[allow(unused)]
-#[derive(Default)]
+#[derive(Debug)]
 pub struct Quality {
-    class: u8,
-    accuracy: u8,
+    class: quality::Class,
+    accuracy: quality::Accuracy,
     offset_scaled_log_variance: u16,
 }
 
 impl Quality {
     pub fn new_from_buf(buf: &mut BytesMut) -> Self {
         Self {
-            class: buf.get_u8(),
-            accuracy: buf.get_u8(),
+            class: quality::Class::new_from_buf(buf),
+            accuracy: quality::Accuracy::new_from_buf(buf),
             offset_scaled_log_variance: buf.get_u16(),
         }
     }
 }
 
-impl std::fmt::Debug for Quality {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt.debug_struct("Quality")
-            .field("class", &self.class)
-            .field("accuracy", &self.accuracy)
-            .field(
-                "offset_scaled_log_variance",
-                &self.offset_scaled_log_variance,
-            )
-            .finish()
-    }
-}
-
-#[derive(Default)]
+#[derive(Debug)]
+#[allow(unused)]
 pub struct GrandMaster {
     priority_one: u8,
     quality: Quality,
@@ -113,21 +170,9 @@ impl GrandMaster {
     }
 }
 
-impl std::fmt::Debug for GrandMaster {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt.debug_struct("GrandMaster")
-            .field("identity", &self.identity)
-            .field("pri_1", &self.priority_one)
-            .field("pri_2", &self.priority_two)
-            .field("quality", &self.quality)
-            .finish()
-    }
-}
-
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Timestamp {
     pub val: time::Duration,
-    // pub nanos_field: time::Duration,
 }
 
 impl Timestamp {
@@ -157,11 +202,16 @@ impl Timestamp {
     }
 }
 
-impl std::fmt::Debug for Timestamp {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt.debug_struct("Timestamp")
-            .field("val", &self.val)
-            // .field("nanos", &self.nanos_field)
-            .finish()
+impl std::fmt::Debug for Identity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cfg = HexConfig {
+            title: false,
+            ascii: false,
+            width: 8,
+            group: 0,
+            ..HexConfig::default()
+        };
+
+        write!(f, "{}", self.inner.hex_conf(cfg))
     }
 }

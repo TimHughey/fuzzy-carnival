@@ -13,7 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific
 
-use super::{Message, MetaData, MsgId};
+use super::{clock, protocol::MsgType, Message, MetaData};
 use crate::{kit::tests::Data, Result};
 use anyhow::anyhow;
 use tracing_test::traced_test;
@@ -56,6 +56,12 @@ fn can_replay_messages() -> Result<()> {
 
 #[test]
 #[traced_test]
+fn can_create_local_port_identity() {
+    println!("{:#?}", clock::get_local_port_identity());
+}
+
+#[test]
+#[traced_test]
 fn can_replay_follow_up_messages() -> Result<()> {
     const MAX_MSGS: usize = 50;
 
@@ -77,7 +83,7 @@ fn can_replay_follow_up_messages() -> Result<()> {
                 // pass the newly split BytesMut to Message
                 let message = Message::new_from_buf(metadata, buf);
 
-                if message.match_msg_id(MsgId::FollowUp) {
+                if message.match_msg_type(MsgType::FollowUp) {
                     println!("{message:#?}\n");
                 }
             }

@@ -14,61 +14,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{header::Channel, Message, MetaData};
+use super::{Channel, Message, MetaData};
 use crate::{
     util::{BinSave, BinSaveCat},
-    Result,
+    HostInfo, Result,
 };
 use bytes::{BufMut, BytesMut};
 use once_cell::sync::Lazy;
-use std::net::SocketAddr;
-use tokio_util::codec::{Decoder, Encoder};
+use std::net::{IpAddr, SocketAddr};
+use tokio::net::UdpSocket;
+use tokio_util::{
+    codec::{Decoder, Encoder},
+    udp::UdpFramed,
+};
 
 #[derive(Debug, Default)]
 pub struct FrameOut {
     _priv: (),
 }
 
-#[derive(Debug)]
+static BIN_SAVE: Lazy<Option<BinSave>> = Lazy::new(|| BinSave::new(BinSaveCat::Ptp).ok());
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Context {
-    channel: Channel,
     #[allow(unused)]
-    binsave: Lazy<BinSave>,
-    _priv: (),
+    channel: Channel,
+    addr: SocketAddr,
 }
 
 impl Context {
-    pub fn new_for_channel(channel: Channel) -> Self {
-        Self {
-            channel,
-            binsave: Lazy::new(|| BinSave::new(BinSaveCat::Ptp).expect("binsave init failure")),
-            _priv: (),
-        }
+    pub async fn new(channel: Channel) -> Result<UdpFramed<Context>> {
+        let addr = make_bind_addr(channel)?;
+        let socket = UdpSocket::bind(addr).await?;
+        let codec = Self { channel, addr };
+
+        Ok(UdpFramed::new(socket, codec))
     }
 
-    pub fn maybe_got_frame(&mut self, res: Option<Result<(Message, SocketAddr)>>) -> Result<()> {
-        use super::MsgId;
-
-        if let Some(res) = res {
-            match res {
-                Ok((mut message, addr)) => {
-                    message.save_sockaddr(addr);
-
-                    if message.match_msg_id(MsgId::Sync) {
-                        tracing::info!("{:#} {message:#?}", self.channel);
-                    }
-
-                    return Ok(());
-                }
-                Err(e) => {
-                    tracing::error!("{:#} framing error: {e}", self.channel);
-                    return Err(e);
-                }
-            }
-        }
-
-        Ok(())
+    #[allow(unused)]
+    pub fn auth_sender_port(&self, port: u16) -> bool {
+        self.addr.port() == port
     }
+}
+
+// Stand-alone function, no need to host it in Context
+fn make_bind_addr(channel: Channel) -> Result<SocketAddr> {
+    let ip_addr: IpAddr = HostInfo::ip_as_str().parse()?;
+
+    Ok(SocketAddr::new(ip_addr, channel.into()))
 }
 
 impl Decoder for Context {
@@ -87,8 +80,10 @@ impl Decoder for Context {
                 // the buffer to Message
                 let buf = src.split_to(metadata.split_bytes());
 
-                // for debug purposes persist the complete message
-                self.binsave.persist(&buf, "all", None)?;
+                // for debug purposes persist the complete message, allow to quietly fail
+                BIN_SAVE
+                    .as_ref()
+                    .and_then(|bin_save| bin_save.persist(&buf, "all", None).ok());
 
                 Some(Message::new_from_buf(metadata, buf))
             }
