@@ -61,7 +61,7 @@ pub fn get_local_port_identity() -> &'static PortIdentity {
     &local::PORT_IDENTITY
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Identity {
     inner: [u8; IDENTITY_LEN],
 }
@@ -116,7 +116,7 @@ impl Known {
 pub mod quality {
     use bytes::{Buf, BytesMut};
 
-    #[derive(Debug, Default, Clone, Copy)]
+    #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
     pub enum Accuracy {
         LessThan100ns(u8),
         #[default]
@@ -128,14 +128,14 @@ pub mod quality {
     }
 
     impl Accuracy {
-        pub fn new_from_buf(buf: &mut BytesMut) -> Self {
+        pub fn new(v: u8) -> Self {
             const LESS_THAN_100_NS: std::ops::Range<u8> = 0x17..0x21;
             const WITHIN_100_NS: u8 = 0x21;
             const GREATER_THAN_100_NS: std::ops::Range<u8> = 0x22..0x32;
             const ALT_PROFILES: std::ops::Range<u8> = 0x80..0xfe;
             const UNKNOWN: std::ops::RangeInclusive<u8> = 0xfe..=0xff;
 
-            match buf.get_u8() {
+            match v {
                 WITHIN_100_NS => Accuracy::Within100ns,
                 v if LESS_THAN_100_NS.contains(&v) => Accuracy::LessThan100ns(v),
                 v if GREATER_THAN_100_NS.contains(&v) => Accuracy::GreaterThan100ns(v),
@@ -144,16 +144,20 @@ pub mod quality {
                 v => Accuracy::Reserved(v),
             }
         }
+
+        pub fn new_from_buf(buf: &mut BytesMut) -> Self {
+            Accuracy::new(buf.get_u8())
+        }
     }
 
-    #[derive(Debug, Default, Clone, Copy)]
+    #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
     pub enum Class {
+        #[default]
+        Default, // low discriminat for sorting
         Reserved(u8),
         Shall(u8),
         DegradationAlternative(u8),
         AlternateProfiles(u8),
-        #[default]
-        Default,
     }
 
     impl Class {
@@ -174,11 +178,11 @@ pub mod quality {
 }
 
 #[allow(unused)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct Quality {
-    class: quality::Class,
-    accuracy: quality::Accuracy,
-    offset_scaled_log_variance: u16,
+    pub class: quality::Class,
+    pub accuracy: quality::Accuracy,
+    pub offset_scaled_log_variance: u16,
 }
 
 impl Quality {
@@ -191,7 +195,7 @@ impl Quality {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(unused)]
 pub struct GrandMaster {
     priority_one: u8,
@@ -259,7 +263,7 @@ impl std::fmt::Debug for Identity {
 impl std::fmt::Debug for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Timestamp")
-            .field("cal", &format_args!("{:8.2?}", &self.val))
+            .field("val", &format_args!("{:8.2?}", &self.val))
             .finish()
     }
 }

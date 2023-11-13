@@ -33,7 +33,7 @@ mod util;
 
 pub(super) use clock::{Epoch, Identity as ClockIdentity, Known as KnownClock};
 pub(super) use codec::Context as Codec;
-pub(super) use protocol::{Channel, Message, MetaData, MsgType, Payload, PortIdentity};
+pub(super) use protocol::{Channel, Message, MetaData, MsgType, PortIdentity};
 pub(super) use state::{Context as State, Count as StateCount};
 
 pub(super) enum Selected {

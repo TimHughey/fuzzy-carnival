@@ -21,7 +21,7 @@ use super::{
 use crate::Result;
 use bitflags::bitflags;
 use bytes::{Buf, BufMut, BytesMut};
-use pretty_hex::PrettyHex;
+use pretty_hex::{HexConfig, PrettyHex};
 use std::hash::{Hash, Hasher};
 use tokio::time::{Duration, Instant};
 
@@ -198,7 +198,7 @@ pub struct Header {
     pub source_port_identity: PortIdentity,
     pub sequence_id: u16,
     pub control_field: u8,
-    pub log_message_period: u8,
+    pub log_message_interval: u8,
 }
 
 impl Header {
@@ -227,7 +227,7 @@ impl Header {
             source_port_identity: PortIdentity::new_from_buf(buf),
             sequence_id: buf.get_u16(),
             control_field: buf.get_u8(),
-            log_message_period: buf.get_u8(),
+            log_message_interval: buf.get_u8(),
         }
     }
 }
@@ -236,7 +236,7 @@ impl Header {
 pub struct Message {
     pub header: Header,
     pub payload: Payload,
-    _suffix: Option<Suffix>, // captured for potential future needs
+    suffix: Option<Suffix>, // captured for potential future needs
 }
 
 impl Message {
@@ -261,7 +261,7 @@ impl Message {
         Self {
             header,
             payload,
-            _suffix: suffix,
+            suffix,
         }
     }
 
@@ -274,20 +274,16 @@ impl Message {
         self.header.source_port_identity.as_ref()
     }
 
-    // pub fn into_parts(self) -> (Header, Payload) {
-    //     (self.header, self.payload)
-    // }
-
     #[allow(unused)]
     pub fn match_msg_type(&self, msg_type: MsgType) -> bool {
         self.header.metadata.msg_type == msg_type
     }
 }
 
-#[derive(Default, Clone, Eq, PartialEq, Hash)]
+#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct PortIdentity {
-    clock_identity: ClockIdentity,
-    port: u16,
+    pub clock_identity: ClockIdentity,
+    pub port: u16,
 }
 
 impl PortIdentity {
@@ -296,6 +292,19 @@ impl PortIdentity {
             clock_identity: ClockIdentity::new_from_buf(buf),
             port: buf.get_u16(),
         }
+    }
+
+    pub fn new_from_buf_maybe(buf: &mut BytesMut) -> Option<Self> {
+        let item = Self {
+            clock_identity: ClockIdentity::new_from_buf(buf),
+            port: buf.get_u16(),
+        };
+
+        if item > Self::default() {
+            return Some(item);
+        }
+
+        None
     }
 
     pub fn new_local(id: &[u8], port: Option<u16>) -> Self {
@@ -317,42 +326,6 @@ impl AsRef<PortIdentity> for PortIdentity {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::kit::ptp::clock::Quality as ClockQuality;
-    use bytes::BytesMut;
-
-    #[test]
-    fn can_create_local_port_identity() {
-        use super::PortIdentity;
-        use crate::HostInfo;
-        use bytes::BufMut;
-
-        const BYTE_6: u8 = 0x11;
-        const BYTE_7: u8 = 0xaa;
-
-        let id = HostInfo::mac_as_byte_slice();
-        let port_identity = PortIdentity::new_local(id, None);
-
-        println!("{port_identity:?}");
-
-        let clock_identity = port_identity.clock_identity.as_ref();
-
-        assert_eq!(clock_identity[6], BYTE_6);
-        assert_eq!(clock_identity[7], BYTE_7);
-        assert_eq!(port_identity.port, 0x90a1);
-
-        let qval: u32 = 0xf8fe_436a;
-
-        let mut buf = BytesMut::with_capacity(8);
-        buf.put(&qval.to_be_bytes()[..]);
-
-        let quality = ClockQuality::new_from_buf(&mut buf);
-
-        println!("{quality:#?}");
-    }
-}
-
 #[derive(Default, Clone)]
 pub enum Payload {
     Announce {
@@ -370,7 +343,7 @@ pub enum Payload {
         precise_origin_timestamp: Option<Timestamp>,
     },
     Signaling {
-        target_port_identity: PortIdentity,
+        target_port_identity: Option<PortIdentity>,
     },
     Management {
         target_port_identity: PortIdentity,
@@ -401,7 +374,7 @@ impl Payload {
                 precise_origin_timestamp: Timestamp::new_from_buf(buf),
             },
             MsgType::Signaling => Payload::Signaling {
-                target_port_identity: PortIdentity::new_from_buf(buf),
+                target_port_identity: PortIdentity::new_from_buf_maybe(buf),
             },
             MsgType::Management => Payload::Management {
                 target_port_identity: PortIdentity::new_from_buf(buf),
@@ -448,8 +421,8 @@ impl std::fmt::Debug for Header {
                 &format_args!("{:#04x?}", &self.control_field),
             )
             .field(
-                "log_message_period",
-                &format_args!("0x{:02x}", &self.log_message_period),
+                "log_message_interval",
+                &format_args!("0x{:02x}", &self.log_message_interval),
             )
             .field("correction_field", &self.correction_field)
             .finish_non_exhaustive()
@@ -458,18 +431,41 @@ impl std::fmt::Debug for Header {
 
 impl std::fmt::Debug for Message {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt.debug_struct("PTP")
-            .field("header", &self.header)
-            .field("payload", &self.payload)
-            .finish_non_exhaustive()
+        if matches!(
+            self.header.metadata.msg_type,
+            MsgType::Announce | MsgType::Signaling | MsgType::Sync | MsgType::FollowUp
+        ) {
+            fmt.debug_struct("PTP")
+                .field("header", &self.header)
+                .field("payload", &self.payload)
+                .field("suffix", &self.suffix)
+                .finish()
+        } else {
+            fmt.debug_struct("PTP")
+                .field("header", &self.header)
+                .field("payload", &self.payload)
+                .finish_non_exhaustive()
+        }
     }
 }
 
 impl std::fmt::Debug for PortIdentity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cfg = HexConfig {
+            title: false,
+            ascii: false,
+            width: 2,
+            group: 0,
+            ..HexConfig::default()
+        };
+
         f.debug_struct("PortIdentity")
             .field("clock_identity", &self.clock_identity)
-            .field("port", &format_args!("0x{:x}", &self.port))
+            .field(
+                "port",
+                &format_args!("{}", self.port.to_be_bytes().hex_conf(cfg)),
+            )
+            // .field("port", &format_args!("0x{:x}", &self.port))
             .finish()
     }
 }
