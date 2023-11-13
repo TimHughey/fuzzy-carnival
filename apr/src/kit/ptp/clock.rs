@@ -14,26 +14,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{util, PortIdentity};
+use super::{util, Message, MsgType, PortIdentity};
 use bytes::{Buf, BytesMut};
 use once_cell::sync::Lazy;
 use pretty_hex::{HexConfig, PrettyHex};
-use std::time;
+use std::{collections::HashMap, hash::Hash};
+use tokio::time::{Duration, Instant};
 
 const IDENTITY_LEN: usize = 8;
 #[derive(Copy, Clone)]
 pub struct Epoch {
-    inner: time::Instant,
+    inner: Instant,
 }
 
 impl Epoch {
-    pub fn reception_time() -> time::Duration {
-        EPOCH.inner.elapsed()
+    pub fn reception_time() -> Instant {
+        let elapsed = EPOCH.inner.elapsed();
+        let now = Instant::now();
+
+        now.checked_sub(elapsed).unwrap()
     }
+
+    // pub fn duration_since_epoch(later: &Instant) -> Duration {
+    //     later.duration_since(EPOCH.inner)
+    // }
 }
 
 static EPOCH: Lazy<Epoch> = Lazy::new(|| Epoch {
-    inner: time::Instant::now(),
+    inner: Instant::now(),
 });
 
 pub mod local {
@@ -53,7 +61,7 @@ pub fn get_local_port_identity() -> &'static PortIdentity {
     &local::PORT_IDENTITY
 }
 
-#[derive(Default, PartialEq, Eq, Hash)]
+#[derive(Default, Clone, PartialEq, Eq, Hash)]
 pub struct Identity {
     inner: [u8; IDENTITY_LEN],
 }
@@ -72,10 +80,43 @@ impl AsRef<[u8]> for Identity {
     }
 }
 
+#[derive(Debug)]
+pub struct Known {
+    pub last_at: Instant,
+    pub payloads: HashMap<MsgType, Message>,
+}
+
+impl Known {
+    pub fn new(msg: Message) -> Self {
+        let msg_type = msg.get_type();
+
+        Self {
+            last_at: msg.header.metadata.reception_time,
+            payloads: HashMap::from([(msg_type, msg)]),
+        }
+    }
+
+    pub fn update(&mut self, msg: Message) {
+        use std::collections::hash_map::Entry;
+
+        let msg_type = msg.get_type();
+
+        match self.payloads.entry(msg_type) {
+            Entry::Occupied(mut o) => {
+                self.last_at = msg.header.metadata.reception_time;
+
+                *o.get_mut() = msg;
+            }
+            Entry::Vacant(v) => {
+                v.insert(msg);
+            }
+        }
+    }
+}
 pub mod quality {
     use bytes::{Buf, BytesMut};
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub enum Accuracy {
         LessThan100ns(u8),
         #[default]
@@ -105,7 +146,7 @@ pub mod quality {
         }
     }
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub enum Class {
         Reserved(u8),
         Shall(u8),
@@ -133,7 +174,7 @@ pub mod quality {
 }
 
 #[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Quality {
     class: quality::Class,
     accuracy: quality::Accuracy,
@@ -150,7 +191,7 @@ impl Quality {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(unused)]
 pub struct GrandMaster {
     priority_one: u8,
@@ -170,14 +211,13 @@ impl GrandMaster {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Clone, Copy)]
 pub struct Timestamp {
-    pub val: time::Duration,
+    pub val: Duration,
 }
 
 impl Timestamp {
     pub fn new_from_buf(buf: &mut BytesMut) -> Option<Self> {
-        use std::time::Duration;
         use util::make_array_nlo;
         // combination of:
         //  - seconds (48 bits)
@@ -213,5 +253,13 @@ impl std::fmt::Debug for Identity {
         };
 
         write!(f, "{}", self.inner.hex_conf(cfg))
+    }
+}
+
+impl std::fmt::Debug for Timestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Timestamp")
+            .field("cal", &format_args!("{:8.2?}", &self.val))
+            .finish()
     }
 }

@@ -31,9 +31,9 @@ pub(super) mod tlv;
 
 mod util;
 
-pub(super) use clock::{Epoch, Identity as ClockIdentity};
+pub(super) use clock::{Epoch, Identity as ClockIdentity, Known as KnownClock};
 pub(super) use codec::Context as Codec;
-pub(super) use protocol::{Channel, Message, MetaData, PortIdentity};
+pub(super) use protocol::{Channel, Message, MetaData, MsgType, Payload, PortIdentity};
 pub(super) use state::{Context as State, Count as StateCount};
 
 pub(super) enum Selected {
@@ -88,8 +88,7 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
             Selected::MaybeMessage { res } => match res {
                 Ok((message, sock_addr)) => {
                     state.inc_count(StateCount::Message);
-                    state.got_message();
-                    tracing::debug!("{sock_addr:?} {message:#?}");
+                    state.handle_message(sock_addr, message);
                 }
                 Err(e) => {
                     tracing::error!("{e}");
@@ -108,9 +107,11 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
                 if let Some(metrics) = state.freq_metrics() {
                     tracing::info!("{metrics:?}");
                 }
+
+                tracing::debug!("{state:#?}");
             }
         }
-    } // forever loop: only exits are Err and cancel via breaks
+    } // forever loop: Err and cancel (via break) are the only way out
 
     Ok(())
 }

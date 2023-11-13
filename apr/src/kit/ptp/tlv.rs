@@ -90,6 +90,7 @@ impl std::fmt::Display for Type {
     }
 }
 
+#[derive(Clone)]
 pub enum Value {
     NoData {
         id: Type,

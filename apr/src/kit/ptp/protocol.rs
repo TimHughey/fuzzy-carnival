@@ -22,7 +22,8 @@ use crate::Result;
 use bitflags::bitflags;
 use bytes::{Buf, BufMut, BytesMut};
 use pretty_hex::PrettyHex;
-use std::time;
+use std::hash::{Hash, Hasher};
+use tokio::time::{Duration, Instant};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum Channel {
@@ -72,9 +73,9 @@ impl MsgType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MetaData {
-    pub reception_time: time::Duration,
+    pub reception_time: Instant,
     pub transport_specific: u8, // high nibble of byte 0
     pub msg_type: MsgType,      // low nibble of byte 0
     pub _reserved: u8,          // high nibble of byte 1
@@ -151,6 +152,12 @@ impl MetaData {
     }
 }
 
+impl Hash for MetaData {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.msg_type.hash(state);
+    }
+}
+
 bitflags! { // Message Flags
     // NOTE: the bit order below is deliberately different
     //       than the spec.  flags u16 is sent big-endian
@@ -180,12 +187,13 @@ bitflags! { // Message Flags
     }
 }
 
+#[derive(Clone)]
 pub struct Header {
     pub metadata: MetaData,
     pub _domain_num: u8,
     pub _minor_sdo_id: u8,
     pub flags: MessageFlags,
-    pub correction_field: Option<time::Duration>,
+    pub correction_field: Option<Duration>,
     pub _msg_type_specific: u32,
     pub source_port_identity: PortIdentity,
     pub sequence_id: u16,
@@ -207,9 +215,9 @@ impl Header {
             flags: MessageFlags::from_bits_retain(buf.get_u16_ne()),
             // NOTE: PTP value is multiplied by 2^16 (65536)
             correction_field: {
-                let d = time::Duration::from_nanos(buf.get_u64() / 65536);
+                let d = Duration::from_nanos(buf.get_u64() / 65536);
 
-                if d > time::Duration::ZERO {
+                if d > Duration::ZERO {
                     Some(d)
                 } else {
                     None
@@ -224,9 +232,10 @@ impl Header {
     }
 }
 
+#[derive(Clone)]
 pub struct Message {
-    header: Header,
-    payload: Payload,
+    pub header: Header,
+    pub payload: Payload,
     _suffix: Option<Suffix>, // captured for potential future needs
 }
 
@@ -261,17 +270,21 @@ impl Message {
         self.header.metadata.msg_type
     }
 
+    pub fn port_identity(&self) -> &PortIdentity {
+        self.header.source_port_identity.as_ref()
+    }
+
+    // pub fn into_parts(self) -> (Header, Payload) {
+    //     (self.header, self.payload)
+    // }
+
     #[allow(unused)]
     pub fn match_msg_type(&self, msg_type: MsgType) -> bool {
         self.header.metadata.msg_type == msg_type
     }
-
-    // pub fn save_sockaddr(&mut self, addr: SocketAddr) {
-    //     self.sock_addr.get_or_insert(addr);
-    // }
 }
 
-#[derive(Default, Eq, PartialEq, Hash)]
+#[derive(Default, Clone, Eq, PartialEq, Hash)]
 pub struct PortIdentity {
     clock_identity: ClockIdentity,
     port: u16,
@@ -295,6 +308,12 @@ impl PortIdentity {
             clock_identity: ClockIdentity::new_from_buf(&mut buf),
             port: port.unwrap_or(0x90a1),
         }
+    }
+}
+
+impl AsRef<PortIdentity> for PortIdentity {
+    fn as_ref(&self) -> &PortIdentity {
+        self
     }
 }
 
@@ -334,7 +353,7 @@ mod tests {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub enum Payload {
     Announce {
         origin_timestamp: Option<Timestamp>,
@@ -397,7 +416,7 @@ impl Payload {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Suffix {
     _tlvs: Vec<tlv::Value>,
 }
