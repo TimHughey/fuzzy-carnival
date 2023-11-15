@@ -25,6 +25,7 @@ pub(super) mod tests;
 
 pub(super) mod clock;
 pub(super) mod codec;
+pub(super) mod foreign;
 pub(super) mod protocol;
 pub(super) mod state;
 pub(super) mod tlv;
@@ -33,7 +34,8 @@ mod util;
 
 pub(super) use clock::{Epoch, Identity as ClockIdentity, Known as KnownClock};
 pub(super) use codec::Context as Codec;
-pub(super) use protocol::{Channel, Message, MetaData, MsgType, PortIdentity};
+pub(super) use foreign::MasterMap as ForeignMasterMap;
+pub(super) use protocol::{Channel, Message, MetaData, MsgFlags, MsgType, PortIdentity};
 pub(super) use state::{Context as State, Count as StateCount};
 
 pub(super) enum Selected {
@@ -104,11 +106,12 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
             }
             Selected::Broadcast { tick_at: _tick_at } => state.inc_count(StateCount::Broadcast),
             Selected::Report { tick_at: _tick_at } => {
-                if let Some(metrics) = state.freq_metrics() {
-                    tracing::info!("{metrics:?}");
-                }
+                let _ = state.freq_metrics();
+                // if let Some(metrics) = state.freq_metrics() {
+                //     tracing::info!("{metrics:?}");
+                // }
 
-                tracing::debug!("{state:#?}");
+                tracing::info!("{state}");
             }
         }
     } // forever loop: Err and cancel (via break) are the only way out

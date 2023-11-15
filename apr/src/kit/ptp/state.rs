@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{KnownClock, Message, PortIdentity};
+use super::{ForeignMasterMap, KnownClock, Message, PortIdentity};
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
@@ -48,6 +48,7 @@ pub struct Context {
     pub message_freq: VecDeque<Duration>,
     pub counters: Counters,
     pub known_clocks: HashMap<PortIdentity, KnownClock>,
+    pub foreign_master_map: ForeignMasterMap,
 }
 
 #[derive(Copy, Clone)]
@@ -65,6 +66,7 @@ impl Context {
             message_freq: VecDeque::with_capacity(20),
             counters: Counters::default(),
             known_clocks: HashMap::with_capacity(10),
+            foreign_master_map: ForeignMasterMap::new(),
         }
     }
 
@@ -116,16 +118,60 @@ impl Context {
     }
 
     pub fn handle_message(&mut self, _sock_addr: SocketAddr, msg: Message) {
+        use super::{
+            foreign::update::{
+                Announce as AnnounceUpdate, FollowUp as FollowUpUpdate, Sync as SyncUpdate,
+            },
+            MsgType,
+        };
+        use std::collections::hash_map::Entry;
+
+        // record some statistics
         self.got_message();
 
-        if let Some(known_clock) = self.known_clocks.get_mut(msg.port_identity()) {
-            known_clock.update(msg);
-        } else {
-            let port_identity = msg.port_identity().clone();
-            let new_clock = KnownClock::new(msg);
-            tracing::info!("NEW CLOCK {new_clock:#?}");
+        // we need both of these for the code below, get them now because we will
+        // move message for handling
+        let key = msg.header.source_port_identity;
+        let msg_id = msg.get_type();
 
-            self.known_clocks.insert(port_identity, new_clock);
+        // get the record for this source port identity (aka clock id).
+        // in the code below we will only create a new entry upon receipt of
+        // an Announce message.  all other messages are ignored until the clock is
+        // announved.
+        let entry = self.foreign_master_map.inner.entry(key);
+
+        match (msg_id, entry) {
+            // we know this clock
+            (MsgType::Announce, Entry::Occupied(mut o)) => {
+                o.get_mut().got_announce(AnnounceUpdate::from(msg));
+            }
+            // we don't this clock and we have announce message
+            (MsgType::Announce, Entry::Vacant(_v)) => {
+                let update = AnnounceUpdate::from(msg);
+                self.foreign_master_map
+                    .inner
+                    .entry(key)
+                    .or_default()
+                    .got_announce(update);
+            }
+            // sync messages are sent to initiate the two-step sync + follow_up
+            // process to yield the precise source port timestamp
+            (MsgType::Sync, Entry::Occupied(mut o)) => {
+                let update = SyncUpdate::from(msg);
+                o.get_mut().got_sync(&update);
+            }
+
+            // attempt to handle FollowUp messages only if we've previously seen this
+            // source port identity (aka received Announce).  see foreign mod for
+            // additional constraints (e.g. we've received a two-step sync message)
+            (MsgType::FollowUp, Entry::Occupied(mut o)) => {
+                let update = FollowUpUpdate::from(msg);
+                o.get_mut().got_follow_up(update);
+            }
+
+            (msg_type, _entry) => {
+                tracing::debug!("unhandled message id: {msg_type:?}");
+            }
         }
     }
 
@@ -137,7 +183,18 @@ impl Context {
 impl std::fmt::Debug for Context {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("State")
-            .field("known_clocks", &self.known_clocks)
+            .field("foreign_masters", &self.foreign_master_map)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Display for Context {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("State")
+            .field(
+                "foreign_masters",
+                &format_args!("{:#?}", &self.foreign_master_map),
+            )
             .finish_non_exhaustive()
     }
 }

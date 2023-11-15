@@ -73,7 +73,7 @@ impl MsgType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MetaData {
     pub reception_time: Instant,
     pub transport_specific: u8, // high nibble of byte 0
@@ -163,7 +163,7 @@ bitflags! { // Message Flags
     //       than the spec.  flags u16 is sent big-endian
     //
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct MessageFlags: u16 {
+    pub struct MsgFlags: u16 {
         // bit ordering exactly matches IEEE 1588-2019 (Table 37)
         // MSB
         const ALTERNATE_MASTER = 0b01 << 0;
@@ -187,12 +187,17 @@ bitflags! { // Message Flags
     }
 }
 
+impl MsgFlags {
+    pub fn is_good_sync(self) -> bool {
+        self == MsgFlags::UNICAST | MsgFlags::TWO_STEP | MsgFlags::PTP_TIMESCALE
+    }
+}
+
 #[derive(Clone)]
 pub struct Header {
-    pub metadata: MetaData,
     pub _domain_num: u8,
     pub _minor_sdo_id: u8,
-    pub flags: MessageFlags,
+    pub flags: MsgFlags,
     pub correction_field: Option<Duration>,
     pub _msg_type_specific: u32,
     pub source_port_identity: PortIdentity,
@@ -203,16 +208,15 @@ pub struct Header {
 
 impl Header {
     #[allow(unused)]
-    pub fn new_with_metadata(metadata: MetaData, buf: &mut BytesMut) -> Self {
+    pub fn new(buf: &mut BytesMut) -> Self {
         // NOTE:  this function assumes the buf has available bytes to create the header
 
         Self {
-            metadata,
             _domain_num: buf.get_u8(),
             _minor_sdo_id: buf.get_u8(),
             // NOTE: must get as native-endian to match bitflags
             //       haven't taken the time to decipher why... someday...
-            flags: MessageFlags::from_bits_retain(buf.get_u16_ne()),
+            flags: MsgFlags::from_bits_retain(buf.get_u16_ne()),
             // NOTE: PTP value is multiplied by 2^16 (65536)
             correction_field: {
                 let d = Duration::from_nanos(buf.get_u64() / 65536);
@@ -234,9 +238,10 @@ impl Header {
 
 #[derive(Clone)]
 pub struct Message {
+    pub metadata: MetaData,
     pub header: Header,
     pub payload: Payload,
-    suffix: Option<Suffix>, // captured for potential future needs
+    pub suffix: Option<Suffix>, // captured for potential future needs
 }
 
 impl Message {
@@ -246,7 +251,7 @@ impl Message {
         // NOTE: metadata previously created, skip those bytes
         buf.advance(MetaData::buf_size_of());
 
-        let header = Header::new_with_metadata(metadata, &mut buf);
+        let header = Header::new(&mut buf);
         let payload = Payload::new(metadata.msg_type, &mut buf);
         let suffix = Suffix::new_from_buf(&mut buf);
 
@@ -259,6 +264,7 @@ impl Message {
         }
 
         Self {
+            metadata,
             header,
             payload,
             suffix,
@@ -267,20 +273,16 @@ impl Message {
 
     #[allow(unused)]
     pub fn get_type(&self) -> MsgType {
-        self.header.metadata.msg_type
-    }
-
-    pub fn port_identity(&self) -> &PortIdentity {
-        self.header.source_port_identity.as_ref()
+        self.metadata.msg_type
     }
 
     #[allow(unused)]
     pub fn match_msg_type(&self, msg_type: MsgType) -> bool {
-        self.header.metadata.msg_type == msg_type
+        self.metadata.msg_type == msg_type
     }
 }
 
-#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(Default, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct PortIdentity {
     pub clock_identity: ClockIdentity,
     pub port: u16,
@@ -412,7 +414,6 @@ impl Suffix {
 impl std::fmt::Debug for Header {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fmt.debug_struct("Header")
-            .field("metadata", &self.metadata)
             .field("sequence_id", &self.sequence_id)
             .field("source_port_identity", &self.source_port_identity)
             .field("flags", &self.flags)
@@ -431,21 +432,38 @@ impl std::fmt::Debug for Header {
 
 impl std::fmt::Debug for Message {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = format!("PTP {:?}", self.metadata.msg_type);
+
         if matches!(
-            self.header.metadata.msg_type,
+            self.metadata.msg_type,
             MsgType::Announce | MsgType::Signaling | MsgType::Sync | MsgType::FollowUp
         ) {
-            fmt.debug_struct("PTP")
+            fmt.debug_struct(name.as_str())
+                .field("metadata", &self.metadata)
                 .field("header", &self.header)
                 .field("payload", &self.payload)
                 .field("suffix", &self.suffix)
                 .finish()
         } else {
             fmt.debug_struct("PTP")
+                .field("metadata", &self.metadata)
                 .field("header", &self.header)
                 .field("payload", &self.payload)
                 .finish_non_exhaustive()
         }
+    }
+}
+
+impl std::fmt::Debug for MetaData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MetaData")
+            .field("msg_type", &self.msg_type)
+            .field("len", &self.len)
+            .field(
+                "reception_time",
+                &format_args!("{:?}", Epoch::local_time(&self.reception_time)),
+            )
+            .finish_non_exhaustive()
     }
 }
 
@@ -465,7 +483,6 @@ impl std::fmt::Debug for PortIdentity {
                 "port",
                 &format_args!("{}", self.port.to_be_bytes().hex_conf(cfg)),
             )
-            // .field("port", &format_args!("0x{:x}", &self.port))
             .finish()
     }
 }

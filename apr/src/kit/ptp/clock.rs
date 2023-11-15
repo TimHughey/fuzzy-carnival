@@ -16,6 +16,7 @@
 
 use super::{util, Message, MsgType, PortIdentity};
 use bytes::{Buf, BytesMut};
+
 use once_cell::sync::Lazy;
 use pretty_hex::{HexConfig, PrettyHex};
 use std::{collections::HashMap, hash::Hash};
@@ -29,15 +30,12 @@ pub struct Epoch {
 
 impl Epoch {
     pub fn reception_time() -> Instant {
-        let elapsed = EPOCH.inner.elapsed();
-        let now = Instant::now();
-
-        now.checked_sub(elapsed).unwrap()
+        Instant::now()
     }
 
-    // pub fn duration_since_epoch(later: &Instant) -> Duration {
-    //     later.duration_since(EPOCH.inner)
-    // }
+    pub fn local_time(reception_time: &Instant) -> Duration {
+        reception_time.duration_since(EPOCH.inner)
+    }
 }
 
 static EPOCH: Lazy<Epoch> = Lazy::new(|| Epoch {
@@ -61,7 +59,7 @@ pub fn get_local_port_identity() -> &'static PortIdentity {
     &local::PORT_IDENTITY
 }
 
-#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Identity {
     inner: [u8; IDENTITY_LEN],
 }
@@ -86,12 +84,13 @@ pub struct Known {
     pub payloads: HashMap<MsgType, Message>,
 }
 
+#[allow(unused)]
 impl Known {
     pub fn new(msg: Message) -> Self {
         let msg_type = msg.get_type();
 
         Self {
-            last_at: msg.header.metadata.reception_time,
+            last_at: msg.metadata.reception_time,
             payloads: HashMap::from([(msg_type, msg)]),
         }
     }
@@ -103,7 +102,7 @@ impl Known {
 
         match self.payloads.entry(msg_type) {
             Entry::Occupied(mut o) => {
-                self.last_at = msg.header.metadata.reception_time;
+                self.last_at = msg.metadata.reception_time;
 
                 *o.get_mut() = msg;
             }
