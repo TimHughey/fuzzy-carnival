@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{ForeignMasterMap, KnownClock, Message, PortIdentity};
+use super::{foreign::Master, ForeignMasterMap, KnownClock, Message, PortIdentity};
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
@@ -143,16 +143,18 @@ impl Context {
         match (msg_id, entry) {
             // we know this clock
             (MsgType::Announce, Entry::Occupied(mut o)) => {
-                o.get_mut().got_announce(AnnounceUpdate::from(msg));
+                if let Ok(update) = AnnounceUpdate::try_from(msg) {
+                    o.get_mut().got_announce(update);
+                } else {
+                    tracing::warn!("failed to create anounce update");
+                }
             }
             // we don't this clock and we have announce message
-            (MsgType::Announce, Entry::Vacant(_v)) => {
-                let update = AnnounceUpdate::from(msg);
-                self.foreign_master_map
-                    .inner
-                    .entry(key)
-                    .or_default()
-                    .got_announce(update);
+            (MsgType::Announce, Entry::Vacant(v)) => {
+                if let Ok(update) = AnnounceUpdate::try_from(msg) {
+                    let master = v.insert(Master::default());
+                    master.got_announce(update);
+                }
             }
             // sync messages are sent to initiate the two-step sync + follow_up
             // process to yield the precise source port timestamp

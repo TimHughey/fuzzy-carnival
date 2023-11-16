@@ -111,7 +111,7 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
                 //     tracing::info!("{metrics:?}");
                 // }
 
-                tracing::info!("{state}");
+                tracing::info!("\n{state}");
             }
         }
     } // forever loop: Err and cancel (via break) are the only way out
