@@ -215,4 +215,20 @@ mod clock {
 
         // println!("{quality:#?}");
     }
+
+    #[tokio::test]
+    async fn can_get_epoch_now() {
+        use crate::kit::ptp::Epoch;
+        use tokio::time::{sleep, Duration};
+
+        let now0 = Epoch::now();
+        println!("{now0:.2}");
+
+        let sleep_ms = Duration::from_millis(333);
+
+        sleep(sleep_ms).await;
+
+        let now1 = Epoch::now();
+        println!("{now1:.2}");
+    }
 }

@@ -19,7 +19,7 @@ use bytes::{Buf, BytesMut};
 use once_cell::sync::Lazy;
 use pretty_hex::{HexConfig, PrettyHex};
 use std::hash::Hash;
-use tokio::time::{Duration, Instant};
+use time::{Duration, Instant};
 
 const IDENTITY_LEN: usize = 8;
 #[derive(Copy, Clone)]
@@ -29,19 +29,23 @@ pub struct Epoch {
 
 impl Epoch {
     #[inline]
-    pub fn reception_time() -> Instant {
+    pub fn reception_time() -> time::Instant {
         Instant::now()
+        //Instant::now() + EPOCH.inner.elapsed()
+        //EPOCH.inner.elapsed()
     }
 
     #[inline]
     pub fn local_time(reception_time: &Instant) -> Duration {
-        reception_time.duration_since(EPOCH.inner)
+        // reception_time.0.duration_since(EPOCH.inner)
+
+        reception_time.elapsed()
     }
 
     #[inline]
     #[allow(unused)]
-    pub fn now() -> Instant {
-        Instant::now()
+    pub fn now() -> time::Duration {
+        EPOCH.inner.elapsed()
     }
 }
 
@@ -192,9 +196,7 @@ impl GrandMaster {
 }
 
 #[derive(Default, Clone, Copy)]
-pub struct Timestamp {
-    pub val: Duration,
-}
+pub struct Timestamp(pub time::Duration);
 
 impl Timestamp {
     pub fn new_from_buf(buf: &mut BytesMut) -> Option<Self> {
@@ -209,16 +211,23 @@ impl Timestamp {
         // consume the vals from the buffer regardless of if this a non-zero timestamp
         // the field sizing for PTP doesn't fit "cleanly" into a Duration so we do
         // some hand rolled buf work
-        let secs = u64::from_be_bytes(make_array_nlo::<8, 6, 2>(buf));
-        let nanos = buf.get_u32();
+        let secs: i64 = u64::from_be_bytes(make_array_nlo::<8, 6, 2>(buf))
+            .try_into()
+            .unwrap();
+
+        let nanos: i32 = buf.get_u32().try_into().unwrap();
 
         let val = Duration::new(secs, nanos);
 
         if val > Duration::ZERO {
-            return Some(Self { val });
+            return Some(Self(val));
         }
 
         None
+    }
+
+    pub fn into_inner(self) -> Duration {
+        self.0
     }
 }
 
@@ -239,7 +248,7 @@ impl std::fmt::Debug for Identity {
 impl std::fmt::Debug for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Timestamp")
-            .field("val", &format_args!("{:8.2?}", &self.val))
+            .field("val", &format_args!("{:8.2?}", &self.0))
             .finish()
     }
 }

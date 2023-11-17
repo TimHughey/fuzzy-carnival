@@ -67,6 +67,7 @@ rand = "0.8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = ">=1.0.173"
 test-log = { version = ">=0.2.12", features = ["trace"] }
+time = { version = "~0.3.30", features = ["formatting"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["full"] }
 tokio-util = { version = ">=0.7.8", features = ["full"] }

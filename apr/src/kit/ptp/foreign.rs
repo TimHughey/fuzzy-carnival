@@ -15,14 +15,14 @@
 // limitations under the License.
 
 pub(self) use super::{
-    clock::GrandMaster,
     foreign::track::{
         Announces as AnnouncesTrack, FollowUps as FollowUpsTrack, Syncs as SyncsTrack,
     },
     protocol::Payload,
-    Header, Message, MsgFlags,
+    ClockTimestamp, Epoch, GrandMaster, Header, Message, MsgFlags,
 };
-pub(self) use tokio::time::{Duration, Instant};
+
+pub(self) use time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Base {
@@ -39,7 +39,14 @@ impl Base {
     }
 
     pub fn interval(&self, latest: &Base) -> Duration {
-        latest.arrival_time.duration_since(self.arrival_time)
+        let e_latest = latest.arrival_time.elapsed();
+        let e_arrival = self.arrival_time.elapsed();
+
+        e_arrival - e_latest
+    }
+
+    pub fn local_time(&self) -> Duration {
+        Epoch::local_time(&self.arrival_time)
     }
 
     pub fn seq_variance(&self, latest: &Self) -> Option<u16> {
@@ -48,7 +55,7 @@ impl Base {
 }
 
 pub(super) mod track {
-    use super::{update, Base, Duration, GrandMaster, Instant, Payload};
+    use super::{update, Base, ClockTimestamp, Duration, GrandMaster, Instant};
     use crate::Result;
     use std::collections::VecDeque;
 
@@ -100,7 +107,8 @@ pub(super) mod track {
                 if self.durations.len() >= 4 {
                     // now sum all the known intervals
                     let sum: Duration = self.durations.iter().sum();
-                    let sum_max = max_interval * self.durations.len().try_into().unwrap();
+                    let sum_max: Duration =
+                        max_interval * u32::try_from(self.durations.len()).unwrap();
 
                     if sum <= sum_max {
                         return Some(latest.arrival_time);
@@ -163,14 +171,31 @@ pub(super) mod track {
     pub(super) struct FollowUps {
         pub last: Option<Base>,
         pub count: u64,
-        pub payload: Payload,
+        pub correction_field: Option<Duration>,
+        pub precise_origin_timestamp: Option<ClockTimestamp>,
+        pub offset_from_master: Option<Duration>,
     }
 
     impl FollowUps {
-        pub fn apply(&mut self, update: update::FollowUp) {
-            self.last = Some(update.base);
+        pub fn apply(&mut self, update: &update::FollowUp) {
+            let base = update.base;
+            let correction_field = update.correction_field;
+            let precise_origin_timestamp = update.precise_origin_timestamp;
+
+            self.last = Some(base);
             self.count += 1;
-            self.payload = update.payload.unwrap();
+            self.correction_field = correction_field;
+            self.precise_origin_timestamp = precise_origin_timestamp;
+
+            let ingress_timestamp = base.local_time();
+            // assume this is two-step for now
+            let offset = ingress_timestamp
+                - precise_origin_timestamp.unwrap_or_default().into_inner()
+                - correction_field.unwrap_or_default();
+
+            self.offset_from_master = Some(offset);
+
+            // let offset_from_master = tracing::info!("\n{self:?}");
         }
     }
 
@@ -226,6 +251,7 @@ pub(super) mod track {
 
 pub(super) mod update {
     use super::{Base, Duration, GrandMaster, Header, Message, MsgFlags, Payload};
+    use crate::kit::ptp::clock::Timestamp;
 
     pub struct Announce {
         pub base: Base,
@@ -257,7 +283,7 @@ pub(super) mod update {
             {
                 return Ok(Self {
                     base,
-                    log_messsage_interval: Duration::from_millis(u64::from(msg_interval)),
+                    log_messsage_interval: Duration::milliseconds(i64::from(msg_interval)),
                     grandmaster,
                 });
             }
@@ -270,15 +296,37 @@ pub(super) mod update {
 
     pub struct FollowUp {
         pub base: Base,
-        pub payload: Option<Payload>,
+        pub correction_field: Option<Duration>,
+        pub precise_origin_timestamp: Option<Timestamp>,
     }
 
-    impl From<Message> for FollowUp {
-        fn from(msg: Message) -> Self {
-            Self {
-                base: Base::new(&msg),
-                payload: Some(msg.payload),
+    impl TryFrom<Message> for FollowUp {
+        type Error = anyhow::Error;
+
+        fn try_from(msg: Message) -> Result<Self, Self::Error> {
+            let base = Base::new(&msg);
+
+            if let Message {
+                header: Header {
+                    correction_field, ..
+                },
+                payload:
+                    Payload::FollowUp {
+                        precise_origin_timestamp,
+                    },
+                ..
+            } = msg
+            {
+                return Ok(Self {
+                    base,
+                    correction_field,
+                    precise_origin_timestamp,
+                });
             }
+
+            let error = "payload type mismatch";
+            tracing::error!(error);
+            Err(anyhow::anyhow!(error))
         }
     }
 
@@ -289,6 +337,10 @@ pub(super) mod update {
 
     impl From<Message> for Sync {
         fn from(msg: Message) -> Self {
+            if let Some(correction) = msg.header.correction_field {
+                tracing::info!("sync correction field: {correction:3.3?}");
+            }
+
             Self {
                 base: Base::new(&msg),
                 flags: msg.header.flags,
@@ -311,7 +363,7 @@ impl Master {
         self.announces_mut().apply(update);
     }
 
-    pub fn got_follow_up(&mut self, update: update::FollowUp) {
+    pub fn got_follow_up(&mut self, update: &update::FollowUp) {
         // the spec states a sync must arrive before processing a followup
         if self.syncs_mut().and_then(SyncsTrack::take_one).is_some() {
             // we've confirmed a sync proceeded this follow-up

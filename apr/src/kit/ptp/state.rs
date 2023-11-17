@@ -68,6 +68,7 @@ impl Context {
         }
     }
 
+    #[allow(unused)]
     pub fn average_msg_frequency(&self) -> Option<Duration> {
         let sum: Duration = self.message_freq.iter().sum();
 
@@ -78,6 +79,7 @@ impl Context {
         None
     }
 
+    #[allow(unused)]
     pub fn freq_metrics(&self) -> Option<FreqMetrics> {
         let fm = &self.message_freq;
         let min = fm.iter().min();
@@ -165,8 +167,11 @@ impl Context {
             // source port identity (aka received Announce).  see foreign mod for
             // additional constraints (e.g. we've received a two-step sync message)
             (MsgType::FollowUp, Entry::Occupied(mut o)) => {
-                let update = FollowUpUpdate::from(msg);
-                o.get_mut().got_follow_up(update);
+                if let Ok(update) = FollowUpUpdate::try_from(msg) {
+                    o.get_mut().got_follow_up(&update);
+                } else {
+                    tracing::warn!("FollowUpUdapte::try_from() failed");
+                }
             }
 
             (msg_type, _entry) => {

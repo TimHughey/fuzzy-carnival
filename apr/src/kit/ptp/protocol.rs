@@ -23,7 +23,7 @@ use bitflags::bitflags;
 use bytes::{Buf, BufMut, BytesMut};
 use pretty_hex::{HexConfig, PrettyHex};
 use std::hash::{Hash, Hasher};
-use tokio::time::{Duration, Instant};
+use time::{Duration, Instant};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum Channel {
@@ -219,7 +219,9 @@ impl Header {
             flags: MsgFlags::from_bits_retain(buf.get_u16_ne()),
             // NOTE: PTP value is multiplied by 2^16 (65536)
             correction_field: {
-                let d = Duration::from_nanos(buf.get_u64() / 65536);
+                let nanoseconds: i32 = (buf.get_u64() / 65536).try_into().unwrap();
+                let d = Duration::new(0, nanoseconds);
+                // let d = Duration::from_nanos();
 
                 if d > Duration::ZERO {
                     Some(d)
