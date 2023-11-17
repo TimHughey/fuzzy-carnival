@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{foreign::Master, ForeignMasterMap, KnownClock, Message, PortIdentity};
+use super::{foreign::Master, Message, PortIdentity};
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
@@ -47,8 +47,7 @@ pub struct Context {
     pub last_at: Option<Instant>,
     pub message_freq: VecDeque<Duration>,
     pub counters: Counters,
-    pub known_clocks: HashMap<PortIdentity, KnownClock>,
-    pub foreign_master_map: ForeignMasterMap,
+    pub foreign_ports: HashMap<PortIdentity, Master>,
 }
 
 #[derive(Copy, Clone)]
@@ -65,8 +64,7 @@ impl Context {
             last_at: None,
             message_freq: VecDeque::with_capacity(20),
             counters: Counters::default(),
-            known_clocks: HashMap::with_capacity(10),
-            foreign_master_map: ForeignMasterMap::new(),
+            foreign_ports: HashMap::with_capacity(10),
         }
     }
 
@@ -138,7 +136,7 @@ impl Context {
         // in the code below we will only create a new entry upon receipt of
         // an Announce message.  all other messages are ignored until the clock is
         // announved.
-        let entry = self.foreign_master_map.inner.entry(key);
+        let entry = self.foreign_ports.entry(key);
 
         match (msg_id, entry) {
             // we know this clock
@@ -185,7 +183,7 @@ impl Context {
 impl std::fmt::Debug for Context {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("State")
-            .field("foreign_masters", &self.foreign_master_map)
+            .field("foreign_masters", &self.foreign_ports)
             .finish_non_exhaustive()
     }
 }
@@ -195,7 +193,7 @@ impl std::fmt::Display for Context {
         f.debug_struct("State")
             .field(
                 "foreign_masters",
-                &format_args!("{:#?}", &self.foreign_master_map),
+                &format_args!("{:#?}", &self.foreign_ports),
             )
             .finish_non_exhaustive()
     }

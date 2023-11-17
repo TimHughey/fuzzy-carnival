@@ -14,12 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{util, Message, MsgType, PortIdentity};
+use super::{util, PortIdentity};
 use bytes::{Buf, BytesMut};
-
 use once_cell::sync::Lazy;
 use pretty_hex::{HexConfig, PrettyHex};
-use std::{collections::HashMap, hash::Hash};
+use std::hash::Hash;
 use tokio::time::{Duration, Instant};
 
 const IDENTITY_LEN: usize = 8;
@@ -29,12 +28,20 @@ pub struct Epoch {
 }
 
 impl Epoch {
+    #[inline]
     pub fn reception_time() -> Instant {
         Instant::now()
     }
 
+    #[inline]
     pub fn local_time(reception_time: &Instant) -> Duration {
         reception_time.duration_since(EPOCH.inner)
+    }
+
+    #[inline]
+    #[allow(unused)]
+    pub fn now() -> Instant {
+        Instant::now()
     }
 }
 
@@ -78,40 +85,6 @@ impl AsRef<[u8]> for Identity {
     }
 }
 
-#[derive(Debug)]
-pub struct Known {
-    pub last_at: Instant,
-    pub payloads: HashMap<MsgType, Message>,
-}
-
-#[allow(unused)]
-impl Known {
-    pub fn new(msg: Message) -> Self {
-        let msg_type = msg.get_type();
-
-        Self {
-            last_at: msg.metadata.reception_time,
-            payloads: HashMap::from([(msg_type, msg)]),
-        }
-    }
-
-    pub fn update(&mut self, msg: Message) {
-        use std::collections::hash_map::Entry;
-
-        let msg_type = msg.get_type();
-
-        match self.payloads.entry(msg_type) {
-            Entry::Occupied(mut o) => {
-                self.last_at = msg.metadata.reception_time;
-
-                *o.get_mut() = msg;
-            }
-            Entry::Vacant(v) => {
-                v.insert(msg);
-            }
-        }
-    }
-}
 pub mod quality {
     use bytes::{Buf, BytesMut};
 
@@ -211,6 +184,10 @@ impl GrandMaster {
             priority_two: buf.get_u8(),
             identity: Identity::new_from_buf(buf),
         }
+    }
+
+    pub fn identity(&self) -> Identity {
+        self.identity
     }
 }
 
