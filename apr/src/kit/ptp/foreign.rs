@@ -16,37 +16,37 @@
 
 pub(self) use super::{
     foreign::track::{
-        Announces as AnnouncesTrack, FollowUps as FollowUpsTrack, Syncs as SyncsTrack,
+        Announces as TrackAnnounces, FollowUps as TrackFollowUps, Syncs as TrackSyncs,
     },
     protocol::Payload,
-    ClockTimestamp, Epoch, GrandMaster, Header, Message, MsgFlags,
+    ClockTimestamp, GrandMaster, Header, Message, Result,
 };
 
 pub(self) use time::{Duration, Instant};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Base {
-    pub arrival_time: Instant,
+    pub ingress_timestamp: ClockTimestamp,
     pub seq_id: u16,
 }
 
 impl Base {
     pub fn new(msg: &Message) -> Self {
         Self {
-            arrival_time: msg.metadata.reception_time,
+            ingress_timestamp: msg.metadata.reception_timestamp,
             seq_id: msg.header.sequence_id,
         }
     }
 
-    pub fn interval(&self, latest: &Base) -> Duration {
-        let e_latest = latest.arrival_time.elapsed();
-        let e_arrival = self.arrival_time.elapsed();
-
-        e_arrival - e_latest
+    pub fn ingress_timestamp(&self) -> ClockTimestamp {
+        self.ingress_timestamp
     }
 
-    pub fn local_time(&self) -> Duration {
-        Epoch::local_time(&self.arrival_time)
+    pub fn interval(&self, latest: &Base) -> Duration {
+        let e_latest = latest.ingress_timestamp.into_inner();
+        let e_arrival = self.ingress_timestamp.into_inner();
+
+        e_arrival - e_latest
     }
 
     pub fn seq_variance(&self, latest: &Self) -> Option<u16> {
@@ -54,34 +54,35 @@ impl Base {
     }
 }
 
-pub(super) mod track {
-    use super::{update, Base, ClockTimestamp, Duration, GrandMaster, Instant};
+pub mod track {
+    use super::{update, Base, ClockTimestamp, Duration, GrandMaster, Message, Payload};
     use crate::Result;
     use std::collections::VecDeque;
 
-    #[derive(Debug)]
+    #[derive(Default, Debug)]
     pub(super) struct Intervals {
         last: Option<Base>,
-        durations: VecDeque<Duration>,
-    }
-
-    impl std::default::Default for Intervals {
-        fn default() -> Self {
-            Self {
-                last: None,
-                durations: VecDeque::with_capacity(5),
-            }
-        }
+        durations: Option<VecDeque<Duration>>,
     }
 
     impl Intervals {
-        pub fn check_if_master(&mut self, latest: Base, max_interval: Duration) -> Option<Instant> {
+        pub fn check_if_master(
+            &mut self,
+            latest: Base,
+            max_interval: Duration,
+        ) -> Option<ClockTimestamp> {
+            let intervals = self
+                .durations
+                .get_or_insert_with(|| VecDeque::with_capacity(5));
+
             // ensure we're considering four intervals
-            while self.durations.len() > 4 {
-                self.durations.pop_front();
+            while intervals.len() > 4 {
+                intervals.pop_front();
             }
 
-            if let Some(last) = self.last.as_mut() {
+            let last = self.last.as_mut();
+
+            if let Some(last) = last {
                 // calc the duration since the previous and latest
                 let interval = last.interval(&latest);
 
@@ -100,23 +101,23 @@ pub(super) mod track {
                 }
 
                 // add the calculated interval to the list for consideration
-                self.durations.push_back(interval);
+                intervals.push_back(interval);
 
                 *last = latest;
 
-                if self.durations.len() >= 4 {
+                if intervals.len() >= 4 {
                     // now sum all the known intervals
-                    let sum: Duration = self.durations.iter().sum();
-                    let sum_max: Duration =
-                        max_interval * u32::try_from(self.durations.len()).unwrap();
+                    let sum: Duration = intervals.iter().sum();
 
-                    if sum <= sum_max {
-                        return Some(latest.arrival_time);
+                    if sum <= u32::try_from(intervals.len()).unwrap() * max_interval {
+                        return Some(latest.ingress_timestamp);
                     }
                 }
             }
 
-            self.last = Some(latest);
+            self.last.get_or_insert(latest);
+
+            // self.last = Some(latest);
             None
         }
     }
@@ -125,7 +126,7 @@ pub(super) mod track {
     #[derive(Default, Debug)]
     pub(super) struct Announces {
         pub last: Option<Base>,
-        pub master_at: Option<Instant>,
+        pub master_at: Option<ClockTimestamp>,
         pub grandmaster: Option<GrandMaster>,
         pub intervals: Intervals,
     }
@@ -167,55 +168,70 @@ pub(super) mod track {
         }
     }
 
-    #[derive(Debug, Default, Clone)]
-    pub(super) struct FollowUps {
-        pub last: Option<Base>,
+    #[derive(Default, Clone, Hash)]
+    pub struct FollowUps {
+        pub last: Base,
         pub count: u64,
-        pub correction_field: Option<Duration>,
-        pub precise_origin_timestamp: Option<ClockTimestamp>,
-        pub offset_from_master: Option<Duration>,
+        pub correction_field: Duration,
+        pub precise_origin_timestamp: ClockTimestamp,
+        pub offset_from_master: Duration,
     }
 
     impl FollowUps {
-        pub fn apply(&mut self, update: &update::FollowUp) {
-            let base = update.base;
-            let correction_field = update.correction_field;
-            let precise_origin_timestamp = update.precise_origin_timestamp;
+        pub fn try_apply(&mut self, msg: &Message) -> Result<()> {
+            let base = Base::new(msg);
+            let correction_field = msg.correction_field();
 
-            self.last = Some(base);
-            self.count += 1;
-            self.correction_field = correction_field;
-            self.precise_origin_timestamp = precise_origin_timestamp;
+            if let Message {
+                payload:
+                    Payload::FollowUp {
+                        precise_origin_timestamp,
+                    },
+                ..
+            } = msg
+            {
+                let precise = precise_origin_timestamp.unwrap_or_default();
 
-            let ingress_timestamp = base.local_time();
-            // assume this is two-step for now
-            let offset = ingress_timestamp
-                - precise_origin_timestamp.unwrap_or_default().into_inner()
-                - correction_field.unwrap_or_default();
+                self.last = base;
+                self.count += 1;
+                self.correction_field = correction_field.unwrap_or_default();
+                self.precise_origin_timestamp = precise_origin_timestamp.unwrap_or_default();
 
-            self.offset_from_master = Some(offset);
+                // assume this is two-step for now
+                let offset = base.ingress_timestamp().into_inner()
+                    - precise.into_inner()
+                    - self.correction_field;
 
-            // let offset_from_master = tracing::info!("\n{self:?}");
+                self.offset_from_master = offset;
+
+                return Ok(());
+            }
+
+            let error = "payload mismatch";
+            tracing::error!("{error}: {:#?}", msg.payload);
+            Err(anyhow::anyhow!(error))
         }
     }
 
     #[derive(Debug, Clone, PartialEq)]
-    pub(super) struct Syncs {
+    pub struct Syncs {
         pub last: Option<Base>,
         pub count: u64,
     }
 
     impl Syncs {
-        pub fn new(update: &update::Sync) -> Self {
+        pub fn new(msg: &Message) -> Self {
             Self {
-                last: Some(update.base),
+                last: Some(Base::new(msg)),
                 count: 1,
             }
         }
 
-        pub fn apply(&mut self, update: &update::Sync) -> Result<()> {
-            let latest = update.base;
-            if update.flags.is_good_sync() {
+        pub fn try_apply(&mut self, msg: &Message) -> Result<()> {
+            let latest = Base::new(msg);
+            let flags = msg.header.flags;
+
+            if flags.is_good_sync() {
                 if let Some(last) = self.last.as_mut() {
                     match last.seq_variance(&latest) {
                         Some(1) => (),
@@ -233,7 +249,7 @@ pub(super) mod track {
             }
 
             let error = "invalid flags";
-            tracing::warn!("{error}: flags={:#?}", update.flags);
+            tracing::warn!("{error}: flags={:#?}", flags);
             Err(anyhow::anyhow!(error))
         }
 
@@ -250,8 +266,7 @@ pub(super) mod track {
 }
 
 pub(super) mod update {
-    use super::{Base, Duration, GrandMaster, Header, Message, MsgFlags, Payload};
-    use crate::kit::ptp::clock::Timestamp;
+    use super::{Base, Duration, GrandMaster, Header, Message, Payload};
 
     pub struct Announce {
         pub base: Base,
@@ -293,117 +308,82 @@ pub(super) mod update {
             Err(anyhow::anyhow!(error))
         }
     }
-
-    pub struct FollowUp {
-        pub base: Base,
-        pub correction_field: Option<Duration>,
-        pub precise_origin_timestamp: Option<Timestamp>,
-    }
-
-    impl TryFrom<Message> for FollowUp {
-        type Error = anyhow::Error;
-
-        fn try_from(msg: Message) -> Result<Self, Self::Error> {
-            let base = Base::new(&msg);
-
-            if let Message {
-                header: Header {
-                    correction_field, ..
-                },
-                payload:
-                    Payload::FollowUp {
-                        precise_origin_timestamp,
-                    },
-                ..
-            } = msg
-            {
-                return Ok(Self {
-                    base,
-                    correction_field,
-                    precise_origin_timestamp,
-                });
-            }
-
-            let error = "payload type mismatch";
-            tracing::error!(error);
-            Err(anyhow::anyhow!(error))
-        }
-    }
-
-    pub struct Sync {
-        pub base: Base,
-        pub flags: MsgFlags,
-    }
-
-    impl From<Message> for Sync {
-        fn from(msg: Message) -> Self {
-            if let Some(correction) = msg.header.correction_field {
-                tracing::info!("sync correction field: {correction:3.3?}");
-            }
-
-            Self {
-                base: Base::new(&msg),
-                flags: msg.header.flags,
-            }
-        }
-    }
 }
 
 #[allow(unused)]
 #[derive(Default)]
-pub struct Master {
+
+/// Representation of a Foreign Port Identity
+///
+/// Foreign ports are announced by the PTP instance which hosts the clock,
+/// send sync messages and followups to provide precise time information.
+pub struct Port {
     seen_at: Option<Instant>,
     announces: Option<track::Announces>,
-    syncs: Option<track::Syncs>,
-    follow_ups: Option<track::FollowUps>,
+    pub(super) syncs: Option<track::Syncs>,
+    pub(super) follow_ups: Option<track::FollowUps>,
 }
 
-impl Master {
+impl Port {
     pub fn got_announce(&mut self, update: update::Announce) {
         self.announces_mut().apply(update);
     }
 
-    pub fn got_follow_up(&mut self, update: &update::FollowUp) {
+    pub fn got_follow_up(&mut self, msg: &Message) -> Result<()> {
         // the spec states a sync must arrive before processing a followup
-        if self.syncs_mut().and_then(SyncsTrack::take_one).is_some() {
+        if self.syncs_mut().and_then(TrackSyncs::take_one).is_some() {
             // we've confirmed a sync proceeded this follow-up
-            return self.follow_ups_mut().apply(update);
+
+            return self.follow_ups_mut().try_apply(msg);
+
+            // return self.follow_ups_mut().apply(update);
         }
 
         tracing::warn!("ignoring follow up before sync");
+
+        Ok(())
     }
 
-    pub fn got_sync(&mut self, update: &update::Sync) {
-        // only process the sync message if this source port id was announced
-        if self.announces.is_some() {
-            let syncs = self.syncs.as_mut();
-
-            match syncs {
-                Some(syncs) => {
-                    if syncs.apply(update).is_err() {
-                        // NOTE: tracing log entry produced by syncs.update()
-                        self.syncs = None;
-                    }
-                }
-                None => self.syncs = Some(track::Syncs::new(update)),
-            }
-        }
+    fn announces_mut(&mut self) -> &mut TrackAnnounces {
+        self.announces.get_or_insert(TrackAnnounces::default())
     }
 
-    fn announces_mut(&mut self) -> &mut AnnouncesTrack {
-        self.announces.get_or_insert(AnnouncesTrack::default())
+    fn follow_ups_mut(&mut self) -> &mut TrackFollowUps {
+        self.follow_ups.get_or_insert(TrackFollowUps::default())
     }
 
-    fn follow_ups_mut(&mut self) -> &mut FollowUpsTrack {
-        self.follow_ups.get_or_insert(FollowUpsTrack::default())
-    }
-
-    fn syncs_mut(&mut self) -> Option<&mut SyncsTrack> {
+    fn syncs_mut(&mut self) -> Option<&mut TrackSyncs> {
         self.syncs.as_mut()
+    }
+
+    pub fn have_announces(&self) -> bool {
+        self.announces.is_some()
     }
 }
 
-impl std::fmt::Debug for Master {
+impl std::fmt::Debug for track::FollowUps {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("FollowUps")
+                .field(
+                    "correction_field",
+                    &format_args!("{:0.3}", self.correction_field),
+                )
+                .field("offset", &format_args!("{}", self.offset_from_master))
+                .finish_non_exhaustive()
+        } else {
+            f.debug_struct("FollowUps")
+                .field("last", &self.last)
+                .field("count", &self.count)
+                .field("correction_field", &self.correction_field)
+                .field("precise_origin_timestamp", &self.precise_origin_timestamp)
+                .field("offset_from_mester", &self.offset_from_master)
+                .finish()
+        }
+    }
+}
+
+impl std::fmt::Debug for Port {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Master")
             .field("seen_at", &format_args!("{:?}", self.seen_at))
@@ -416,7 +396,7 @@ impl std::fmt::Debug for Master {
     }
 }
 
-impl std::fmt::Display for Master {
+impl std::fmt::Display for Port {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Master")
             // .field("seen_at", &format_args!("{:?}", self.seen_at))

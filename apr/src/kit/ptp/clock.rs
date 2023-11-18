@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{util, PortIdentity};
+use super::util;
 use bytes::{Buf, BytesMut};
 use once_cell::sync::Lazy;
 use pretty_hex::{HexConfig, PrettyHex};
@@ -23,52 +23,17 @@ use time::{Duration, Instant};
 
 const IDENTITY_LEN: usize = 8;
 #[derive(Copy, Clone)]
-pub struct Epoch {
-    inner: Instant,
-}
+pub struct Epoch(Instant);
 
 impl Epoch {
     #[inline]
-    pub fn reception_time() -> time::Instant {
-        Instant::now()
-        //Instant::now() + EPOCH.inner.elapsed()
-        //EPOCH.inner.elapsed()
-    }
-
-    #[inline]
-    pub fn local_time(reception_time: &Instant) -> Duration {
-        // reception_time.0.duration_since(EPOCH.inner)
-
-        reception_time.elapsed()
-    }
-
-    #[inline]
     #[allow(unused)]
     pub fn now() -> time::Duration {
-        EPOCH.inner.elapsed()
+        EPOCH.0.elapsed()
     }
 }
 
-static EPOCH: Lazy<Epoch> = Lazy::new(|| Epoch {
-    inner: Instant::now(),
-});
-
-pub mod local {
-    use crate::{kit::ptp::PortIdentity, HostInfo};
-    use once_cell::sync::Lazy;
-
-    #[allow(unused)]
-    pub(super) static PORT_IDENTITY: Lazy<PortIdentity> = Lazy::new(|| {
-        let id = HostInfo::mac_as_byte_slice();
-
-        PortIdentity::new_local(id, None)
-    });
-}
-
-#[allow(unused)]
-pub fn get_local_port_identity() -> &'static PortIdentity {
-    &local::PORT_IDENTITY
-}
+static EPOCH: Lazy<Epoch> = Lazy::new(|| Epoch(Instant::now()));
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Identity {
@@ -195,7 +160,7 @@ impl GrandMaster {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Timestamp(pub time::Duration);
 
 impl Timestamp {
@@ -229,6 +194,22 @@ impl Timestamp {
     pub fn into_inner(self) -> Duration {
         self.0
     }
+
+    pub fn now() -> Self {
+        Self(Epoch::now())
+    }
+}
+
+impl AsRef<Duration> for Timestamp {
+    fn as_ref(&self) -> &Duration {
+        &self.0
+    }
+}
+
+impl AsRef<Timestamp> for Timestamp {
+    fn as_ref(&self) -> &Timestamp {
+        self
+    }
 }
 
 impl std::fmt::Debug for Identity {
@@ -248,7 +229,7 @@ impl std::fmt::Debug for Identity {
 impl std::fmt::Debug for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Timestamp")
-            .field("val", &format_args!("{:8.2?}", &self.0))
+            .field("0", &format_args!("{:.2}", &self.0))
             .finish()
     }
 }

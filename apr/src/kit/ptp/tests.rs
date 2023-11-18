@@ -77,7 +77,7 @@ fn can_replay_follow_up_messages() -> Result<()> {
                 // pass the newly split BytesMut to Message
                 let message = Message::new_from_buf(metadata, buf);
 
-                if message.match_msg_type(MsgType::FollowUp) {
+                if matches!(message.metadata.msg_type, MsgType::FollowUp) {
                     println!("{message:#?}\n");
                 }
             }
@@ -92,12 +92,9 @@ fn can_replay_follow_up_messages() -> Result<()> {
 
 #[cfg(test)]
 mod clock {
-    use crate::kit::ptp::{
-        clock::{
-            quality::{Accuracy, Class},
-            Quality,
-        },
-        PortIdentity,
+    use crate::kit::ptp::clock::{
+        quality::{Accuracy, Class},
+        Quality,
     };
 
     type SomeClockQualityClass = Option<Class>;
@@ -168,21 +165,10 @@ mod clock {
     }
 
     #[test]
-
-    fn can_create_local_port_identity() {
-        use crate::kit::ptp::clock;
-
-        let local_identity = clock::get_local_port_identity();
-
-        assert!(*local_identity > PortIdentity::default());
-        assert_ne!(*local_identity, PortIdentity::default());
-    }
-
-    #[test]
     fn can_create_local_port_identity_alt() {
         use crate::kit::ptp::{
             clock::{quality::Accuracy, Quality},
-            PortIdentity,
+            ClockIdentity, PortIdentity,
         };
         use crate::HostInfo;
         use bytes::{BufMut, BytesMut};
@@ -191,7 +177,12 @@ mod clock {
         const BYTE_7: u8 = 0xaa;
 
         let id = HostInfo::mac_as_byte_slice();
-        let port_identity = PortIdentity::new_local(id, None);
+        let mut buf = BytesMut::with_capacity(std::mem::size_of::<ClockIdentity>());
+
+        buf.put(id); // this only represents six of the eight identity bytes
+        buf.put_u16(0x11aa); // pad to create our "uniqueness"
+        buf.put_u16(0x90a1);
+        let port_identity = PortIdentity::new_from_buf(&mut buf);
 
         // println!("{port_identity:?}");
 
@@ -203,7 +194,7 @@ mod clock {
 
         let qval: u32 = 0xf8fe_436a; // from shairport
 
-        let mut buf = BytesMut::with_capacity(8);
+        // let mut buf = BytesMut::with_capacity(8);
         buf.put(&qval.to_be_bytes()[..]);
 
         let quality = Quality::new_from_buf(&mut buf);
@@ -218,17 +209,18 @@ mod clock {
 
     #[tokio::test]
     async fn can_get_epoch_now() {
-        use crate::kit::ptp::Epoch;
+        use crate::kit::ptp::clock::Epoch;
         use tokio::time::{sleep, Duration};
 
+        const SLEEP: Duration = Duration::from_millis(333);
+
         let now0 = Epoch::now();
-        println!("{now0:.2}");
 
-        let sleep_ms = Duration::from_millis(333);
+        assert!(now0 > Duration::ZERO);
 
-        sleep(sleep_ms).await;
+        sleep(SLEEP).await;
 
         let now1 = Epoch::now();
-        println!("{now1:.2}");
+        assert!(now1 > SLEEP);
     }
 }

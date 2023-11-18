@@ -20,23 +20,20 @@ use tokio::time::{self, Duration, Instant};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
-#[cfg(test)]
-pub(super) mod tests;
-
 pub(super) mod clock;
 pub(super) mod codec;
 pub(super) mod foreign;
 pub(super) mod protocol;
 pub(super) mod state;
+#[cfg(test)]
+pub(super) mod tests;
 pub(super) mod tlv;
 
 mod util;
 
-pub(super) use clock::{
-    Epoch, GrandMaster, Identity as ClockIdentity, Timestamp as ClockTimestamp,
-};
+pub(super) use clock::{GrandMaster, Identity as ClockIdentity, Timestamp as ClockTimestamp};
 pub(super) use codec::Context as Codec;
-pub(super) use protocol::{Channel, Header, Message, MetaData, MsgFlags, MsgType, PortIdentity};
+pub(super) use protocol::{Channel, Header, Message, MetaData, MsgType, PortIdentity};
 pub(super) use state::{Context as State, Count as StateCount};
 
 pub(super) enum Selected {
@@ -91,7 +88,7 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
             Selected::MaybeMessage { res } => match res {
                 Ok((message, sock_addr)) => {
                     state.inc_count(StateCount::Message);
-                    state.handle_message(sock_addr, message);
+                    let _res = state.handle_message(sock_addr, message);
                 }
                 Err(e) => {
                     tracing::error!("{e}");
@@ -109,7 +106,11 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
             Selected::Report { tick_at: _tick_at } => {
                 let foreign_port_map = &state.foreign_ports;
 
-                tracing::info!("{foreign_port_map:#?}");
+                for (pi, fm) in foreign_port_map.iter() {
+                    tracing::info!("{pi:?} => {:#?}", fm.follow_ups);
+                }
+
+                //   tracing::info!("{foreign_port_map:#?}");
 
                 // let _ = state.freq_metrics();
                 // if let Some(metrics) = state.freq_metrics() {

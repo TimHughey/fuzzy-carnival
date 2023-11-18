@@ -37,7 +37,7 @@ pub(crate) mod conn;
 pub mod helper;
 pub(crate) mod methods;
 pub mod msg;
-mod ptp;
+pub mod ptp;
 pub mod tags;
 
 #[cfg(test)]

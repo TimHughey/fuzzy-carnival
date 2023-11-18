@@ -14,7 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{foreign::Master, Message, PortIdentity};
+use super::foreign::track::Syncs as TrackSyncs;
+pub(super) use super::{foreign::Port, Message, PortIdentity, Result};
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
@@ -47,7 +48,7 @@ pub struct Context {
     pub last_at: Option<Instant>,
     pub message_freq: VecDeque<Duration>,
     pub counters: Counters,
-    pub foreign_ports: HashMap<PortIdentity, Master>,
+    pub foreign_ports: HashMap<PortIdentity, Port>,
 }
 
 #[derive(Copy, Clone)]
@@ -117,13 +118,8 @@ impl Context {
         }
     }
 
-    pub fn handle_message(&mut self, _sock_addr: SocketAddr, msg: Message) {
-        use super::{
-            foreign::update::{
-                Announce as AnnounceUpdate, FollowUp as FollowUpUpdate, Sync as SyncUpdate,
-            },
-            MsgType,
-        };
+    pub fn handle_message(&mut self, _sock_addr: SocketAddr, msg: Message) -> Result<()> {
+        use super::{foreign::update::Announce as AnnounceUpdate, MsgType};
         use std::collections::hash_map::Entry;
 
         // record some statistics
@@ -148,34 +144,61 @@ impl Context {
                 } else {
                     tracing::warn!("failed to create anounce update");
                 }
+
+                Ok(())
             }
-            // we don't this clock and we have announce message
+            // we don't recognize this clock and we have announce message
             (MsgType::Announce, Entry::Vacant(v)) => {
                 if let Ok(update) = AnnounceUpdate::try_from(msg) {
-                    let master = v.insert(Master::default());
+                    let master = v.insert(Port::default());
                     master.got_announce(update);
                 }
+
+                Ok(())
             }
             // sync messages are sent to initiate the two-step sync + follow_up
             // process to yield the precise source port timestamp
             (MsgType::Sync, Entry::Occupied(mut o)) => {
-                let update = SyncUpdate::from(msg);
-                o.get_mut().got_sync(&update);
+                let fm = o.get_mut();
+
+                if fm.have_announces() {
+                    if let Some(syncs) = fm.syncs.as_mut() {
+                        match syncs.try_apply(&msg) {
+                            Ok(()) => (),
+                            Err(e) => {
+                                // sync try_apply only fails if the sync message
+                                // does not match the expected contents.  if it doesn't
+                                // match something is very wrong and all sync tracking is removed.
+                                //
+                                // this approach is OK because syncs arrive very quickly
+                                tracing::error!("sync apply failed: {e}");
+                                o.remove_entry();
+                                return Err(e);
+                            }
+                        }
+                    } else {
+                        fm.syncs = Some(TrackSyncs::new(&msg));
+                    }
+                }
+
+                Ok(())
             }
 
             // attempt to handle FollowUp messages only if we've previously seen this
             // source port identity (aka received Announce).  see foreign mod for
             // additional constraints (e.g. we've received a two-step sync message)
             (MsgType::FollowUp, Entry::Occupied(mut o)) => {
-                if let Ok(update) = FollowUpUpdate::try_from(msg) {
-                    o.get_mut().got_follow_up(&update);
-                } else {
-                    tracing::warn!("FollowUpUdapte::try_from() failed");
-                }
+                o.get_mut().got_follow_up(&msg)
+
+                // let fm = o.get_mut();
+
+                // if fm.syncs.as_mut().and_then(f)
             }
 
             (msg_type, _entry) => {
                 tracing::debug!("unhandled message id: {msg_type:?}");
+
+                Ok(())
             }
         }
     }

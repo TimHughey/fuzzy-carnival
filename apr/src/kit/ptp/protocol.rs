@@ -16,14 +16,14 @@
 
 use super::{
     clock::{GrandMaster, Timestamp},
-    tlv, util, ClockIdentity, Epoch,
+    tlv, util, ClockIdentity, ClockTimestamp,
 };
 use crate::Result;
 use bitflags::bitflags;
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BytesMut};
 use pretty_hex::{HexConfig, PrettyHex};
 use std::hash::{Hash, Hasher};
-use time::{Duration, Instant};
+use time::Duration;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum Channel {
@@ -75,7 +75,7 @@ impl MsgType {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MetaData {
-    pub reception_time: Instant,
+    pub reception_timestamp: ClockTimestamp,
     pub transport_specific: u8, // high nibble of byte 0
     pub msg_type: MsgType,      // low nibble of byte 0
     pub _reserved: u8,          // high nibble of byte 1
@@ -127,7 +127,7 @@ impl MetaData {
 
         // construct Self with a possible Err for unknown msg_id (aka type)
         let md = Self {
-            reception_time: Epoch::reception_time(),
+            reception_timestamp: ClockTimestamp::now(),
             transport_specific: util::nibble_high(byte_0),
             msg_type: MsgType::new(byte_0),
             _reserved: util::nibble_high(byte_1),
@@ -273,14 +273,12 @@ impl Message {
         }
     }
 
-    #[allow(unused)]
     pub fn get_type(&self) -> MsgType {
         self.metadata.msg_type
     }
 
-    #[allow(unused)]
-    pub fn match_msg_type(&self, msg_type: MsgType) -> bool {
-        self.metadata.msg_type == msg_type
+    pub fn correction_field(&self) -> Option<Duration> {
+        self.header.correction_field
     }
 }
 
@@ -309,18 +307,6 @@ impl PortIdentity {
         }
 
         None
-    }
-
-    pub fn new_local(id: &[u8], port: Option<u16>) -> Self {
-        let mut buf = BytesMut::with_capacity(std::mem::size_of::<ClockIdentity>());
-
-        buf.put(id); // this only represents six of the eight identity bytes
-        buf.put_u16(0x11aa); // pad to create our "uniqueness"
-
-        Self {
-            clock_identity: ClockIdentity::new_from_buf(&mut buf),
-            port: port.unwrap_or(0x90a1),
-        }
     }
 }
 
@@ -461,10 +447,7 @@ impl std::fmt::Debug for MetaData {
         f.debug_struct("MetaData")
             .field("msg_type", &self.msg_type)
             .field("len", &self.len)
-            .field(
-                "reception_time",
-                &format_args!("{:?}", Epoch::local_time(&self.reception_time)),
-            )
+            .field("reception_timestamp", &self.reception_timestamp)
             .finish_non_exhaustive()
     }
 }
