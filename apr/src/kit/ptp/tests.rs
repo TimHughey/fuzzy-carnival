@@ -13,7 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific
 
-use super::{protocol::MsgType, Message, MetaData};
+use super::{MetaData, Payload};
 use crate::{kit::tests::Data, Result};
 use anyhow::anyhow;
 use tracing_test::traced_test;
@@ -39,9 +39,9 @@ fn can_replay_messages() -> Result<()> {
                 let buf = src.split_to(metadata.split_bytes());
 
                 // pass the newly split BytesMut to Message
-                let message = Message::new_from_buf(metadata, buf);
+                let payload = Payload::try_new(metadata, buf)?;
 
-                println!("{message:#?}\n");
+                println!("{payload:#?}\n");
             }
             Some(_) | None => {
                 return Err(anyhow!("failed to create metadata"));
@@ -75,10 +75,13 @@ fn can_replay_follow_up_messages() -> Result<()> {
                 let buf = src.split_to(metadata.split_bytes());
 
                 // pass the newly split BytesMut to Message
-                let message = Message::new_from_buf(metadata, buf);
+                let payload = Payload::try_new(metadata, buf)?;
 
-                if matches!(message.metadata.msg_type, MsgType::FollowUp) {
-                    println!("{message:#?}\n");
+                match payload {
+                    Payload::FollowUp(followup) => {
+                        println!("{followup:#?}");
+                    }
+                    Payload::Announce(_) | Payload::Discard(_) | Payload::Sync(_) => (),
                 }
             }
             Some(_) | None => {

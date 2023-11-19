@@ -33,11 +33,11 @@ mod util;
 
 pub(super) use clock::{GrandMaster, Identity as ClockIdentity, Timestamp as ClockTimestamp};
 pub(super) use codec::Context as Codec;
-pub(super) use protocol::{Channel, Header, Message, MetaData, MsgType, PortIdentity};
+pub(super) use protocol::{Channel, MetaData, Payload, PortIdentity};
 pub(super) use state::{Context as State, Count as StateCount};
 
 pub(super) enum Selected {
-    MaybeMessage { res: Result<(Message, SocketAddr)> },
+    MaybeMessage { res: Result<(Payload, SocketAddr)> },
     Cancel,
     Broadcast { tick_at: Instant },
     Report { tick_at: Instant },
@@ -86,9 +86,9 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
 
         match selected {
             Selected::MaybeMessage { res } => match res {
-                Ok((message, sock_addr)) => {
+                Ok((payload, sock_addr)) => {
                     state.inc_count(StateCount::Message);
-                    let _res = state.handle_message(sock_addr, message);
+                    let _res = state.inbound(sock_addr, payload);
                 }
                 Err(e) => {
                     tracing::error!("{e}");
@@ -107,7 +107,7 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
                 let foreign_port_map = &state.foreign_ports;
 
                 for (pi, fm) in foreign_port_map.iter() {
-                    tracing::info!("{pi:?} => {:#?}", fm.follow_ups);
+                    tracing::info!("\n{pi:#?} => {:#?}", fm.follow_ups);
                 }
 
                 //   tracing::info!("{foreign_port_map:#?}");

@@ -18,12 +18,24 @@ use super::{
     clock::{GrandMaster, Timestamp},
     tlv, util, ClockIdentity, ClockTimestamp,
 };
-use crate::Result;
 use bitflags::bitflags;
 use bytes::{Buf, BytesMut};
 use pretty_hex::{HexConfig, PrettyHex};
 use std::hash::{Hash, Hasher};
+use thiserror::Error;
 use time::Duration;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("version check failed")]
+    WrongVersion { version: u8 },
+    #[error("announce check failed")]
+    InvalidAnnounce { steps_removed: u16, time_source: u8 },
+    #[error("unhandled msg_id: {msg_id:?}")]
+    UnhandledMsg { msg_id: MsgType },
+}
+
+type MetaDataResult = std::result::Result<Option<MetaData>, Error>;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum Channel {
@@ -90,16 +102,11 @@ impl MetaData {
     }
 
     #[inline]
-    fn check_version(self) -> bool {
-        self.version == 2u8
-    }
-
-    #[inline]
     pub fn is_src_ready(self, src: &BytesMut) -> bool {
         src.len() >= (self.len as usize)
     }
 
-    /// Attempt to create [``MetaData``] from an immutable slice.
+    /// Attempt to create [``MetaData2``] from an immutable slice.
     ///
     /// This function will not consume bytes from the buffer
     /// so it may be used to determine if the complete message
@@ -111,7 +118,7 @@ impl MetaData {
     ///
     /// This function will return an error if the message version
     /// is not v2
-    pub fn new_from_slice(src: &[u8]) -> Result<Option<Self>> {
+    pub fn new_from_slice(src: &[u8]) -> MetaDataResult {
         use std::io::Cursor;
 
         // insufficient number of bytes to create metadata
@@ -123,32 +130,36 @@ impl MetaData {
         let mut cursor = Cursor::new(src);
         let byte_0 = cursor.get_u8();
         let byte_1 = cursor.get_u8();
+
+        // have byte_1 so we can check version early and return Error on mismatch
+        let version = check_version(byte_1)?;
+
         let len = cursor.get_u16();
 
         // construct Self with a possible Err for unknown msg_id (aka type)
-        let md = Self {
+        Ok(Some(Self {
             reception_timestamp: ClockTimestamp::now(),
             transport_specific: util::nibble_high(byte_0),
             msg_type: MsgType::new(byte_0),
             _reserved: util::nibble_high(byte_1),
-            version: util::nibble_low(byte_1),
+            version,
             len,
-        };
-
-        // return the created metadata if the version is correct
-        if md.check_version() {
-            return Ok(Some(md));
-        }
-
-        // version check failed, return Err
-        let error = "incorrect message version";
-        tracing::error!("{error}: {} != 0x02", md.version);
-        Err(anyhow::anyhow!(error))
+        }))
     }
 
     #[inline]
     pub fn split_bytes(self) -> usize {
         self.len as usize
+    }
+}
+
+#[inline]
+fn check_version(byte: u8) -> std::result::Result<u8, Error> {
+    let version = util::nibble_low(byte);
+
+    match version {
+        0x02 => Ok(version),
+        version => Err(Error::WrongVersion { version }),
     }
 }
 
@@ -209,8 +220,7 @@ pub struct Header {
 impl Header {
     #[allow(unused)]
     pub fn new(buf: &mut BytesMut) -> Self {
-        // NOTE:  this function assumes the buf has available bytes to create the header
-
+        /// NOTE:  this function assumes the buf has available bytes to create the header
         Self {
             _domain_num: buf.get_u8(),
             _minor_sdo_id: buf.get_u8(),
@@ -236,49 +246,55 @@ impl Header {
             log_message_interval: buf.get_u8(),
         }
     }
-}
-
-#[derive(Clone)]
-pub struct Message {
-    pub metadata: MetaData,
-    pub header: Header,
-    pub payload: Payload,
-    pub suffix: Option<Suffix>, // captured for potential future needs
-}
-
-impl Message {
-    /// Creates [Core] from a [``MetaData``] and a [``BytesMut``] containing
-    /// sufficient available bytes.
-    pub fn new_from_buf(metadata: MetaData, mut buf: BytesMut) -> Self {
-        // NOTE: metadata previously created, skip those bytes
-        buf.advance(MetaData::buf_size_of());
-
-        let header = Header::new(&mut buf);
-        let payload = Payload::new(metadata.msg_type, &mut buf);
-        let suffix = Suffix::new_from_buf(&mut buf);
-
-        if !buf.is_empty() {
-            tracing::warn!(
-                "{:?} incomplete buffer consumption\nUNUSED BUF {:?}",
-                metadata.msg_type,
-                buf.hex_dump()
-            );
-        }
-
-        Self {
-            metadata,
-            header,
-            payload,
-            suffix,
-        }
-    }
-
-    pub fn get_type(&self) -> MsgType {
-        self.metadata.msg_type
-    }
 
     pub fn correction_field(&self) -> Option<Duration> {
-        self.header.correction_field
+        self.correction_field
+    }
+
+    pub fn flags(&self) -> MsgFlags {
+        self.flags
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Common {
+    pub ingress_timestamp: ClockTimestamp,
+    pub seq_id: u16,
+    pub msg_id: MsgType,
+    pub source_port_identity: PortIdentity,
+}
+
+impl Common {
+    pub fn new(metadata: &MetaData, header: &Header) -> Self {
+        Self {
+            ingress_timestamp: metadata.reception_timestamp,
+            seq_id: header.sequence_id,
+            msg_id: metadata.msg_type,
+            source_port_identity: header.source_port_identity,
+        }
+    }
+
+    // pub fn identity(&self) -> PortIdentity {
+    //     self.source_port_identity
+    // }
+
+    pub fn ingress_timestamp(&self) -> ClockTimestamp {
+        self.ingress_timestamp
+    }
+
+    pub fn interval(&self, latest: &Self) -> Duration {
+        let e_latest = latest.ingress_timestamp.into_inner();
+        let e_arrival = self.ingress_timestamp.into_inner();
+
+        e_arrival - e_latest
+    }
+
+    pub fn msg_id(&self) -> MsgType {
+        self.msg_id
+    }
+
+    pub fn seq_variance(&self, latest: &Self) -> Option<u16> {
+        latest.seq_id.checked_sub(self.seq_id)
     }
 }
 
@@ -316,66 +332,133 @@ impl AsRef<PortIdentity> for PortIdentity {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Clone)]
+pub struct AnnounceData {
+    pub common: Common,
+    pub origin_timestamp: Option<Timestamp>,
+    pub log_message_interval: Duration,
+    pub grandmaster: GrandMaster,
+}
+
+#[derive(Debug, Clone)]
+pub struct FollowUpData {
+    pub common: Common,
+    pub correction: Option<Duration>,
+    pub origin_timestamp: Option<Timestamp>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SyncData {
+    pub common: Common,
+    pub flags: MsgFlags,
+    pub correction: Option<Duration>,
+    pub origin_timestamp: Option<Timestamp>,
+}
+
+type PayloadResult = std::result::Result<Payload, Error>;
+
+#[derive(Debug, Clone)]
 pub enum Payload {
-    Announce {
-        origin_timestamp: Option<Timestamp>,
-        current_utc_offset: u16,
-        _reserved: u8,
-        grandmaster: GrandMaster,
-        steps_removed: u16,
-        time_source: u8,
-    },
-    Sync {
-        origin_timestamp: Option<Timestamp>,
-    },
-    FollowUp {
-        precise_origin_timestamp: Option<Timestamp>,
-    },
-    Signaling {
-        target_port_identity: Option<PortIdentity>,
-    },
-    Management {
-        target_port_identity: PortIdentity,
-        starting_boundary_hops: u8,
-        boundary_hops: u8,
-        action_field: u8,
-        _reserved: u8,
-    },
-    #[default]
-    Empty,
+    Announce(AnnounceData),
+    FollowUp(FollowUpData),
+    Sync(SyncData),
+    Discard(Common),
 }
 
 impl Payload {
-    pub fn new(msg_type: MsgType, buf: &mut BytesMut) -> Self {
-        match msg_type {
-            MsgType::Announce => Payload::Announce {
-                origin_timestamp: Timestamp::new_from_buf(buf),
-                current_utc_offset: buf.get_u16(),
-                _reserved: buf.get_u8(),
-                grandmaster: GrandMaster::new_from_buf(buf),
-                steps_removed: buf.get_u16(),
-                time_source: buf.get_u8(),
-            },
-            MsgType::Sync => Payload::Sync {
-                origin_timestamp: Timestamp::new_from_buf(buf),
-            },
-            MsgType::FollowUp => Payload::FollowUp {
-                precise_origin_timestamp: Timestamp::new_from_buf(buf),
-            },
-            MsgType::Signaling => Payload::Signaling {
-                target_port_identity: PortIdentity::new_from_buf_maybe(buf),
-            },
-            MsgType::Management => Payload::Management {
-                target_port_identity: PortIdentity::new_from_buf(buf),
-                starting_boundary_hops: buf.get_u8(),
-                boundary_hops: buf.get_u8(),
-                action_field: buf.get_u8(),
-                _reserved: buf.get_u8(),
-            },
-
-            _id => Payload::Empty,
+    pub fn get_common(&self) -> &Common {
+        match self {
+            Payload::Announce(data) => &data.common,
+            Payload::Sync(data) => &data.common,
+            Payload::FollowUp(data) => &data.common,
+            Payload::Discard(common) => common,
         }
+    }
+
+    pub fn port_identity(&self) -> PortIdentity {
+        self.get_common().source_port_identity
+    }
+
+    pub fn try_new(metadata: MetaData, mut buf: BytesMut) -> PayloadResult {
+        // NOTE: metadata previously created, skip those bytes
+        buf.advance(MetaData::buf_size_of());
+
+        // build the header (from buf)
+        let header = Header::new(&mut buf);
+
+        // build Common from header
+        let common = Common::new(&metadata, &header);
+
+        // build payload from buf
+        let payload = match common.msg_id() {
+            MsgType::Announce => {
+                // pluck all bytes from the buffer then validate to ensure
+                // we only hand-off Announce payloads that can be processed
+                let origin_timestamp = Timestamp::new_from_buf(&mut buf);
+                let _current_utc_offset = buf.get_u16();
+                let _reserved = buf.get_u8();
+                let grandmaster = GrandMaster::new_from_buf(&mut buf);
+                let steps_removed = buf.get_u16();
+                let time_source = buf.get_u8();
+
+                let interval = header.log_message_interval;
+
+                if steps_removed == 0 && time_source == 0xa0 {
+                    Ok(Payload::Announce(AnnounceData {
+                        common,
+                        origin_timestamp,
+                        log_message_interval: Duration::milliseconds(i64::from(interval)),
+                        grandmaster,
+                    }))
+                } else {
+                    Err(Error::InvalidAnnounce {
+                        steps_removed,
+                        time_source,
+                    })
+                }
+            }
+            MsgType::FollowUp => Ok(Payload::FollowUp(FollowUpData {
+                common,
+                correction: header.correction_field(),
+                origin_timestamp: Timestamp::new_from_buf(&mut buf),
+            })),
+            MsgType::Sync => Ok(Payload::Sync(SyncData {
+                common,
+                flags: header.flags(),
+                correction: header.correction_field(),
+                origin_timestamp: Timestamp::new_from_buf(&mut buf),
+            })),
+
+            MsgType::Management => {
+                let _target_port_identity = PortIdentity::new_from_buf(&mut buf);
+                let _starting_boundary_hops = buf.get_u8();
+                let _boundary_hops = buf.get_u8();
+                let _action_fiel = buf.get_u8();
+                let _reserved = buf.get_u8();
+
+                Ok(Payload::Discard(common))
+            }
+            MsgType::Signaling => {
+                let _target_port_identity = PortIdentity::new_from_buf_maybe(&mut buf);
+
+                Ok(Payload::Discard(common))
+            }
+
+            MsgType::DelayReq
+            | MsgType::DelayResp
+            | MsgType::PdelayReq
+            | MsgType::PdelayResp
+            | MsgType::PdelayRespFollowUp
+            | MsgType::Reserved(_) => Err(Error::UnhandledMsg {
+                msg_id: common.msg_id,
+            }),
+        }?;
+
+        if !buf.is_empty() {
+            let _suffix = Suffix::new_from_buf(&mut buf);
+        }
+
+        Ok(payload)
     }
 }
 
@@ -418,40 +501,6 @@ impl std::fmt::Debug for Header {
     }
 }
 
-impl std::fmt::Debug for Message {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = format!("PTP {:?}", self.metadata.msg_type);
-
-        if matches!(
-            self.metadata.msg_type,
-            MsgType::Announce | MsgType::Signaling | MsgType::Sync | MsgType::FollowUp
-        ) {
-            fmt.debug_struct(name.as_str())
-                .field("metadata", &self.metadata)
-                .field("header", &self.header)
-                .field("payload", &self.payload)
-                .field("suffix", &self.suffix)
-                .finish()
-        } else {
-            fmt.debug_struct("PTP")
-                .field("metadata", &self.metadata)
-                .field("header", &self.header)
-                .field("payload", &self.payload)
-                .finish_non_exhaustive()
-        }
-    }
-}
-
-impl std::fmt::Debug for MetaData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MetaData")
-            .field("msg_type", &self.msg_type)
-            .field("len", &self.len)
-            .field("reception_timestamp", &self.reception_timestamp)
-            .finish_non_exhaustive()
-    }
-}
-
 impl std::fmt::Debug for PortIdentity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let cfg = HexConfig {
@@ -472,58 +521,63 @@ impl std::fmt::Debug for PortIdentity {
     }
 }
 
-impl std::fmt::Debug for Payload {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Payload::Announce {
-                origin_timestamp,
-                current_utc_offset,
-                grandmaster,
-                steps_removed,
-                time_source,
-                ..
-            } => fmt
-                .debug_struct("Announce")
-                .field("origin_timestamp", origin_timestamp)
-                .field("current_utc_offset", current_utc_offset)
-                .field("grandmaster", grandmaster)
-                .field("steps_removed", steps_removed)
-                .field("time_source", &format_args!("0x{time_source:x}"))
-                .finish(),
+// impl std::fmt::Debug for Payload {
+//     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Payload::Announce {
+//                 origin_timestamp,
+//                 current_utc_offset,
+//                 grandmaster,
+//                 steps_removed,
+//                 time_source,
+//                 ..
+//             } => fmt
+//                 .debug_struct("Announce")
+//                 .field("origin_timestamp", origin_timestamp)
+//                 .field("current_utc_offset", current_utc_offset)
+//                 .field("grandmaster", grandmaster)
+//                 .field("steps_removed", steps_removed)
+//                 .field("time_source", &format_args!("0x{time_source:x}"))
+//                 .finish(),
 
-            Payload::Sync { origin_timestamp } => fmt
-                .debug_struct("Sync")
-                .field("origin_timestamp", origin_timestamp)
-                .finish(),
+// Payload::Announce2(data) => fmt
+//     .debug_struct("AnnouceData")
+//     .field("origin_timestamp", &data.origin_timestamp)
+//     .field("grandmaster", &data.grandmaster)
+//     .finish(),
+//             Payload::Sync { origin_timestamp } => fmt
+//                 .debug_struct("Sync")
+//                 .field("origin_timestamp", origin_timestamp)
+//                 .finish(),
 
-            Payload::FollowUp {
-                precise_origin_timestamp,
-            } => fmt
-                .debug_struct("FollowUp")
-                .field("precise_origin_timestamp", precise_origin_timestamp)
-                .finish(),
+//             Payload::FollowUp {
+//                 precise_origin_timestamp,
+//             } => fmt
+//                 .debug_struct("FollowUp")
+//                 .field("precise_origin_timestamp", precise_origin_timestamp)
+//                 .finish(),
 
-            Payload::Signaling {
-                target_port_identity,
-            } => fmt
-                .debug_struct("Signaling")
-                .field("target_port_identity", target_port_identity)
-                .finish(),
-            Self::Management {
-                target_port_identity,
-                starting_boundary_hops,
-                boundary_hops,
-                action_field,
-                _reserved,
-            } => fmt
-                .debug_struct("Management")
-                .field("target_port", target_port_identity)
-                .field("starting_boundary_hops", starting_boundary_hops)
-                .field("boundary_hops", boundary_hops)
-                .field("action_field", action_field)
-                .finish(),
+//             Payload::Signaling {
+//                 target_port_identity,
+//             } => fmt
+//                 .debug_struct("Signaling")
+//                 .field("target_port_identity", target_port_identity)
+//                 .finish(),
+//             Self::Management {
+//                 target_port_identity,
+//                 starting_boundary_hops,
+//                 boundary_hops,
+//                 action_field,
+//                 _reserved,
+//             } => fmt
+//                 .debug_struct("Management")
+//                 .field("target_port", target_port_identity)
+//                 .field("starting_boundary_hops", starting_boundary_hops)
+//                 .field("boundary_hops", boundary_hops)
+//                 .field("action_field", action_field)
+//                 .finish(),
 
-            Self::Empty => fmt.debug_struct("Empty").finish(),
-        }
-    }
-}
+//             Self::Empty => fmt.debug_struct("Empty").finish(),
+//         }
+//     }
+// }

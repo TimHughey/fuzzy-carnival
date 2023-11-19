@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Channel, Message, MetaData};
+use super::{Channel, MetaData, Payload};
 use crate::{
     util::{BinSave, BinSaveCat},
     HostInfo, Result,
@@ -65,7 +65,7 @@ fn make_bind_addr(channel: Channel) -> Result<SocketAddr> {
 }
 
 impl Decoder for Context {
-    type Item = Message;
+    type Item = Payload;
     type Error = anyhow::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
@@ -85,7 +85,13 @@ impl Decoder for Context {
                     .as_ref()
                     .and_then(|bin_save| bin_save.persist(&buf, "all", None).ok());
 
-                Some(Message::new_from_buf(metadata, buf))
+                match Payload::try_new(metadata, buf) {
+                    Ok(payload) => Some(payload),
+                    Err(e) => {
+                        tracing::error!("Payload::try_new(): {e}");
+                        None
+                    }
+                }
             }
             Some(_) | None => None,
         })

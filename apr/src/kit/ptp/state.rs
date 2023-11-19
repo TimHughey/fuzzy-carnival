@@ -14,8 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::foreign::track::Syncs as TrackSyncs;
-pub(super) use super::{foreign::Port, Message, PortIdentity, Result};
+pub(super) use super::{foreign::Port, Payload, PortIdentity, Result};
+use crate::kit::ptp::foreign::Syncs;
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
@@ -118,17 +118,12 @@ impl Context {
         }
     }
 
-    pub fn handle_message(&mut self, _sock_addr: SocketAddr, msg: Message) -> Result<()> {
-        use super::{foreign::update::Announce as AnnounceUpdate, MsgType};
+    pub fn inbound(&mut self, _sock_addr: SocketAddr, payload: Payload) -> Result<()> {
         use std::collections::hash_map::Entry;
-
-        // record some statistics
         self.got_message();
 
-        // we need both of these for the code below, get them now because we will
-        // move message for handling
-        let key = msg.header.source_port_identity;
-        let msg_id = msg.get_type();
+        // can not use a reference here since HashMap::entry() consumes the key
+        let key = payload.port_identity();
 
         // get the record for this source port identity (aka clock id).
         // in the code below we will only create a new entry upon receipt of
@@ -136,34 +131,30 @@ impl Context {
         // announved.
         let entry = self.foreign_ports.entry(key);
 
-        match (msg_id, entry) {
-            // we know this clock
-            (MsgType::Announce, Entry::Occupied(mut o)) => {
-                if let Ok(update) = AnnounceUpdate::try_from(msg) {
-                    o.get_mut().got_announce(update);
-                } else {
-                    tracing::warn!("failed to create anounce update");
-                }
+        let msg_id = payload.get_common().msg_id;
 
+        match (payload, entry) {
+            // we know this clock
+            (Payload::Announce(data), Entry::Occupied(mut o)) => {
+                let port = o.get_mut();
+                port.announces_mut().apply(data);
                 Ok(())
             }
-            // we don't recognize this clock and we have announce message
-            (MsgType::Announce, Entry::Vacant(v)) => {
-                if let Ok(update) = AnnounceUpdate::try_from(msg) {
-                    let master = v.insert(Port::default());
-                    master.got_announce(update);
-                }
+            // we don't recognize this clock port and we have announce message
+            (Payload::Announce(data), Entry::Vacant(v)) => {
+                let port = v.insert(Port::default());
+                port.announces_mut().apply(data);
 
                 Ok(())
             }
             // sync messages are sent to initiate the two-step sync + follow_up
             // process to yield the precise source port timestamp
-            (MsgType::Sync, Entry::Occupied(mut o)) => {
-                let fm = o.get_mut();
+            (Payload::Sync(data), Entry::Occupied(mut o)) => {
+                let port = o.get_mut();
 
-                if fm.have_announces() {
-                    if let Some(syncs) = fm.syncs.as_mut() {
-                        match syncs.try_apply(&msg) {
+                if port.have_announces() {
+                    if let Some(syncs) = port.syncs.as_mut() {
+                        match syncs.try_apply(&data) {
                             Ok(()) => (),
                             Err(e) => {
                                 // sync try_apply only fails if the sync message
@@ -177,29 +168,29 @@ impl Context {
                             }
                         }
                     } else {
-                        fm.syncs = Some(TrackSyncs::new(&msg));
+                        port.syncs = Some(Syncs::new(&data));
                     }
                 }
 
                 Ok(())
             }
-
             // attempt to handle FollowUp messages only if we've previously seen this
             // source port identity (aka received Announce).  see foreign mod for
             // additional constraints (e.g. we've received a two-step sync message)
-            (MsgType::FollowUp, Entry::Occupied(mut o)) => {
-                o.get_mut().got_follow_up(&msg)
+            (Payload::FollowUp(data), Entry::Occupied(mut o)) => {
+                let port = o.get_mut();
 
-                // let fm = o.get_mut();
-
-                // if fm.syncs.as_mut().and_then(f)
-            }
-
-            (msg_type, _entry) => {
-                tracing::debug!("unhandled message id: {msg_type:?}");
+                if port.syncs_mut().and_then(Syncs::take_one).is_some() {
+                    port.follow_ups_mut().apply(&data);
+                }
 
                 Ok(())
             }
+            (Payload::FollowUp(_) | Payload::Sync(_), Entry::Vacant(_)) => {
+                tracing::info!("ignoring {msg_id:?} before announce");
+                Ok(())
+            }
+            (Payload::Discard(_data), _) => Ok(()),
         }
     }
 
