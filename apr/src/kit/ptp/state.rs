@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(super) use super::{foreign::Port, Payload, PortIdentity, Result};
+pub(super) use super::{foreign::Port, protocol::Error, Payload, PortIdentity};
 use crate::kit::ptp::foreign::Syncs;
 use std::{
     collections::{HashMap, VecDeque},
@@ -118,7 +118,11 @@ impl Context {
         }
     }
 
-    pub fn inbound(&mut self, _sock_addr: SocketAddr, payload: Payload) -> Result<()> {
+    pub fn inbound(
+        &mut self,
+        _sock_addr: SocketAddr,
+        payload: Payload,
+    ) -> std::result::Result<(), Error> {
         use std::collections::hash_map::Entry;
         self.got_message();
 
@@ -180,7 +184,17 @@ impl Context {
             (Payload::FollowUp(data), Entry::Occupied(mut o)) => {
                 let port = o.get_mut();
 
-                if port.syncs_mut().and_then(Syncs::take_one).is_some() {
+                // confirm FollowUp is for the last Sync
+                if let Some(sync_seq_id) = port.last_sync_seq_id() {
+                    let seq_id = data.common.seq_id;
+
+                    if sync_seq_id != seq_id {
+                        return Err(Error::SeqIdMismatch {
+                            want: seq_id,
+                            have: sync_seq_id,
+                        });
+                    }
+
                     port.follow_ups_mut().apply(&data);
                 }
 

@@ -106,18 +106,10 @@ pub async fn run_loop(cancel_token: CancellationToken) -> Result<()> {
             Selected::Report { tick_at: _tick_at } => {
                 let foreign_port_map = &state.foreign_ports;
 
-                for (pi, fm) in foreign_port_map.iter() {
-                    tracing::info!("\n{pi:#?} => {:#?}", fm.follow_ups);
+                for (pi, port) in foreign_port_map.iter() {
+                    port.jitter_mean()
+                        .map(|mean| Some(tracing::info!("port={pi} mean={mean:.3}")));
                 }
-
-                //   tracing::info!("{foreign_port_map:#?}");
-
-                // let _ = state.freq_metrics();
-                // if let Some(metrics) = state.freq_metrics() {
-                //     tracing::info!("{metrics:?}");
-                // }
-
-                // tracing::info!("\n{state}");
             }
         }
     } // forever loop: Err and cancel (via break) are the only way out

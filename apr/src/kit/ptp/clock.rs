@@ -185,6 +185,7 @@ impl Timestamp {
         let val = Duration::new(secs, nanos);
 
         if val > Duration::ZERO {
+            tracing::debug!("origin timestamp: {val:.6}");
             return Some(Self(val));
         }
 
@@ -223,6 +224,20 @@ impl std::fmt::Debug for Identity {
         };
 
         write!(f, "{}", self.inner.hex_conf(cfg))
+    }
+}
+
+impl std::fmt::Display for Identity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (idx, b) in self.inner.iter().enumerate() {
+            if idx > 0 {
+                write!(f, "-")?;
+            }
+
+            write!(f, "{b:02x}")?;
+        }
+
+        Ok(())
     }
 }
 

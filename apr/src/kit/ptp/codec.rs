@@ -16,11 +16,12 @@
 
 use super::{Channel, MetaData, Payload};
 use crate::{
-    util::{BinSave, BinSaveCat},
-    HostInfo, Result,
+    // util::{BinSave, BinSaveCat},
+    HostInfo,
+    Result,
 };
 use bytes::{BufMut, BytesMut};
-use once_cell::sync::Lazy;
+// use once_cell::sync::Lazy;
 use std::net::{IpAddr, SocketAddr};
 use tokio::net::UdpSocket;
 use tokio_util::{
@@ -33,7 +34,7 @@ pub struct FrameOut {
     _priv: (),
 }
 
-static BIN_SAVE: Lazy<Option<BinSave>> = Lazy::new(|| BinSave::new(BinSaveCat::Ptp).ok());
+// static BIN_SAVE: Lazy<Option<BinSave>> = Lazy::new(|| BinSave::new(BinSaveCat::Ptp).ok());
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Context {
@@ -70,7 +71,7 @@ impl Decoder for Context {
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
         // attempt to create metadata from an immutable slice of source buffer
-        Ok(match MetaData::new_from_slice(src)? {
+        Ok(match MetaData::new_from_slice(src, self.channel)? {
             Some(metadata) if metadata.is_src_ready(src) => {
                 // creation of the metadata successful and src contains enough bytes
                 // to continue with message creation
@@ -81,9 +82,9 @@ impl Decoder for Context {
                 let buf = src.split_to(metadata.split_bytes());
 
                 // for debug purposes persist the complete message, allow to quietly fail
-                BIN_SAVE
-                    .as_ref()
-                    .and_then(|bin_save| bin_save.persist(&buf, "all", None).ok());
+                // BIN_SAVE
+                //     .as_ref()
+                //     .and_then(|bin_save| bin_save.persist(&buf, "all", None).ok());
 
                 match Payload::try_new(metadata, buf) {
                     Ok(payload) => Some(payload),

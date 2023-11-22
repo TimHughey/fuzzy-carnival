@@ -14,9 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+
 pub(self) use super::{
-    protocol::{AnnounceData, Common, FollowUpData, SyncData},
-    ClockTimestamp, GrandMaster, Result,
+    protocol::{AnnounceData, Common, Error, FollowUpData, SyncData},
+    ClockTimestamp, GrandMaster,
 };
 pub(self) use time::{Duration, Instant};
 
@@ -133,32 +135,77 @@ impl Announces {
     }
 }
 
+#[derive(Clone, Hash)]
+pub struct Jitter {
+    at: Instant,
+    val: Duration,
+}
+
+#[allow(unused)]
+impl Jitter {
+    pub fn elapsed(&self, other: &Self) -> std::time::Duration {
+        self.at.0.duration_since(other.at.0)
+    }
+}
+
 #[derive(Default, Clone, Hash)]
 pub struct FollowUps {
     pub last: Option<Common>,
     pub count: u64,
     pub correction_field: Duration,
     pub precise_origin_timestamp: ClockTimestamp,
-    pub offset_from_master: Duration,
+    pub offset_from_master: Option<Duration>,
+    pub jitter: VecDeque<Jitter>,
 }
 
 impl FollowUps {
     pub fn apply(&mut self, data: &FollowUpData) {
         let common = data.common;
-        let correction_field = data.correction;
-
+        let correction = data.correction.unwrap_or_default();
         let precise = data.origin_timestamp.unwrap_or_default();
+
+        // NOTE: two-step mode is validated when the Sync is received
+        let offset = common.offset(precise, correction);
+
+        if let Some(prev_offset) = self.offset_from_master {
+            self.jitter.push_back(Jitter {
+                at: common.ingress_at,
+                val: offset - prev_offset,
+            });
+
+            while self.jitter.len() > 30 {
+                self.jitter.pop_front();
+            }
+        }
 
         self.last = Some(common);
         self.count += 1;
-        self.correction_field = correction_field.unwrap_or_default();
+        self.correction_field = correction;
         self.precise_origin_timestamp = precise;
+        self.offset_from_master = Some(offset);
 
-        // NOTE: two-step mode is validated when the Sync is received
-        let offset =
-            common.ingress_timestamp().into_inner() - precise.into_inner() - self.correction_field;
+        // let offset =
+        //     common.ingress_timestamp().into_inner() - precise.into_inner() - self.correction_field;
 
-        self.offset_from_master = offset;
+        //  let _jitter = self.offset_from_master.map(|prev| prev - offset);
+
+        // if let Some(jitter) = jitter {
+        //     tracing::info!("jitter={jitter:.3}");
+        // }
+
+        // self.offset_from_master = Some(offset);
+    }
+}
+
+impl<'a> std::iter::Sum<&'a Self> for Jitter {
+    fn sum<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = &'a Self>,
+    {
+        Self {
+            at: Instant::now(),
+            val: iter.map(|Jitter { at: _, val }| *val).sum(),
+        }
     }
 }
 
@@ -176,7 +223,11 @@ impl Syncs {
         }
     }
 
-    pub fn try_apply(&mut self, data: &SyncData) -> Result<()> {
+    pub fn last_seq_id(&self) -> Option<u16> {
+        self.last.map(|last| last.seq_id)
+    }
+
+    pub fn try_apply(&mut self, data: &SyncData) -> std::result::Result<(), Error> {
         let latest = data.common;
         let flags = data.flags;
 
@@ -199,9 +250,10 @@ impl Syncs {
 
         let error = "invalid flags";
         tracing::warn!("{error}: flags={:#?}", flags);
-        Err(anyhow::anyhow!(error))
+        Err(Error::InvalidFlags { flags })
     }
 
+    #[allow(unused)]
     pub fn take_one(&mut self) -> Option<u64> {
         if let Some(reduced_cnt) = self.count.checked_sub(1) {
             self.count = reduced_cnt;
@@ -249,6 +301,24 @@ impl Port {
         self.follow_ups.get_or_insert(FollowUps::default())
     }
 
+    pub fn jitter_mean(&self) -> Option<Duration> {
+        self.follow_ups
+            .as_ref()
+            .and_then(|fup| match u32::try_from(fup.jitter.len()) {
+                Ok(cnt) if cnt > 0 => {
+                    let sum: Jitter = fup.jitter.iter().sum();
+
+                    Some(sum.val / cnt)
+                }
+                Ok(_) | Err(_) => None,
+            })
+    }
+
+    pub fn last_sync_seq_id(&self) -> Option<u16> {
+        self.syncs.as_ref().and_then(Syncs::last_seq_id)
+    }
+
+    #[allow(unused)]
     pub fn syncs_mut(&mut self) -> Option<&mut Syncs> {
         self.syncs.as_mut()
     }
@@ -260,13 +330,28 @@ impl Port {
 
 impl std::fmt::Debug for FollowUps {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let offset = if let Some(offset) = self.offset_from_master {
+            format!("{offset}")
+        } else {
+            "None".into()
+        };
+
         if f.alternate() {
+            let jitter_sum: Jitter = self.jitter.iter().sum();
+            let cnt = self.jitter.len();
+
+            let mean = match u32::try_from(cnt) {
+                Ok(len) => jitter_sum.val / len,
+                Err(_) => Duration::default(),
+            };
+
             f.debug_struct("FollowUps")
                 .field(
                     "correction_field",
                     &format_args!("{:0.3}", self.correction_field),
                 )
-                .field("offset", &format_args!("{}", self.offset_from_master))
+                .field("offset", &offset)
+                .field("jitter_mean", &format_args!("{mean:.3}"))
                 .finish_non_exhaustive()
         } else {
             f.debug_struct("FollowUps")
@@ -274,7 +359,7 @@ impl std::fmt::Debug for FollowUps {
                 .field("count", &self.count)
                 .field("correction_field", &self.correction_field)
                 .field("precise_origin_timestamp", &self.precise_origin_timestamp)
-                .field("offset_from_mester", &self.offset_from_master)
+                .field("offset_from_mester", &offset)
                 .finish()
         }
     }
@@ -305,6 +390,15 @@ impl std::fmt::Display for Port {
             // .field("have_announce_last", &self.announce_last.is_some())
             .field("Syncs", &self.syncs)
             .field("follow_ups", &self.follow_ups)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Jitter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Jitter")
+            .field("ago", &format_args!("{:.3}", self.at.elapsed()))
+            .field("val", &format_args!("{:.3}", self.val))
             .finish()
     }
 }

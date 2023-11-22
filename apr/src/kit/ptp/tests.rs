@@ -13,7 +13,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific
 
-use super::{MetaData, Payload};
+use super::{Channel, MetaData, Payload};
 use crate::{kit::tests::Data, Result};
 use anyhow::anyhow;
 use tracing_test::traced_test;
@@ -29,7 +29,7 @@ fn can_replay_messages() -> Result<()> {
     while !src.is_empty() && cnt < MAX_MSGS {
         cnt += 1;
 
-        match MetaData::new_from_slice(&src)? {
+        match MetaData::new_from_slice(&src, Channel::Event)? {
             Some(metadata) if metadata.is_src_ready(&src) => {
                 // creation of the metadata successful and src contains enough bytes
                 // to continue with message creation
@@ -65,7 +65,7 @@ fn can_replay_follow_up_messages() -> Result<()> {
     while !src.is_empty() && cnt < MAX_MSGS {
         cnt += 1;
 
-        match MetaData::new_from_slice(&src)? {
+        match MetaData::new_from_slice(&src, Channel::General)? {
             Some(metadata) if metadata.is_src_ready(&src) => {
                 // creation of the metadata successful and src contains enough bytes
                 // to continue with message creation
