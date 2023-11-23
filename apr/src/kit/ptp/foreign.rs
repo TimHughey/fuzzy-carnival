@@ -14,13 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
-
+use super::Payload;
 pub(self) use super::{
     protocol::{AnnounceData, Common, Error, FollowUpData, SyncData},
     ClockTimestamp, GrandMaster,
 };
+use std::collections::VecDeque;
 pub(self) use time::{Duration, Instant};
+
+type ApplyError = std::result::Result<(), Error>;
 
 pub mod track {
     use super::{ClockTimestamp, Common, Duration};
@@ -96,6 +98,7 @@ pub struct Announces {
     pub master_at: Option<ClockTimestamp>,
     pub grandmaster: Option<GrandMaster>,
     pub intervals: track::Intervals,
+    pub history: VecDeque<Common>,
 }
 
 impl Announces {
@@ -183,17 +186,6 @@ impl FollowUps {
         self.correction_field = correction;
         self.precise_origin_timestamp = precise;
         self.offset_from_master = Some(offset);
-
-        // let offset =
-        //     common.ingress_timestamp().into_inner() - precise.into_inner() - self.correction_field;
-
-        //  let _jitter = self.offset_from_master.map(|prev| prev - offset);
-
-        // if let Some(jitter) = jitter {
-        //     tracing::info!("jitter={jitter:.3}");
-        // }
-
-        // self.offset_from_master = Some(offset);
     }
 }
 
@@ -293,12 +285,56 @@ impl Port {
         }
     }
 
-    pub fn announces_mut(&mut self) -> &mut Announces {
-        self.announces.get_or_insert(Announces::default())
-    }
+    pub fn apply(&mut self, payload: Payload) -> ApplyError {
+        let announces = self.announces.get_or_insert(Announces::default());
 
-    pub fn follow_ups_mut(&mut self) -> &mut FollowUps {
-        self.follow_ups.get_or_insert(FollowUps::default())
+        // now handle each payload variant
+        match (payload, self.syncs.as_mut()) {
+            // Announces are the precursor to applying all other messages
+            (Payload::Announce(data), _syncs) => {
+                announces.apply(data);
+                Ok(())
+            }
+
+            // we've already confirmed we have Announces so if we also have Syncs try to apply
+            // the SyncData
+            (Payload::Sync(data), Some(syncs)) => syncs.try_apply(&data),
+
+            // this is our first Sync, create Syncs (infallible)
+            (Payload::Sync(data), None) => {
+                self.syncs = Some(Syncs::new(&data));
+                Ok(())
+            }
+
+            // to process a FollowUp we must have previously seen a Sync
+            (Payload::FollowUp(data), Some(syncs)) => {
+                // confirm FollowUp is for the last Sync
+                if let Some(sync_seq_id) = syncs.last_seq_id() {
+                    let seq_id = data.common.seq_id;
+
+                    if sync_seq_id != seq_id {
+                        return Err(Error::SeqIdMismatch {
+                            want: seq_id,
+                            have: sync_seq_id,
+                        });
+                    }
+
+                    self.follow_ups
+                        .get_or_insert(FollowUps::default())
+                        .apply(&data);
+                }
+
+                Ok(())
+            }
+            // ignore FollowUps until we've seen a Sync
+            (Payload::FollowUp(_data), None) => Ok(()),
+
+            // discard all other messages
+            (payload, _syncs) => {
+                tracing::debug!("discarding: {payload:#?}");
+                Ok(())
+            }
+        }
     }
 
     pub fn jitter_mean(&self) -> Option<Duration> {
@@ -312,19 +348,6 @@ impl Port {
                 }
                 Ok(_) | Err(_) => None,
             })
-    }
-
-    pub fn last_sync_seq_id(&self) -> Option<u16> {
-        self.syncs.as_ref().and_then(Syncs::last_seq_id)
-    }
-
-    #[allow(unused)]
-    pub fn syncs_mut(&mut self) -> Option<&mut Syncs> {
-        self.syncs.as_mut()
-    }
-
-    pub fn have_announces(&self) -> bool {
-        self.announces.is_some()
     }
 }
 

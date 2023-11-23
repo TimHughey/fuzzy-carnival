@@ -15,13 +15,14 @@
 // limitations under the License.
 
 pub(super) use super::{foreign::Port, protocol::Error, Payload, PortIdentity};
-use crate::kit::ptp::foreign::Syncs;
 use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
     ops::Div,
 };
 use tokio::time::{Duration, Instant};
+
+type InboundResult = std::result::Result<(), Error>;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Count {
@@ -118,11 +119,7 @@ impl Context {
         }
     }
 
-    pub fn inbound(
-        &mut self,
-        _sock_addr: SocketAddr,
-        payload: Payload,
-    ) -> std::result::Result<(), Error> {
+    pub fn inbound(&mut self, _sock_addr: SocketAddr, payload: Payload) -> InboundResult {
         use std::collections::hash_map::Entry;
         self.got_message();
 
@@ -135,76 +132,12 @@ impl Context {
         // announved.
         let entry = self.foreign_ports.entry(key);
 
-        let msg_id = payload.get_common().msg_id;
-
-        match (payload, entry) {
-            // we know this clock
-            (Payload::Announce(data), Entry::Occupied(mut o)) => {
-                let port = o.get_mut();
-                port.announces_mut().apply(data);
-                Ok(())
-            }
-            // we don't recognize this clock port and we have announce message
-            (Payload::Announce(data), Entry::Vacant(v)) => {
+        match entry {
+            Entry::Occupied(mut o) => o.get_mut().apply(payload),
+            Entry::Vacant(v) => {
                 let port = v.insert(Port::default());
-                port.announces_mut().apply(data);
-
-                Ok(())
+                port.apply(payload)
             }
-            // sync messages are sent to initiate the two-step sync + follow_up
-            // process to yield the precise source port timestamp
-            (Payload::Sync(data), Entry::Occupied(mut o)) => {
-                let port = o.get_mut();
-
-                if port.have_announces() {
-                    if let Some(syncs) = port.syncs.as_mut() {
-                        match syncs.try_apply(&data) {
-                            Ok(()) => (),
-                            Err(e) => {
-                                // sync try_apply only fails if the sync message
-                                // does not match the expected contents.  if it doesn't
-                                // match something is very wrong and all sync tracking is removed.
-                                //
-                                // this approach is OK because syncs arrive very quickly
-                                tracing::error!("sync apply failed: {e}");
-                                o.remove_entry();
-                                return Err(e);
-                            }
-                        }
-                    } else {
-                        port.syncs = Some(Syncs::new(&data));
-                    }
-                }
-
-                Ok(())
-            }
-            // attempt to handle FollowUp messages only if we've previously seen this
-            // source port identity (aka received Announce).  see foreign mod for
-            // additional constraints (e.g. we've received a two-step sync message)
-            (Payload::FollowUp(data), Entry::Occupied(mut o)) => {
-                let port = o.get_mut();
-
-                // confirm FollowUp is for the last Sync
-                if let Some(sync_seq_id) = port.last_sync_seq_id() {
-                    let seq_id = data.common.seq_id;
-
-                    if sync_seq_id != seq_id {
-                        return Err(Error::SeqIdMismatch {
-                            want: seq_id,
-                            have: sync_seq_id,
-                        });
-                    }
-
-                    port.follow_ups_mut().apply(&data);
-                }
-
-                Ok(())
-            }
-            (Payload::FollowUp(_) | Payload::Sync(_), Entry::Vacant(_)) => {
-                tracing::info!("ignoring {msg_id:?} before announce");
-                Ok(())
-            }
-            (Payload::Discard(_data), _) => Ok(()),
         }
     }
 

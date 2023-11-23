@@ -482,7 +482,13 @@ impl Payload {
                 Ok(Payload::Discard(common))
             }
             MsgType::Signaling => {
-                let _target_port_identity = PortIdentity::new_from_buf_maybe(&mut buf);
+                let target_port_identity = PortIdentity::new_from_buf_maybe(&mut buf);
+
+                if let Some(tpi) = target_port_identity {
+                    let suffix = Suffix::new_from_buf(&mut buf);
+
+                    tracing::info!("signaling: {tpi}\n{suffix:#?}");
+                }
 
                 Ok(Payload::Discard(common))
             }
@@ -498,13 +504,7 @@ impl Payload {
         }?;
 
         if !buf.is_empty() {
-            let suffix = Suffix::new_from_buf(&mut buf);
-
-            if common.msg_id == MsgType::FollowUp {
-                if let Some(suffix) = suffix {
-                    tracing::info!("\n{suffix:#?}");
-                }
-            }
+            let _suffix = Suffix::new_from_buf(&mut buf);
         }
 
         Ok(payload)
