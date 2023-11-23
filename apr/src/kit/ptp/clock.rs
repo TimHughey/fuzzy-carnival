@@ -14,26 +14,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::util;
+use super::{protocol, util};
 use bytes::{Buf, BytesMut};
 use once_cell::sync::Lazy;
 use pretty_hex::{HexConfig, PrettyHex};
 use std::hash::Hash;
+use std::net::IpAddr;
 use time::{Duration, Instant};
 
 const IDENTITY_LEN: usize = 8;
-#[derive(Copy, Clone)]
-pub struct Epoch(Instant);
 
-impl Epoch {
-    #[inline]
-    #[allow(unused)]
-    pub fn now() -> time::Duration {
-        EPOCH.0.elapsed()
-    }
-}
-
-static EPOCH: Lazy<Epoch> = Lazy::new(|| Epoch(Instant::now()));
+type ProtocolError = protocol::Error;
+type PeerNetResult = std::result::Result<PeerNet, ProtocolError>;
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Identity {
@@ -51,6 +43,48 @@ impl Identity {
 impl AsRef<[u8]> for Identity {
     fn as_ref(&self) -> &[u8] {
         self.inner.as_slice()
+    }
+}
+
+impl From<[u8; 8]> for Identity {
+    fn from(value: [u8; 8]) -> Self {
+        Self { inner: value }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PeerNet {
+    Uuid { addr: uuid::Uuid, port: u16 },
+    Ip { addr: IpAddr, port: u16 },
+}
+
+impl TryFrom<(&str, u64)> for PeerNet {
+    type Error = protocol::Error;
+
+    fn try_from(value: (&str, u64)) -> PeerNetResult {
+        use protocol::Error::InvalidClockNetPeer as Invalid;
+
+        let (addr, port_u64) = value;
+
+        let port = u16::try_from(port_u64).map_err(|_| Invalid {
+            addr: addr.into(),
+            port: port_u64,
+        })?;
+
+        // attempt to parse as an ip addr (common case)
+        if let Ok(addr) = addr.parse::<IpAddr>() {
+            return Ok(Self::Ip { addr, port });
+        }
+
+        // we may also see the "net" identifier as a UUID
+        if let Ok(addr) = addr.parse::<uuid::Uuid>() {
+            return Ok(Self::Uuid { addr, port });
+        }
+
+        Err(Invalid {
+            addr: addr.into(),
+            port: port_u64,
+        })
     }
 }
 
@@ -212,6 +246,19 @@ impl AsRef<Timestamp> for Timestamp {
         self
     }
 }
+
+#[derive(Copy, Clone)]
+pub struct Epoch(Instant);
+
+impl Epoch {
+    #[inline]
+    #[allow(unused)]
+    pub fn now() -> time::Duration {
+        EPOCH.0.elapsed()
+    }
+}
+
+static EPOCH: Lazy<Epoch> = Lazy::new(|| Epoch(Instant::now()));
 
 impl std::fmt::Debug for Identity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

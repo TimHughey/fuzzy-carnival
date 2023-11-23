@@ -29,16 +29,16 @@ use time::{Duration, Instant};
 pub enum Error {
     #[error("version check failed")]
     WrongVersion { version: u8 },
-    #[error("announce check failed")]
-    InvalidAnnounce { steps_removed: u16, time_source: u8 },
     #[error("invalid flags: {flags:?}")]
     InvalidFlags { flags: MsgFlags },
     #[error("seq_id mismatch: {want} != {have}")]
     SeqIdMismatch { want: u16, have: u16 },
-    #[error("followup is missing suffix")]
-    FollowUpMissingSuffix,
     #[error("unhandled msg_id: {msg_id:?}")]
     UnhandledMsg { msg_id: MsgType },
+    #[error("unreasonable log_message_interval: {log_message_interval}")]
+    UnreasonableLogMessageInterval { log_message_interval: i8 },
+    #[error("net clock peer failed: {addr} {port}")]
+    InvalidClockNetPeer { addr: String, port: u64 },
 }
 
 type MetaDataResult = std::result::Result<Option<MetaData>, Error>;
@@ -207,8 +207,10 @@ bitflags! { // Message Flags
 }
 
 impl MsgFlags {
-    pub fn is_good_sync(self) -> bool {
-        self == MsgFlags::UNICAST | MsgFlags::TWO_STEP | MsgFlags::PTP_TIMESCALE
+    pub fn is_good_sync(mut self) -> bool {
+        self.remove(MsgFlags::PTP_TIMESCALE);
+
+        self == MsgFlags::UNICAST | MsgFlags::TWO_STEP
     }
 }
 
@@ -286,11 +288,6 @@ impl Common {
         }
     }
 
-    // #[inline]
-    // pub fn ingress_timestamp(&self) -> ClockTimestamp {
-    //     self.ingress_timestamp
-    // }
-
     pub fn interval(&self, latest: &Self) -> Duration {
         let e_latest = latest.ingress_timestamp.into_inner();
         let e_arrival = self.ingress_timestamp.into_inner();
@@ -352,6 +349,8 @@ impl AsRef<PortIdentity> for PortIdentity {
 pub struct AnnounceData {
     pub common: Common,
     pub origin_timestamp: Option<Timestamp>,
+    pub steps_removed: u16,
+    pub time_source: u8,
     pub log_message_interval: Duration,
     pub grandmaster: GrandMaster,
 }
@@ -416,48 +415,45 @@ impl Payload {
                 let grandmaster = GrandMaster::new_from_buf(&mut buf);
                 let steps_removed = buf.get_u16();
                 let time_source = buf.get_u8();
+                let log_message_interval = header.log_message_interval;
 
                 // interval is represented as log2 of seconds.  here we convert that
                 // representation to millseconds
                 let log_message_interval =
                     Duration::milliseconds(match header.log_message_interval {
+                        n if (..-4).contains(&n) => {
+                            return Err(Error::UnreasonableLogMessageInterval {
+                                log_message_interval,
+                            });
+                        }
                         n if n < 0 => 1000 >> n.abs(),
                         n if n > 0 => 1000 << n.abs(),
                         _n => 1000,
                     });
 
-                if steps_removed == 0 && time_source == 0xa0 {
-                    Ok(Payload::Announce(AnnounceData {
-                        common,
-                        origin_timestamp,
-                        log_message_interval,
-                        grandmaster,
-                    }))
-                } else {
-                    Err(Error::InvalidAnnounce {
-                        steps_removed,
-                        time_source,
-                    })
-                }
+                Ok(Payload::Announce(AnnounceData {
+                    common,
+                    origin_timestamp,
+                    steps_removed,
+                    time_source,
+                    log_message_interval,
+                    grandmaster,
+                }))
             }
             MsgType::FollowUp => {
-                // IEEE 8021AS-2020 spec alters the definition of FollowUp
-                // messages and includes specific TLVs.
-
                 // the body is the same as IEEE 1588-2019 (just the preciseOriginTimestamp)
                 let origin_timestamp = Timestamp::new_from_buf(&mut buf);
 
                 // now parse the suffix
-                match Suffix::new_from_buf(&mut buf) {
-                    Some(_suffix) => {
-                        // find value for TLVType 0x03, length 28, org id 0x008c2 and sub type 0x01
-
-                        // tracing::info!("{suffix:#?}");
-                    }
-                    None => {
-                        return Err(Error::FollowUpMissingSuffix);
-                    }
-                }
+                //
+                // IEEE 8021AS-2020 spec alters the definition of FollowUp
+                // messages and includes specific TLVs.
+                //
+                // NOTE: as of 2023-11-23 it is unclear if the above is relevant. a specialized
+                //       TLV is included however all components are zeroed
+                //
+                // called for side effects
+                let _suffix = Suffix::new_from_buf(&mut buf);
 
                 Ok(Payload::FollowUp(FollowUpData {
                     common,

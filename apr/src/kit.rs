@@ -221,7 +221,7 @@ impl Kit {
                 Some(self.response(frame))
             }
             Some(Err(e)) => {
-                tracing::error!("framimg error: {e}");
+                tracing::error!("framimg error: {e:?}");
                 Some(Err(e))
             }
             None => None,
@@ -234,7 +234,7 @@ impl Kit {
 
     fn invoke_anchor(&mut self, frame: Frame) -> Result<Response> {
         self.anchor
-            .get_or_insert(SetRateAnchorTime::default())
+            .get_or_insert_with(SetRateAnchorTime::default)
             .response(frame)
     }
 

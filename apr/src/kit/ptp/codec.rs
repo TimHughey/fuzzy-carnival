@@ -89,7 +89,7 @@ impl Decoder for Context {
                 match Payload::try_new(metadata, buf) {
                     Ok(payload) => Some(payload),
                     Err(e) => {
-                        tracing::error!("Payload::try_new(): {e}");
+                        tracing::error!("Payload::try_new(): {e:?}");
                         None
                     }
                 }

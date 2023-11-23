@@ -15,13 +15,15 @@
 // limitations under the License.
 
 use crate::{
-    kit::msg::{Frame, Response},
+    kit::{
+        msg::{Frame, Response},
+        ptp::clock,
+    },
     Result,
 };
-use anyhow::anyhow;
+
 use plist::Value;
 use pretty_hex::PrettyHex;
-use std::net::IpAddr;
 const MATCH_OVERRIDE: &str = "SupportsClockPortMatchingOverride";
 const CLOCK_PORTS: &str = "ClockPorts";
 const DEVICE_TYPE: &str = "DeviceType";
@@ -29,87 +31,14 @@ const ADDRESSES: &str = "Addresses";
 const ID: &str = "ID";
 const CLOCK_ID: &str = "ClockID";
 
-#[derive(Debug, Default)]
-pub struct ClockIpPort {
-    pub addr: Option<IpAddr>,
-    pub port: Option<u16>,
-}
-
-impl ClockIpPort {
-    pub fn as_string(&self) -> Result<String> {
-        if let Self {
-            addr: Some(addr),
-            port: Some(port),
-        } = &self
-        {
-            return Ok(format!("{addr}:{port}"));
-        }
-
-        Err(anyhow!("empty ClockIpPort"))
-    }
-}
-
-impl TryFrom<(&str, u64)> for ClockIpPort {
-    type Error = anyhow::Error;
-
-    fn try_from(value: (&str, u64)) -> std::result::Result<Self, Self::Error> {
-        let (ip_str, port) = value;
-
-        Ok(Self {
-            addr: Some(ip_str.parse()?),
-            port: Some(u16::try_from(port)?),
-        })
-    }
-}
-
-impl std::fmt::Display for ClockIpPort {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Ok(s) = self.as_string() {
-            write!(f, "{s}")
-        } else {
-            write!(f, "Invalid ClockIpPort")
-        }
-    }
-}
-
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Peer {
     supports_clock_port_matching_override: Option<bool>,
-    clock_ports: Vec<ClockIpPort>,
+    clock_ports: Vec<clock::PeerNet>,
     device_type: u8,
     addresses: Vec<String>,
     id: String,
-    clock_id: [u8; 8],
-}
-
-impl std::fmt::Display for Peer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PEER")?;
-
-        if self.supports_clock_port_matching_override.is_some() {
-            write!(f, " [OVERRIDE_SUPPORT]")?;
-        }
-
-        if !self.clock_ports.is_empty() {
-            write!(f, " ClockPorts[")?;
-
-            for clock_port in &self.clock_ports {
-                write!(f, " {clock_port}")?;
-            }
-
-            write!(f, "]")?;
-        }
-
-        write!(f, " Type=[{}]", self.device_type)?;
-
-        for addr in &self.addresses {
-            write!(f, " Peer[{addr}]")?;
-        }
-
-        write!(f, "ID[{}]", self.id)?;
-
-        Ok(())
-    }
+    clock_identity: Option<clock::Identity>,
 }
 
 impl Peer {
@@ -122,7 +51,7 @@ impl Peer {
                 if let Some(ip_port_map) = val.as_dictionary() {
                     for (ip, port) in ip_port_map {
                         if let Some(port) = port.as_unsigned_integer() {
-                            let ip_port = ClockIpPort::try_from((ip.as_str(), port))?;
+                            let ip_port = clock::PeerNet::try_from((ip.as_str(), port))?;
                             self.clock_ports.push(ip_port);
                         }
                     }
@@ -149,9 +78,11 @@ impl Peer {
             }
             CLOCK_ID => {
                 if let Some(clock_id) = val.as_signed_integer() {
-                    let clock_id_bytes = clock_id.to_ne_bytes();
-
-                    self.clock_id = clock_id_bytes;
+                    if clock_id == 0 {
+                        self.clock_identity = None;
+                    } else {
+                        self.clock_identity = Some(clock_id.to_ne_bytes().into());
+                    }
                 }
             }
             key => {
@@ -184,6 +115,8 @@ impl Set {
 
             let val: Val = content.try_into()?;
             if let Some(array) = val.as_array() {
+                tracing::debug!("examining array:\n{array:#?}");
+
                 for entry in array {
                     if let Some(dict) = entry.as_dictionary() {
                         let mut peer = Peer::default();
@@ -200,22 +133,8 @@ impl Set {
 
         if self.inner.is_empty() {
             tracing::warn!("{routing}: empty peer list");
-        } else {
-            tracing::debug!("\n{self}");
         }
 
         Ok(Response::ok_simple(cseq))
-    }
-}
-
-impl std::fmt::Display for Set {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "PEERS SET ")?;
-
-        for peer in &self.inner {
-            write!(f, "{peer}")?;
-        }
-
-        writeln!(f)
     }
 }
